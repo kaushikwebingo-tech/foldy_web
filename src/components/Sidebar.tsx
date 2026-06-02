@@ -6,40 +6,46 @@ import {
 } from 'lucide-react';
 import { getToken, removeToken } from '@/lib/utils';
 
-const NAV = [
-  { group: 'Auth',      items: [
-    { label: 'Login / OTP',   path: '/login',       icon: <LogIn size={16} /> },
-    { label: 'Onboarding',    path: '/onboarding',  icon: <User size={16} /> },
-  ]},
+/* ── nav definition ──────────────────────────────────────────────── */
+const AUTH_NAV = [
+  { label: 'Login / OTP',    path: '/login',       icon: <LogIn size={16} />,   guestOnly: true  },
+  { label: 'Onboarding',     path: '/onboarding',  icon: <User size={16} />,    guestOnly: true  },
+];
+
+const GROUPS = [
   { group: 'B2B Features', items: [
-    { label: 'GST Profile',   path: '/gst-profile',   icon: <Building2 size={16} /> },
-    { label: 'Finance Status',path: '/finance-status',icon: <BarChart2 size={16} /> },
-    { label: 'GST Taxpayer',  path: '/gst-taxpayer',  icon: <FileText size={16} /> },
-    { label: 'TDS',           path: '/tds',            icon: <Receipt size={16} /> },
+    { label: 'GST Profile',    path: '/gst-profile',    icon: <Building2 size={16} /> },
+    { label: 'Finance Status', path: '/finance-status', icon: <BarChart2 size={16} />  },
+    { label: 'GST Taxpayer',   path: '/gst-taxpayer',   icon: <FileText size={16} />   },
+    { label: 'TDS',            path: '/tds',             icon: <Receipt size={16} />    },
   ]},
-  { group: 'Storage',   items: [
-    { label: 'Documents',     path: '/storage',       icon: <FolderOpen size={16} /> },
+  { group: 'Storage', items: [
+    { label: 'Documents',      path: '/storage',        icon: <FolderOpen size={16} /> },
   ]},
-  { group: 'Finance',   items: [
-    { label: 'Payments',      path: '/payments',      icon: <CreditCard size={16} /> },
-    { label: 'DigiLocker',    path: '/digilocker',    icon: <HardDrive size={16} /> },
+  { group: 'Finance', items: [
+    { label: 'Payments',       path: '/payments',       icon: <CreditCard size={16} /> },
+    { label: 'DigiLocker',     path: '/digilocker',     icon: <HardDrive size={16} />  },
   ]},
-  { group: 'Admin',     items: [
-    { label: 'Admin Panel',   path: '/admin',         icon: <ShieldCheck size={16} /> },
+  { group: 'Admin', items: [
+    { label: 'Admin Panel',    path: '/admin',          icon: <ShieldCheck size={16} /> },
   ]},
 ];
 
+/* ── component ───────────────────────────────────────────────────── */
 export default function Sidebar() {
-  const navigate  = useNavigate();
-  const loggedIn  = !!getToken();
+  const navigate = useNavigate();
+  const loggedIn = !!getToken();
 
   const handleLogout = () => {
     removeToken();
     navigate('/login');
+    // force re-render by reloading
+    window.location.href = '/login';
   };
 
   return (
     <aside className="w-60 shrink-0 bg-[#0D1B2A] flex flex-col min-h-screen">
+
       {/* Logo */}
       <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-2">
@@ -53,7 +59,53 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-4 overflow-y-auto">
-        {NAV.map(group => (
+
+        {/* Dashboard — always visible */}
+        <div className="mb-2">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-5 py-2.5 text-sm transition-colors group ${
+                isActive
+                  ? 'bg-[#1A73E8]/15 text-white border-r-2 border-[#1A73E8]'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <LayoutDashboard size={16} />
+            <span className="flex-1">Dashboard</span>
+          </NavLink>
+        </div>
+
+        {/* Login & Onboarding — only when NOT logged in */}
+        {!loggedIn && (
+          <div className="mb-4">
+            <p className="px-5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">
+              Account
+            </p>
+            {AUTH_NAV.map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-5 py-2.5 text-sm transition-colors group ${
+                    isActive
+                      ? 'bg-[#1A73E8]/15 text-white border-r-2 border-[#1A73E8]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`
+                }
+              >
+                {item.icon}
+                <span className="flex-1">{item.label}</span>
+                <ChevronRight size={12} className="opacity-0 group-hover:opacity-50 transition-opacity" />
+              </NavLink>
+            ))}
+          </div>
+        )}
+
+        {/* All other groups — always visible */}
+        {GROUPS.map(group => (
           <div key={group.group} className="mb-4">
             <p className="px-5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">
               {group.group}

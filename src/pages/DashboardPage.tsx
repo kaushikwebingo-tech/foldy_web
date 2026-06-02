@@ -5,18 +5,19 @@ import {
   FileText, Receipt, FolderOpen, CreditCard,
   HardDrive, ShieldCheck, ArrowRight,
 } from 'lucide-react';
+import PlanStatusCard from '@/components/PlanStatusCard';
 
-const MODULES = [
-  { label: 'Login / OTP',     path: '/login',          icon: <LogIn size={20} />,       desc: 'Phone OTP auth + trial status',       badge: 'Public' },
-  { label: 'Onboarding',      path: '/onboarding',     icon: <User size={20} />,        desc: 'PAN · Aadhaar · GSTIN · Bank KYC',     badge: 'Public' },
-  { label: 'GST Profile',     path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'GSTIN public business info lookup',    badge: 'B2B' },
-  { label: 'Finance Status',  path: '/finance-status', icon: <BarChart2 size={20} />,   desc: 'Track GSTR filing status',             badge: 'B2B' },
-  { label: 'GST Taxpayer',    path: '/gst-taxpayer',   icon: <FileText size={20} />,    desc: 'GST portal session + GSTR-1 data',     badge: 'B2B' },
-  { label: 'TDS',             path: '/tds',            icon: <Receipt size={20} />,     desc: 'TRACES Form 16 / 16A jobs',            badge: 'B2B' },
-  { label: 'Storage',         path: '/storage',        icon: <FolderOpen size={20} />,  desc: 'Document vault · folders · files',     badge: 'Auth' },
-  { label: 'Payments',        path: '/payments',       icon: <CreditCard size={20} />,  desc: 'Razorpay order creation & verification', badge: 'Auth' },
-  { label: 'DigiLocker',      path: '/digilocker',     icon: <HardDrive size={20} />,   desc: 'Government document fetch via UIDAI',  badge: 'Public' },
-  { label: 'Admin Panel',     path: '/admin',          icon: <ShieldCheck size={20} />, desc: 'Approve / reject · user management',  badge: 'Admin' },
+const ALL_MODULES = [
+  { label: 'Login / OTP',     path: '/login',          icon: <LogIn size={20} />,       desc: 'Phone OTP auth + trial status',          badge: 'Public', authHide: true  },
+  { label: 'Onboarding',      path: '/onboarding',     icon: <User size={20} />,        desc: 'PAN · Aadhaar · GSTIN · Bank KYC',        badge: 'Public', authHide: true  },
+  { label: 'GST Profile',     path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'GSTIN public business info lookup',       badge: 'B2B',    authHide: false },
+  { label: 'Finance Status',  path: '/finance-status', icon: <BarChart2 size={20} />,   desc: 'Track GSTR filing status',                badge: 'B2B',    authHide: false },
+  { label: 'GST Taxpayer',    path: '/gst-taxpayer',   icon: <FileText size={20} />,    desc: 'GST portal session + GSTR-1 data',        badge: 'B2B',    authHide: false },
+  { label: 'TDS',             path: '/tds',            icon: <Receipt size={20} />,     desc: 'TRACES Form 16 / 16A jobs',               badge: 'B2B',    authHide: false },
+  { label: 'Storage',         path: '/storage',        icon: <FolderOpen size={20} />,  desc: 'Document vault · folders · files',        badge: 'Auth',   authHide: false },
+  { label: 'Payments',        path: '/payments',       icon: <CreditCard size={20} />,  desc: 'Razorpay order creation & verification',  badge: 'Auth',   authHide: false },
+  { label: 'DigiLocker',      path: '/digilocker',     icon: <HardDrive size={20} />,   desc: 'Government document fetch via UIDAI',     badge: 'Public', authHide: false },
+  { label: 'Admin Panel',     path: '/admin',          icon: <ShieldCheck size={20} />, desc: 'Approve / reject · user management',      badge: 'Admin',  authHide: false },
 ];
 
 const BADGE_STYLES: Record<string, string> = {
@@ -27,8 +28,9 @@ const BADGE_STYLES: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const hasToken = !!getToken();
+  const navigate  = useNavigate();
+  const hasToken  = !!getToken();
+  const MODULES   = ALL_MODULES.filter(m => !(hasToken && m.authHide));
 
   return (
     <div>
@@ -61,7 +63,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Plan status */}
+      <div className="mb-6">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Plan & Subscription</p>
+        <PlanStatusCard />
+      </div>
+
       {/* Module grid */}
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">API Modules</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {MODULES.map(mod => (
           <button
