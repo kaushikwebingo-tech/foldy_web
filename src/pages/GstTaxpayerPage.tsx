@@ -1,0 +1,146 @@
+import { useState } from 'react';
+import ApiCard from '@/components/ApiCard';
+import { Field, SelectField } from '@/components/Field';
+import PageHeader from '@/components/PageHeader';
+import { b2bApi } from '@/api/b2bApi';
+import { FileText } from 'lucide-react';
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  label: new Date(2000, i).toLocaleString('en', { month: 'long' }),
+  value: String(i + 1).padStart(2, '0'),
+}));
+
+const YEARS = ['2024', '2025', '2026'].map(y => ({ label: y, value: y }));
+const FY_OPTIONS = ['2024-25', '2023-24', '2022-23'].map(v => ({ label: `FY ${v}`, value: v }));
+const FORM_TYPES = [
+  { label: 'GSTR-1',  value: 'GSTR-1'  },
+  { label: 'GSTR-1A', value: 'GSTR-1A' },
+  { label: 'GSTR-3B', value: 'GSTR-3B' },
+  { label: 'GSTR-9',  value: 'GSTR-9'  },
+  { label: 'GSTR-9C', value: 'GSTR-9C' },
+];
+
+export default function GstTaxpayerPage() {
+  const [username, setUsername]   = useState('');
+  const [gstin, setGstin]         = useState('');
+  const [otp, setOtp]             = useState('');
+  const [tpToken, setTpToken]     = useState('');
+  const [year, setYear]           = useState('2024');
+  const [month, setMonth]         = useState('04');
+  const [fy, setFy]               = useState('2024-25');
+  const [formType, setFormType]   = useState('GSTR-1');
+  const [period, setPeriod]       = useState('');
+
+  return (
+    <div className="max-w-3xl">
+      <PageHeader
+        title="GST Taxpayer Portal"
+        subtitle="Full GST portal session flow: OTP → verify → refresh → fetch GSTR-1 data → mark as filed."
+        icon={<FileText size={18} />}
+        badge="B2B Only"
+      />
+
+      <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+        <strong>Flow:</strong> Step 1 Generate OTP → Step 2 Verify OTP (copy taxpayer_token) → Step 3 Use token in GSTR-1 calls.
+      </div>
+
+      <div className="space-y-4">
+        {/* Step 1 */}
+        <div className="relative">
+          <div className="absolute -left-3 top-4 w-6 h-6 bg-[#1A73E8] rounded-full flex items-center justify-center text-white text-xs font-bold">1</div>
+          <ApiCard
+            title="Generate GST Portal OTP"
+            method="POST"
+            endpoint="/api/v1/b2b/gst-taxpayer/generate-otp"
+            description="Sends OTP to the mobile/email registered with the GST portal for this GSTIN."
+            onSubmit={() => b2bApi.generateGstOtp(username, gstin)}
+          >
+            <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
+            <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          </ApiCard>
+        </div>
+
+        {/* Step 2 */}
+        <div className="relative">
+          <div className="absolute -left-3 top-4 w-6 h-6 bg-[#1A73E8] rounded-full flex items-center justify-center text-white text-xs font-bold">2</div>
+          <ApiCard
+            title="Verify GST Portal OTP"
+            method="POST"
+            endpoint="/api/v1/b2b/gst-taxpayer/verify-otp"
+            description="Verifies OTP and returns a taxpayer_token. Copy the token for all subsequent calls."
+            onSubmit={() => b2bApi.verifyGstOtp(username, gstin, otp)}
+          >
+            <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
+            <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+            <Field label="OTP" value={otp} onChange={setOtp} placeholder="OTP from GST portal" />
+          </ApiCard>
+        </div>
+
+        {/* Refresh session */}
+        <ApiCard
+          title="Refresh Taxpayer Session"
+          method="POST"
+          endpoint="/api/v1/b2b/gst-taxpayer/refresh-session"
+          description="Refreshes the taxpayer_token before it expires."
+          onSubmit={() => b2bApi.refreshGstSession(tpToken)}
+        >
+          <Field label="Taxpayer Token" value={tpToken} onChange={setTpToken} placeholder="Paste token from verify-otp" fullWidth />
+        </ApiCard>
+
+        {/* GSTR-1 Summary */}
+        <ApiCard
+          title="Get GSTR-1 Summary"
+          method="POST"
+          endpoint="/api/v1/b2b/gst-taxpayer/gstr1/summary"
+          description="Fetches GSTR-1 summary for a return period and generates a downloadable PDF."
+          onSubmit={() => b2bApi.getGstr1Summary(tpToken, gstin, year, month)}
+        >
+          <Field label="Taxpayer Token" value={tpToken} onChange={setTpToken} placeholder="Paste token from verify-otp" fullWidth />
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Year" value={year} onChange={setYear} options={YEARS} />
+          <SelectField label="Month" value={month} onChange={setMonth} options={MONTHS} />
+        </ApiCard>
+
+        {/* GSTR-1 B2B */}
+        <ApiCard
+          title="Get GSTR-1 B2B Invoices"
+          method="POST"
+          endpoint="/api/v1/b2b/gst-taxpayer/gstr1/b2b"
+          description="Fetches B2B invoice details from GSTR-1 for a given period."
+          onSubmit={() => b2bApi.getGstr1B2b(tpToken, gstin, year, month)}
+        >
+          <Field label="Taxpayer Token" value={tpToken} onChange={setTpToken} placeholder="Paste token from verify-otp" fullWidth />
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Year" value={year} onChange={setYear} options={YEARS} />
+          <SelectField label="Month" value={month} onChange={setMonth} options={MONTHS} />
+        </ApiCard>
+
+        {/* Sales Summary */}
+        <ApiCard
+          title="Get Annual Sales Summary"
+          method="GET"
+          endpoint="/api/v1/b2b/gst-taxpayer/sales-summary"
+          description="Calculates monthly sales breakdown across 12 months of a financial year. Makes up to 12 Sandbox calls."
+          onSubmit={() => b2bApi.getSalesSummary(gstin, fy, tpToken)}
+        >
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+          <Field label="Taxpayer Token" value={tpToken} onChange={setTpToken} placeholder="Paste token from verify-otp" fullWidth />
+        </ApiCard>
+
+        {/* Mark as filed */}
+        <ApiCard
+          title="Mark Return as Filed"
+          method="POST"
+          endpoint="/api/v1/b2b/gst-taxpayer/mark-filed"
+          description="Marks a GST form as filed for this user, stopping cron notifications for that period."
+          onSubmit={() => b2bApi.markAsFiled(gstin, formType, period)}
+        >
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Form Type" value={formType} onChange={setFormType} options={FORM_TYPES} />
+          <Field label="Period" value={period} onChange={setPeriod} placeholder="MM-YYYY e.g. 04-2024" />
+        </ApiCard>
+      </div>
+    </div>
+  );
+}
