@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, LogIn, User, FileText, BarChart2,
   Building2, Receipt, HardDrive, CreditCard, FolderOpen,
-  ShieldCheck, LogOut, ChevronRight,
+  ShieldCheck, LogOut, ChevronRight, UploadCloud,
 } from 'lucide-react';
 import { getToken, removeToken } from '@/lib/utils';
 
@@ -21,6 +21,7 @@ const GROUPS = [
   ]},
   { group: 'Storage', items: [
     { label: 'Documents',      path: '/storage',        icon: <FolderOpen size={16} /> },
+    { label: 'Manual Uploads', path: '/manual-uploads', icon: <UploadCloud size={16} /> },
   ]},
   { group: 'Finance', items: [
     { label: 'Payments',       path: '/payments',       icon: <CreditCard size={16} /> },

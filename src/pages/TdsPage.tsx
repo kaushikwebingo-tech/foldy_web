@@ -65,7 +65,7 @@ export default function TdsPage() {
         <ApiCard
           title="Submit TDS Certificate Job"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/${certType}/submit`}
+          endpoint={`/api/v1/b2b/tds/submit-job/${certType}`}
           description="Submits a job to TRACES for certificate generation. Returns a job_id."
           onSubmit={() => b2bApi.submitTdsJob(certType, jobPayload)}
         >
@@ -84,7 +84,7 @@ export default function TdsPage() {
         <ApiCard
           title="Poll TDS Job Status"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/${certType}/poll`}
+          endpoint={`/api/v1/b2b/tds/poll-job/${certType}`}
           description="Checks the status of a submitted TDS job. Keep polling until status is completed."
           onSubmit={() => b2bApi.pollTdsJob(certType, jobId, { username, password, tan })}
         >
@@ -98,7 +98,7 @@ export default function TdsPage() {
         <ApiCard
           title="Fetch TDS Job History"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/${certType}/search`}
+          endpoint={`/api/v1/b2b/tds/fetch-jobs/${certType}`}
           description="Searches past TDS certificate jobs for this deductor."
           onSubmit={() => b2bApi.fetchTdsJobs(certType, { username, password, tan, quarter, financial_year: fy })}
         >

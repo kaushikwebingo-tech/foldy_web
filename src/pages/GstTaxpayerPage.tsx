@@ -51,7 +51,7 @@ export default function GstTaxpayerPage() {
           <ApiCard
             title="Generate GST Portal OTP"
             method="POST"
-            endpoint="/api/v1/b2b/gst-taxpayer/generate-otp"
+            endpoint="/api/v1/b2b/gst/otp"
             description="Sends OTP to the mobile/email registered with the GST portal for this GSTIN."
             onSubmit={() => b2bApi.generateGstOtp(username, gstin)}
           >
@@ -66,7 +66,7 @@ export default function GstTaxpayerPage() {
           <ApiCard
             title="Verify GST Portal OTP"
             method="POST"
-            endpoint="/api/v1/b2b/gst-taxpayer/verify-otp"
+            endpoint="/api/v1/b2b/gst/otp/verify"
             description="Verifies OTP and returns a taxpayer_token. Copy the token for all subsequent calls."
             onSubmit={() => b2bApi.verifyGstOtp(username, gstin, otp)}
           >
@@ -80,7 +80,7 @@ export default function GstTaxpayerPage() {
         <ApiCard
           title="Refresh Taxpayer Session"
           method="POST"
-          endpoint="/api/v1/b2b/gst-taxpayer/refresh-session"
+          endpoint="/api/v1/b2b/gst/session/refresh"
           description="Refreshes the taxpayer_token before it expires."
           onSubmit={() => b2bApi.refreshGstSession(tpToken)}
         >
@@ -91,7 +91,7 @@ export default function GstTaxpayerPage() {
         <ApiCard
           title="Get GSTR-1 Summary"
           method="POST"
-          endpoint="/api/v1/b2b/gst-taxpayer/gstr1/summary"
+          endpoint="/api/v1/b2b/gst/gstr1/summary"
           description="Fetches GSTR-1 summary for a return period and generates a downloadable PDF."
           onSubmit={() => b2bApi.getGstr1Summary(tpToken, gstin, year, month)}
         >
@@ -105,7 +105,7 @@ export default function GstTaxpayerPage() {
         <ApiCard
           title="Get GSTR-1 B2B Invoices"
           method="POST"
-          endpoint="/api/v1/b2b/gst-taxpayer/gstr1/b2b"
+          endpoint="/api/v1/b2b/gst/gstr1/b2b"
           description="Fetches B2B invoice details from GSTR-1 for a given period."
           onSubmit={() => b2bApi.getGstr1B2b(tpToken, gstin, year, month)}
         >
@@ -119,7 +119,7 @@ export default function GstTaxpayerPage() {
         <ApiCard
           title="Get Annual Sales Summary"
           method="GET"
-          endpoint="/api/v1/b2b/gst-taxpayer/sales-summary"
+          endpoint="/api/v1/b2b/gst/sales-summary"
           description="Calculates monthly sales breakdown across 12 months of a financial year. Makes up to 12 Sandbox calls."
           onSubmit={() => b2bApi.getSalesSummary(gstin, fy, tpToken)}
         >
@@ -132,7 +132,7 @@ export default function GstTaxpayerPage() {
         <ApiCard
           title="Mark Return as Filed"
           method="POST"
-          endpoint="/api/v1/b2b/gst-taxpayer/mark-filed"
+          endpoint="/api/v1/b2b/gst/mark-as-filed"
           description="Marks a GST form as filed for this user, stopping cron notifications for that period."
           onSubmit={() => b2bApi.markAsFiled(gstin, formType, period)}
         >

@@ -25,7 +25,7 @@ export default function GstProfilePage() {
         <ApiCard
           title="Get Business Info by GSTIN"
           method="POST"
-          endpoint="/api/v1/b2b/gst-profile/business-info"
+          endpoint="/api/v1/b2b/gst/get-business-info"
           description="Returns the business name, address, registration status, and filing details for a GSTIN."
           onSubmit={() => b2bApi.getBusinessInfo(gstin)}
         >

@@ -1,43 +1,44 @@
 import { client } from './client';
 
+// All B2B GST endpoints are mounted flat under /b2b/gst ; TDS under /b2b/tds
 export const b2bApi = {
-  // GST Profile
+  // GST — business info
   getBusinessInfo:    (gstin: string) =>
-    client.post('/b2b/gst-profile/business-info', { gstin }),
+    client.post('/b2b/gst/get-business-info', { gstin }),
 
-  // Finance Status
+  // GST — returns / finance status
   trackGstReturns:    (gstin: string, financial_year: string, gstr?: string) =>
-    client.post('/b2b/finance-status/track', { gstin, financial_year, gstr }),
+    client.post('/b2b/gst/get-finance-status', { gstin, financial_year, gstr }),
 
-  // GST Taxpayer
+  // GST — taxpayer session
   generateGstOtp:     (username: string, gstin: string) =>
-    client.post('/b2b/gst-taxpayer/generate-otp', { username, gstin }),
+    client.post('/b2b/gst/otp', { username, gstin }),
 
   verifyGstOtp:       (username: string, gstin: string, otp: string) =>
-    client.post('/b2b/gst-taxpayer/verify-otp', { username, gstin, otp }),
+    client.post('/b2b/gst/otp/verify', { username, gstin, otp }),
 
   refreshGstSession:  (taxpayer_token: string) =>
-    client.post('/b2b/gst-taxpayer/refresh-session', { taxpayer_token }),
+    client.post('/b2b/gst/session/refresh', { taxpayer_token }),
 
   getGstr1Summary:    (taxpayer_token: string, gstin: string, year: string, month: string, summary_type?: string) =>
-    client.post('/b2b/gst-taxpayer/gstr1/summary', { taxpayer_token, gstin, year, month, summary_type }),
+    client.post('/b2b/gst/gstr1/summary', { taxpayer_token, gstin, year, month, summary_type }),
 
   getGstr1B2b:        (taxpayer_token: string, gstin: string, year: string, month: string) =>
-    client.post('/b2b/gst-taxpayer/gstr1/b2b', { taxpayer_token, gstin, year, month }),
+    client.post('/b2b/gst/gstr1/b2b', { taxpayer_token, gstin, year, month }),
 
   getSalesSummary:    (gstin: string, fy: string, taxpayer_token: string) =>
-    client.get('/b2b/gst-taxpayer/sales-summary', { params: { gstin, fy, taxpayer_token } }),
+    client.get('/b2b/gst/sales-summary', { params: { gstin, fy, taxpayer_token } }),
 
   markAsFiled:        (gstin: string, formType: string, period: string) =>
-    client.post('/b2b/gst-taxpayer/mark-filed', { gstin, formType, period }),
+    client.post('/b2b/gst/mark-as-filed', { gstin, formType, period }),
 
-  // TDS
+  // TDS — TRACES jobs
   submitTdsJob:       (certificateType: string, data: Record<string, unknown>) =>
-    client.post(`/b2b/tds/${certificateType}/submit`, data),
+    client.post(`/b2b/tds/submit-job/${certificateType}`, data),
 
   pollTdsJob:         (certificateType: string, jobId: string, credentials: Record<string, unknown>) =>
-    client.post(`/b2b/tds/${certificateType}/poll`, { ...credentials, job_id: jobId }),
+    client.post(`/b2b/tds/poll-job/${certificateType}`, { ...credentials, job_id: jobId }),
 
   fetchTdsJobs:       (certificateType: string, data: Record<string, unknown>) =>
-    client.post(`/b2b/tds/${certificateType}/search`, data),
+    client.post(`/b2b/tds/fetch-jobs/${certificateType}`, data),
 };

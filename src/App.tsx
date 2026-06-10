@@ -8,6 +8,7 @@ import FinanceStatusPage from '@/pages/FinanceStatusPage';
 import GstTaxpayerPage   from '@/pages/GstTaxpayerPage';
 import TdsPage           from '@/pages/TdsPage';
 import StoragePage       from '@/pages/StoragePage';
+import ManualUploadsPage from '@/pages/ManualUploadsPage';
 import PaymentsPage      from '@/pages/PaymentsPage';
 import DigilockerPage    from '@/pages/DigilockerPage';
 import AdminPage         from '@/pages/AdminPage';
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/gst-taxpayer"   element={<GstTaxpayerPage />} />
           <Route path="/tds"            element={<TdsPage />} />
           <Route path="/storage"        element={<StoragePage />} />
+          <Route path="/manual-uploads" element={<ManualUploadsPage />} />
           <Route path="/payments"       element={<PaymentsPage />} />
           <Route path="/digilocker"     element={<DigilockerPage />} />
           <Route path="/admin"          element={<AdminPage />} />

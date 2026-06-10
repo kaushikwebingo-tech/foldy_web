@@ -42,7 +42,7 @@ export default function FinanceStatusPage() {
         <ApiCard
           title="Track GST Returns"
           method="POST"
-          endpoint="/api/v1/b2b/finance-status/track"
+          endpoint="/api/v1/b2b/gst/get-finance-status"
           description="Returns filing status for GSTR-1, GSTR-3B, GSTR-9, etc. for the specified financial year."
           onSubmit={() => b2bApi.trackGstReturns(gstin, fy, gstr || undefined)}
         >
