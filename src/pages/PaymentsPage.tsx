@@ -25,6 +25,7 @@ export default function PaymentsPage() {
         subtitle="Razorpay integration for plan upgrades. Use mock credentials for testing (see .env.example)."
         icon={<CreditCard size={18} />}
         badge="Auth Required"
+        postmanSection="payments"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">

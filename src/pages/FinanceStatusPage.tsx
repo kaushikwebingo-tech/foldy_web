@@ -32,6 +32,7 @@ export default function FinanceStatusPage() {
         subtitle="Track whether GSTR returns have been filed for a given GSTIN and financial year."
         icon={<BarChart2 size={18} />}
         badge="B2B Only"
+        postmanSection="gst"
       />
 
       <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">

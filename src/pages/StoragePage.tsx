@@ -37,6 +37,7 @@ export default function StoragePage() {
         subtitle="Create folders, upload files (simulated), manage storage quota and paid plans."
         icon={<FolderOpen size={18} />}
         badge="Auth Required"
+        postmanSection="storage"
       />
 
       <div className="space-y-4">

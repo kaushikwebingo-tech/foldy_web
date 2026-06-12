@@ -34,6 +34,7 @@ export default function ManualUploadsPage() {
         subtitle="Upload compliance proofs (PTAX, Trade license, PF/ESI) and store documents (Property papers). Files go to S3 — compressed and virus-scanned."
         icon={<UploadCloud size={18} />}
         badge="Auth Required"
+        postmanSection="manual-uploads"
       />
 
       <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">

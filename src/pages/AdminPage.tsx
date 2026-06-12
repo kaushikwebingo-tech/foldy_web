@@ -21,6 +21,7 @@ export default function AdminPage() {
         subtitle="Admin authentication and user management. Admin token is auto-saved separately from the app user token."
         icon={<ShieldCheck size={18} />}
         badge="Admin Only"
+        postmanSection="admin"
       />
 
       <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">

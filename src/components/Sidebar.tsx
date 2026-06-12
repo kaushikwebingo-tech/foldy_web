@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, LogIn, User, FileText, BarChart2,
   Building2, Receipt, HardDrive, CreditCard, FolderOpen,
-  ShieldCheck, LogOut, ChevronRight, UploadCloud,
+  ShieldCheck, LogOut, ChevronRight, UploadCloud, Server,
 } from 'lucide-react';
-import { getToken, removeToken } from '@/lib/utils';
+import { getToken, removeToken, getApiHost, setApiHost } from '@/lib/utils';
 
 /* ── nav definition ──────────────────────────────────────────────── */
 const AUTH_NAV = [
@@ -36,6 +37,15 @@ const GROUPS = [
 export default function Sidebar() {
   const navigate = useNavigate();
   const loggedIn = !!getToken();
+  const [hostInput, setHostInput] = useState(getApiHost());
+  const [savedHost, setSavedHost] = useState(getApiHost());
+
+  const applyHost = () => {
+    setApiHost(hostInput);
+    const effective = getApiHost();
+    setHostInput(effective);
+    setSavedHost(effective);
+  };
 
   const handleLogout = () => {
     removeToken();
@@ -56,6 +66,37 @@ export default function Sidebar() {
           <span className="font-bold text-white text-base tracking-tight">Foldy</span>
           <span className="text-xs text-blue-400 font-medium ml-auto">Dev</span>
         </div>
+      </div>
+
+      {/* API host target */}
+      <div className="px-5 py-3 border-b border-white/10">
+        <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">
+          <Server size={11} />
+          API Host
+        </label>
+        <div className="flex gap-1.5">
+          <input
+            value={hostInput}
+            onChange={(e) => setHostInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && applyHost()}
+            placeholder="localhost:5000"
+            spellCheck={false}
+            className="min-w-0 flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#1A73E8]"
+          />
+          <button
+            onClick={applyHost}
+            className="shrink-0 px-2 py-1 text-xs font-semibold rounded bg-[#1A73E8] hover:bg-[#1558C0] text-white transition-colors"
+          >
+            Set
+          </button>
+        </div>
+        <p className="text-[10px] mt-1.5 truncate" title={savedHost || 'http://localhost:5000 (via dev proxy)'}>
+          {savedHost ? (
+            <span className="text-amber-400">→ {savedHost}</span>
+          ) : (
+            <span className="text-slate-600">→ localhost:5000 (default)</span>
+          )}
+        </p>
       </div>
 
       {/* Nav */}

@@ -32,6 +32,7 @@ export default function DigilockerPage() {
         subtitle="KYC document fetch via DigiLocker. Initiate session, check status, fetch government documents."
         icon={<HardDrive size={18} />}
         badge="Public"
+        postmanSection="digilocker"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">

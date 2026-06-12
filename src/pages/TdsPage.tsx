@@ -52,6 +52,7 @@ export default function TdsPage() {
         subtitle="Fetch Form 16 / Form 16A certificates from TRACES via Sandbox. Requires TRACES credentials."
         icon={<Receipt size={18} />}
         badge="B2B Only"
+        postmanSection="tds"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">

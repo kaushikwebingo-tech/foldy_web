@@ -38,6 +38,7 @@ export default function GstTaxpayerPage() {
         subtitle="Full GST portal session flow: OTP → verify → refresh → fetch GSTR-1 data → mark as filed."
         icon={<FileText size={18} />}
         badge="B2B Only"
+        postmanSection="gst"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
