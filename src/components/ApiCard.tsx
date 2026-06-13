@@ -3,7 +3,7 @@ import ResponseViewer from './ResponseViewer';
 
 interface Props {
   title: string;
-  method: 'GET' | 'POST' | 'DELETE' | 'PUT';
+  method: 'GET' | 'POST' | 'DELETE' | 'PUT' | 'PATCH';
   endpoint: string;
   description?: string;
   children?: ReactNode;
@@ -16,6 +16,7 @@ const METHOD_COLORS = {
   POST:   'bg-blue-100 text-blue-700',
   DELETE: 'bg-red-100 text-red-700',
   PUT:    'bg-orange-100 text-orange-700',
+  PATCH:  'bg-amber-100 text-amber-700',
 };
 
 export default function ApiCard({ title, method, endpoint, description, children, onSubmit, buttonLabel = 'Send Request' }: Props) {

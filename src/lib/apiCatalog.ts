@@ -218,6 +218,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create Order',
         method: 'POST',
         path: 'api/v1/payments/create-order',
+        description: 'amount is optional & server-authoritative: the price comes from the admin plan catalog when seeded; the body amount is only a fallback.',
         body: { planType: 'business', amount: 999 }
       },
       {
@@ -286,23 +287,124 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   admin: {
     key: 'admin',
     name: 'Admin Panel',
-    description: 'Admin auth + onboarding approval queue. Uses the /api/admin/v1 prefix; set {{token}} to an ADMIN JWT.',
+    description: 'Admin auth + admin-user management + Super-Admin plan catalog. Uses the /api/admin/v1 prefix; set {{token}} to an ADMIN JWT.',
     endpoints: [
-      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
       { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
-      {
-        name: 'List Pending Requests',
-        method: 'GET',
-        path: 'api/admin/v1/approve-reject/pending',
-        query: [{ key: 'page', value: '1' }, { key: 'limit', value: '10' }]
-      },
-      { name: 'Approve User', method: 'POST', path: 'api/admin/v1/approve-reject/approve', body: { userId: '<userId>' } },
-      { name: 'Reject User', method: 'POST', path: 'api/admin/v1/approve-reject/reject', body: { userId: '<userId>' } },
+      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
       {
         name: 'List Admin Users',
         method: 'GET',
         path: 'api/admin/v1/admin-users',
         query: [{ key: 'page', value: '1' }, { key: 'limit', value: '10' }, { key: 'search', value: '', description: 'optional' }]
+      },
+      {
+        name: 'List Plans',
+        method: 'GET',
+        path: 'api/admin/v1/plans',
+        description: 'Subscription plan catalog (active + inactive).'
+      },
+      {
+        name: 'Create Plan',
+        method: 'POST',
+        path: 'api/admin/v1/plans',
+        description: 'One plan per tier. price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none.',
+        body: {
+          planType: 'individual',
+          name: 'Individual',
+          description: 'For solo professionals.',
+          price: 1,
+          currency: 'INR',
+          interval: 'monthly',
+          storageLimit: 10737418240,
+          maxFolders: 10,
+          maxFilesPerFolder: 20,
+          isActive: true
+        }
+      },
+      {
+        name: 'Update Plan',
+        method: 'PUT',
+        path: 'api/admin/v1/plans/:id',
+        description: 'Edit price/quotas/details. Bumps version; does NOT affect active subscribers.',
+        pathVars: [{ key: 'id', value: '<planId>' }],
+        body: { price: 499, name: 'Individual' }
+      },
+      {
+        name: 'Activate / Deactivate Plan',
+        method: 'PATCH',
+        path: 'api/admin/v1/plans/:id/status',
+        pathVars: [{ key: 'id', value: '<planId>' }],
+        body: { isActive: false }
+      },
+      {
+        name: 'Statistics Overview',
+        method: 'GET',
+        path: 'api/admin/v1/stats/overview',
+        description: 'Users + subscriptions + revenue + compliance. Live from MongoDB.',
+        query: [
+          { key: 'activeDays', value: '30', description: 'active-user window (default 30)' },
+          { key: 'trendMonths', value: '6', description: 'revenue trend length (default 6)' }
+        ]
+      },
+      {
+        name: 'Revenue & Trend',
+        method: 'GET',
+        path: 'api/admin/v1/stats/revenue',
+        description: 'Revenue: gross/refunded/net, by module, last 30 days + monthly trend.',
+        query: [{ key: 'trendMonths', value: '6', description: 'default 6' }]
+      },
+      {
+        name: 'List App Users',
+        method: 'GET',
+        path: 'api/admin/v1/users',
+        description: 'App users with block status + subscription summary.',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '10' },
+          { key: 'search', value: '', description: 'phone / email / name (optional)' }
+        ]
+      },
+      {
+        name: 'Block User',
+        method: 'PATCH',
+        path: 'api/admin/v1/users/:userId/block',
+        description: 'Blocks app access. Audit-logged.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Fraudulent activity' }
+      },
+      {
+        name: 'Unblock User',
+        method: 'PATCH',
+        path: 'api/admin/v1/users/:userId/unblock',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Resolved' }
+      },
+      {
+        name: 'Cancel Subscription',
+        method: 'POST',
+        path: 'api/admin/v1/users/:userId/cancel-subscription',
+        description: 'Cancels the user subscription. reason is REQUIRED. Audit-logged.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Customer requested cancellation' }
+      },
+      {
+        name: 'Process Refund',
+        method: 'POST',
+        path: 'api/admin/v1/payments/:paymentId/refund',
+        description: 'Razorpay refund. Omit amount for full; include ₹ amount for partial. Audit-logged.',
+        pathVars: [{ key: 'paymentId', value: '<razorpayPaymentId>' }],
+        body: { amount: 499, reason: 'Service issue' }
+      },
+      {
+        name: 'Audit Logs',
+        method: 'GET',
+        path: 'api/admin/v1/audit-logs',
+        description: 'Management action trail (newest first).',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' },
+          { key: 'action', value: '', description: 'block_user|unblock_user|cancel_subscription|refund_payment (optional)' }
+        ]
       }
     ]
   }
