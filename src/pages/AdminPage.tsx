@@ -218,7 +218,7 @@ export default function AdminPage() {
           onSubmit={() => adminApi.listPlans()}
         />
 
-        {/* Create plan
+        Create plan
         <ApiCard
           title="Create Plan"
           method="POST"
@@ -303,10 +303,10 @@ export default function AdminPage() {
             placeholder="For solo professionals."
             fullWidth
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Update plan */}
-        {/* <ApiCard
+        <ApiCard
           title="Update Plan (price / quotas)"
           method="PUT"
           endpoint="/api/admin/v1/plans/:id"
@@ -321,10 +321,10 @@ export default function AdminPage() {
             placeholder="MongoDB ObjectId of the plan"
             fullWidth
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Activate / deactivate plan */}
-        {/* <ApiCard
+        <ApiCard
           title="Activate / Deactivate Plan"
           method="PATCH"
           endpoint="/api/admin/v1/plans/:id/status"
@@ -350,7 +350,7 @@ export default function AdminPage() {
               { label: "Inactive", value: "false" },
             ]}
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* --- Statistics (Super Admin) --- */}
         <div className="pt-3 pb-1">
@@ -448,7 +448,7 @@ export default function AdminPage() {
         </ApiCard>
 
         {/* Block user */}
-        {/* <ApiCard
+        <ApiCard
           title="Block User"
           method="PATCH"
           endpoint="/api/admin/v1/users/:userId/block"
@@ -471,10 +471,10 @@ export default function AdminPage() {
             placeholder="MongoDB ObjectId of user"
             fullWidth
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Unblock user */}
-        {/* <ApiCard
+        <ApiCard
           title="Unblock User"
           method="PATCH"
           endpoint="/api/admin/v1/users/:userId/unblock"
@@ -496,10 +496,10 @@ export default function AdminPage() {
             placeholder="MongoDB ObjectId of user"
             fullWidth
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Cancel subscription */}
-        {/* <ApiCard
+        <ApiCard
           title="Cancel Subscription"
           method="POST"
           endpoint="/api/admin/v1/users/:userId/cancel-subscription"
@@ -522,10 +522,10 @@ export default function AdminPage() {
             placeholder="MongoDB ObjectId of user"
             fullWidth
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Refund payment */}
-        {/* <ApiCard
+        <ApiCard
           title="Process Refund"
           method="POST"
           endpoint="/api/admin/v1/payments/:paymentId/refund"
@@ -559,10 +559,10 @@ export default function AdminPage() {
             placeholder="full refund"
             type="number"
           />
-        </ApiCard> */}
+        </ApiCard>
 
         {/* Audit logs */}
-        {/* <ApiCard
+        <ApiCard
           title="Audit Logs"
           method="GET"
           endpoint="/api/admin/v1/audit-logs"
@@ -591,7 +591,7 @@ export default function AdminPage() {
             placeholder="1"
             type="number"
           />
-        </ApiCard> */}
+        </ApiCard>
       </div>
 
       {/* Confirmation + reason modal for destructive actions */}
