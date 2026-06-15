@@ -47,6 +47,9 @@ export const adminApi = {
   listAppUsers:   (page = 1, limit = 10, search?: string) =>
     adminClient.get('/users', { params: { page, limit, search } }),
 
+  getUserDetails: (userId: string) =>
+    adminClient.get(`/users/${userId}`),
+
   blockUser:      (userId: string, reason: string) =>
     adminClient.patch(`/users/${userId}/block`, { reason }),
 

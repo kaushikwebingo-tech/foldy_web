@@ -215,21 +215,28 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'Razorpay order creation + signature verification, payment history. Set {{token}}.',
     endpoints: [
       {
+        name: 'List Active Plans',
+        method: 'GET',
+        path: 'api/v1/payments/plans',
+        description: 'Active catalog plans. A tier can have many plans — pick a plan _id to subscribe by planId.'
+      },
+      {
         name: 'Create Order',
         method: 'POST',
         path: 'api/v1/payments/create-order',
-        description: 'amount is optional & server-authoritative: the price comes from the admin plan catalog when seeded; the body amount is only a fallback.',
-        body: { planType: 'business', amount: 999 }
+        description: 'Prefer planId (a tier has many plans). planType is a fallback that resolves the cheapest active plan of that tier; amount is a last-resort fallback. Price is server-authoritative from the catalog.',
+        body: { planId: '<planId>', amount: 999 }
       },
       {
         name: 'Verify Payment & Upgrade',
         method: 'POST',
         path: 'api/v1/payments/verify-payment',
+        description: 'Send planId (preferred) or planType to choose which plan to upgrade to.',
         body: {
           razorpay_order_id: 'order_mock_123',
           razorpay_payment_id: 'pay_mock_123',
           razorpay_signature: 'mock_signature',
-          planType: 'business'
+          planId: '<planId>'
         }
       },
       {
@@ -307,7 +314,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create Plan',
         method: 'POST',
         path: 'api/admin/v1/plans',
-        description: 'One plan per tier. price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none.',
+        description: 'Multiple plans allowed per tier (planType). price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none.',
         body: {
           planType: 'individual',
           name: 'Individual',
@@ -363,6 +370,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           { key: 'limit', value: '10' },
           { key: 'search', value: '', description: 'phone / email / name (optional)' }
         ]
+      },
+      {
+        name: 'Get User Details',
+        method: 'GET',
+        path: 'api/admin/v1/users/:userId',
+        description: 'Full per-user view: profile, subscription/plan, storage usage (used/available), and recent payments.',
+        pathVars: [{ key: 'userId', value: '<userId>' }]
       },
       {
         name: 'Block User',

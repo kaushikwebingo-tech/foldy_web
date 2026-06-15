@@ -447,6 +447,24 @@ export default function AdminPage() {
           />
         </ApiCard>
 
+        {/* Get user details */}
+        <ApiCard
+          title="Get User Details"
+          method="GET"
+          endpoint="/api/admin/v1/users/:userId"
+          description="Full per-user view: profile, subscription/plan, storage usage (used/available), and recent payments."
+          buttonLabel="Fetch Details"
+          onSubmit={() => adminApi.getUserDetails(mgUserId.trim())}
+        >
+          <Field
+            label="User ID"
+            value={mgUserId}
+            onChange={setMgUserId}
+            placeholder="<userId>"
+            fullWidth
+          />
+        </ApiCard>
+
         {/* Block user */}
         <ApiCard
           title="Block User"

@@ -12,6 +12,7 @@ const PLAN_OPTIONS = [
 ];
 
 export default function PaymentsPage() {
+  const [planId, setPlanId]       = useState('');
   const [planType, setPlanType]   = useState('individual');
   const [amount, setAmount]       = useState('');
   const [orderId, setOrderId]     = useState('');
@@ -36,16 +37,30 @@ export default function PaymentsPage() {
       </div>
 
       <div className="space-y-4">
+        {/* List active plans */}
+        <ApiCard
+          title="List Active Plans"
+          method="GET"
+          endpoint="/api/v1/payments/plans"
+          description="Returns active catalog plans. A tier can have many plans — copy a plan _id to subscribe by planId below."
+          onSubmit={() => paymentApi.listPlans()}
+        />
+
         {/* Create order */}
         <ApiCard
           title="Create Payment Order"
           method="POST"
           endpoint="/api/v1/payments/create-order"
-          description="Creates a Razorpay order for a subscription plan upgrade. Returns order_id and amount."
-          onSubmit={() => paymentApi.createOrder(planType, Number(amount))}
+          description="Creates a Razorpay order for a plan upgrade. Prefer planId (a tier has many plans); planType is a fallback that picks the cheapest active plan. amount is a last-resort fallback."
+          onSubmit={() => paymentApi.createOrder({
+            planId: planId || undefined,
+            planType: planId ? undefined : planType,
+            amount: amount ? Number(amount) : undefined,
+          })}
         >
-          <SelectField label="Plan Type" value={planType} onChange={setPlanType} options={PLAN_OPTIONS} />
-          <Field label="Amount (₹)" value={amount} onChange={setAmount} placeholder="e.g. 999" type="number" />
+          <Field label="Plan ID (preferred)" value={planId} onChange={setPlanId} placeholder="catalog plan _id" fullWidth />
+          <SelectField label="Plan Type (fallback)" value={planType} onChange={setPlanType} options={PLAN_OPTIONS} />
+          <Field label="Amount (₹, fallback)" value={amount} onChange={setAmount} placeholder="e.g. 999" type="number" />
         </ApiCard>
 
         {/* Verify payment */}
@@ -58,13 +73,14 @@ export default function PaymentsPage() {
             razorpay_order_id: orderId,
             razorpay_payment_id: paymentId,
             razorpay_signature: signature,
-            planType,
+            ...(planId ? { planId } : { planType }),
           })}
         >
           <Field label="Razorpay Order ID" value={orderId} onChange={setOrderId} placeholder="order_mock_..." />
           <Field label="Razorpay Payment ID" value={paymentId} onChange={setPaymentId} placeholder="pay_mock_..." />
           <Field label="Signature" value={signature} onChange={setSignature} placeholder="mock_signature" fullWidth />
-          <SelectField label="Plan Type" value={planType} onChange={setPlanType} options={PLAN_OPTIONS} />
+          <Field label="Plan ID (preferred)" value={planId} onChange={setPlanId} placeholder="catalog plan _id" fullWidth />
+          <SelectField label="Plan Type (fallback)" value={planType} onChange={setPlanType} options={PLAN_OPTIONS} />
         </ApiCard>
 
         {/* History */}
