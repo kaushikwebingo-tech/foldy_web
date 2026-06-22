@@ -11,10 +11,10 @@ export default defineConfig({
   server: {
     port: 3000,
     host: "0.0.0.0",
-    allowedHosts: ["localhost", "127.0.0.1"],
+    allowedHosts: ["localhost", "127.0.0.1","0.0.0.0"],
     proxy: {
       "/api": {
-        target: "http://localhost:5000",
+        target: "https://apitest.foldy.co.in",
         changeOrigin: true,
       },
     },

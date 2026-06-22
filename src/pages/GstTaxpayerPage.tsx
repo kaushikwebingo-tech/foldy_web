@@ -35,14 +35,21 @@ export default function GstTaxpayerPage() {
     <div className="max-w-3xl">
       <PageHeader
         title="GST Taxpayer Portal"
-        subtitle="Full GST portal session flow: OTP → verify → refresh → fetch GSTR-1 data → mark as filed."
+        subtitle="GST runs on WhiteBooks (GSP). Flow: OTP → verify → refresh → fetch GSTR-1 data → mark as filed."
         icon={<FileText size={18} />}
         badge="B2B Only"
         postmanSection="gst"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        <strong>Flow:</strong> Step 1 Generate OTP → Step 2 Verify OTP (copy taxpayer_token) → Step 3 Use token in GSTR-1 calls.
+        <strong>Flow:</strong> Step 1 Generate OTP → Step 2 Verify OTP (copy <code>taxpayer_token</code>) → Step 3 Use token in GSTR-1 calls.
+        <div className="mt-1 text-blue-600/80">
+          Provider: <strong>WhiteBooks</strong>. The server supplies email / IP / state-code / txn (env: <code>WHITEBOOKS_EMAIL</code>, <code>WHITEBOOKS_IP</code>, <code>WHITEBOOKS_BASE_URL</code>, <code>WHITEBOOKS_CLIENT_ID/SECRET</code>); you only pass username, GSTIN and OTP.
+        </div>
+      </div>
+
+      <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+        <strong>Heads-up:</strong> <code>get-business-info</code> (GSTIN lookup) is temporarily unavailable on WhiteBooks — the GSTIN-search endpoint is pending.
       </div>
 
       <div className="space-y-4">
@@ -121,7 +128,7 @@ export default function GstTaxpayerPage() {
           title="Get Annual Sales Summary"
           method="GET"
           endpoint="/api/v1/b2b/gst/sales-summary"
-          description="Calculates monthly sales breakdown across 12 months of a financial year. Makes up to 12 Sandbox calls."
+          description="Calculates monthly sales breakdown across 12 months of a financial year. Makes up to 12 WhiteBooks calls."
           onSubmit={() => b2bApi.getSalesSummary(gstin, fy, tpToken)}
         >
           <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />

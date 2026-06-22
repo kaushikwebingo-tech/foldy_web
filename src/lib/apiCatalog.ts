@@ -60,7 +60,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   gst: {
     key: 'gst',
     name: 'GST',
-    description: 'GST profile, finance status & taxpayer-session APIs (B2B). Set {{token}}.',
+    description: 'GST profile, finance status & taxpayer-session APIs (B2B), powered by WhiteBooks (GSP). Server supplies email/IP/state/txn from env; you pass username, GSTIN & OTP. Note: get-business-info (GSTIN lookup) is pending the WhiteBooks endpoint. Set {{token}}.',
     endpoints: [
       {
         name: 'Get Business Info',

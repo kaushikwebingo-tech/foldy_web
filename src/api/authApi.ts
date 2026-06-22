@@ -33,4 +33,7 @@ export const authApi = {
 
   getTrialStatus:  () =>
     client.get('/trial/status'),
+
+  logout:          () =>
+    client.post('/auth/logout'),
 };
