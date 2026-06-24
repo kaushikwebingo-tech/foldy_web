@@ -4,32 +4,85 @@ import ApiCard from '@/components/ApiCard';
 import { Field } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { authApi } from '@/api/authApi';
-import { client } from '@/api/client';
 import { getToken, setToken, removeToken } from '@/lib/utils';
 import { LogIn, CheckCircle2, LogOut, LayoutDashboard } from 'lucide-react';
 
-/* ─── Already-logged-in banner ──────────────────────────────────────── */
+/* ─── PAN login cards (shared) ─────────────────────────────────────── */
+function PanLoginCards() {
+  const [pan, setPan]                 = useState('');
+  const [referenceId, setReferenceId] = useState('');
+  const [otp, setOtp]                 = useState('');
+
+  return (
+    <div className="space-y-4">
+      <div className="mb-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+        Login is PAN-first: enter your PAN to receive an OTP on your registered mobile, then verify it.
+        New PAN? Use the <strong>Onboarding</strong> page to register. OTPs print to the server console.
+      </div>
+
+      <ApiCard
+        step={1}
+        title="PAN Entry"
+        method="POST"
+        endpoint="/api/v1/onboarding/pan"
+        description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → starts registration. Copy referenceId into step 2."
+        onSubmit={() => authApi.panEntry(pan)}
+      >
+        <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" fullWidth />
+      </ApiCard>
+
+      <ApiCard
+        step={2}
+        title="Verify OTP & Login"
+        method="POST"
+        endpoint="/api/v1/onboarding/pan/verify-otp"
+        description="On an existing PAN this returns a JWT and logs you in automatically."
+        onSubmit={async () => {
+          const res = await authApi.verifyPanOtp(referenceId, otp);
+          const data = res.data?.data;
+          if (data?.mode === 'login' && data?.token) {
+            setToken(data.token);
+            window.location.reload();
+          }
+          return res;
+        }}
+      >
+        <Field label="referenceId" value={referenceId} onChange={setReferenceId} placeholder="From PAN entry response" fullWidth />
+        <Field label="OTP" value={otp} onChange={setOtp} placeholder="6-digit OTP (server console)" />
+      </ApiCard>
+
+      <ApiCard
+        step={3}
+        title="Get Trial / Plan Status"
+        method="GET"
+        endpoint="/api/v1/user/plan-status"
+        description="Returns the current subscription status for the authenticated user."
+        onSubmit={() => authApi.getTrialStatus()}
+      />
+    </div>
+  );
+}
+
+/* ─── Already-logged-in banner ─────────────────────────────────────── */
 function AlreadyLoggedIn() {
   const navigate = useNavigate();
   const token    = getToken()!;
 
   const handleLogout = () => {
     removeToken();
-    // reload so sidebar re-evaluates auth state
     window.location.reload();
   };
 
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Auth — Login & OTP"
+        title="Auth — PAN Login"
         subtitle="Manage your session."
         icon={<LogIn size={18} />}
         badge="Public"
-        postmanSection="auth"
+        postmanSection="onboarding"
       />
 
-      {/* Session active card */}
       <div className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
@@ -41,15 +94,11 @@ function AlreadyLoggedIn() {
           </div>
         </div>
 
-        {/* Token preview */}
         <div className="bg-white border border-green-200 rounded-xl px-4 py-3 mb-4">
           <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">Current Token</p>
-          <code className="text-xs text-slate-700 break-all leading-5">
-            {token.slice(0, 60)}…
-          </code>
+          <code className="text-xs text-slate-700 break-all leading-5">{token.slice(0, 60)}…</code>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-3">
           <button
             onClick={() => navigate('/')}
@@ -68,95 +117,7 @@ function AlreadyLoggedIn() {
         </div>
       </div>
 
-      {/* Still allow raw API testing below */}
-      <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg">
-        <p className="text-xs text-slate-500">
-          <strong className="text-slate-600">Raw API testing:</strong> You can still call the endpoints below to test them directly.
-        </p>
-      </div>
-
-      <RawAuthCards phone="" otp="" regEmail="" regName="" regPass="" />
-    </div>
-  );
-}
-
-/* ─── Raw API cards (shared between both states) ─────────────────── */
-function RawAuthCards({
-  phone: initPhone, otp: initOtp,
-  regEmail: initEmail, regName: initName, regPass: initPass,
-}: {
-  phone: string; otp: string;
-  regEmail: string; regName: string; regPass: string;
-}) {
-  const [phone, setPhone]   = useState(initPhone);
-  const [otp, setOtp]       = useState(initOtp);
-  const [regEmail, setEmail] = useState(initEmail);
-  const [regPass, setPass]   = useState(initPass);
-  const [regName, setName]   = useState(initName);
-
-  return (
-    <div className="space-y-4">
-      <ApiCard
-        step={1}
-        title="Send OTP"
-        method="POST"
-        endpoint="/api/v1/onboarding/send-otp"
-        description="Sends a 6-digit OTP to the phone number. Check the server console for the OTP value."
-        onSubmit={() => authApi.sendOtp(phone)}
-      >
-        <Field label="Phone Number" value={phone} onChange={setPhone} placeholder="e.g. 9876543210" />
-      </ApiCard>
-
-      <ApiCard
-        step={2}
-        title="Verify OTP"
-        method="POST"
-        endpoint="/api/v1/onboarding/verify-otp"
-        description="Verifies the OTP. On success the JWT is automatically saved and shown in the top bar."
-        onSubmit={async () => {
-          const res = await authApi.verifyOtp(phone, otp);
-          if (res.data?.data?.token) {
-            setToken(res.data.data.token);
-            window.location.reload();   // refresh sidebar auth state
-          }
-          return res;
-        }}
-      >
-        <Field label="Phone Number" value={phone} onChange={setPhone} placeholder="e.g. 9876543210" />
-        <Field label="OTP"          value={otp}   onChange={setOtp}   placeholder="6-digit OTP"    />
-      </ApiCard>
-
-      <ApiCard
-        step={3}
-        title="Register (Email / Password)"
-        method="POST"
-        endpoint="/api/v1/auth/register"
-        description="Legacy email+password registration. Requires phone, email, password (≥ 8 chars) and full name."
-        onSubmit={() => client.post('/auth/register', { phoneno: phone, email: regEmail, password: regPass, fullName: regName })}
-      >
-        <Field label="Phone Number" value={phone}   onChange={setPhone} placeholder="9876543210"        />
-        <Field label="Full Name"    value={regName}  onChange={setName}  placeholder="John Doe"          />
-        <Field label="Email"        value={regEmail} onChange={setEmail} placeholder="user@example.com"  type="email"    />
-        <Field label="Password"     value={regPass}  onChange={setPass}  placeholder="••••••••"          type="password" />
-      </ApiCard>
-
-      <ApiCard
-        step={4}
-        title="Get Trial / Plan Status"
-        method="GET"
-        endpoint="/api/v1/user/plan-status"
-        description="Returns current subscription status for the authenticated user."
-        onSubmit={() => authApi.getTrialStatus()}
-      />
-
-      <ApiCard
-        step={5}
-        title="Check Approval Status"
-        method="GET"
-        endpoint="/api/v1/onboarding/is-user-allowed"
-        description="Returns the admin approval status for this user's application request."
-        onSubmit={() => authApi.checkApproval()}
-      />
+      <PanLoginCards />
     </div>
   );
 }
@@ -164,21 +125,18 @@ function RawAuthCards({
 /* ─── Main export ─────────────────────────────────────────────────── */
 export default function LoginPage() {
   const loggedIn = !!getToken();
-
-  /* already logged in — show session banner first */
   if (loggedIn) return <AlreadyLoggedIn />;
 
-  /* not logged in — show clean login flow */
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Auth — Login & OTP"
-        subtitle="Phone-based OTP flow is the primary login. Token is auto-saved to localStorage on successful verify-otp."
+        title="Auth — PAN Login"
+        subtitle="PAN-first login. The JWT is auto-saved to localStorage on a successful OTP verify."
         icon={<LogIn size={18} />}
         badge="Public"
-        postmanSection="auth"
+        postmanSection="onboarding"
       />
-      <RawAuthCards phone="" otp="" regEmail="" regName="" regPass="" />
+      <PanLoginCards />
     </div>
   );
 }

@@ -1,46 +1,40 @@
 import { client } from './client';
 
+/*
+ * Onboarding (PAN-first) + session helpers.
+ * Single entry: panEntry → server returns mode "register" or "login".
+ * Registration runs 3 OTP layers: PAN → Phone → Email → create-profile.
+ */
 export const authApi = {
-  sendOtp:         (phoneno: string) =>
-    client.post('/onboarding/send-otp', { phoneno }),
+  // Single entry — register (new PAN) or login (existing PAN).
+  panEntry:        (pan: string) =>
+    client.post('/onboarding/pan', { pan }),
 
-  verifyOtp:       (phoneno: string, otp: string) =>
-    client.post('/onboarding/verify-otp', { phoneno, otp }),
+  // Layer 1 — PAN OTP. Returns registrationToken (register) or token (login).
+  verifyPanOtp:    (referenceId: string, otp: string) =>
+    client.post('/onboarding/pan/verify-otp', { referenceId, otp }),
 
-  verifyPan:       (pan_no: string, full_name: string, dob: string) =>
-    client.post('/onboarding/verify-pan', { pan_no, full_name, dob }),
+  // Layers 2 & 3 — phone / email OTP (registration).
+  sendOtp:         (registrationToken: string, channel: 'phone' | 'email', value: string) =>
+    client.post('/onboarding/otp/send', { registrationToken, channel, value }),
 
-  verifyGstin:     (gstin_no: string) =>
-    client.post('/onboarding/verify-gstin', { gstin_no }),
+  verifyOtp:       (registrationToken: string, channel: 'phone' | 'email', otp: string) =>
+    client.post('/onboarding/otp/verify', { registrationToken, channel, otp }),
 
-  verifyBank:      (ifsc_code: string, account_no: string) =>
-    client.post('/onboarding/verify-bank', { ifsc_code, account_no }),
+  // Finish registration → JWT (auto-login).
+  createProfile:   (registrationToken: string, name?: string) =>
+    client.post('/onboarding/create-profile', { registrationToken, ...(name ? { name } : {}) }),
 
-  generateAadhaarOtp: (aadhaar_number: string) =>
-    client.post('/onboarding/aadhaar/generate-otp', { aadhaar_number }),
-
-  verifyAadhaarOtp: (reference_id: string, otp: string) =>
-    client.post('/onboarding/aadhaar/verify-otp', { reference_id, otp }),
-
-  createProfile:   (data: Record<string, unknown>) =>
-    client.post('/onboarding/create-profile', data),
-
+  // Post-login profile read.
   getProfileDetails: () =>
     client.get('/onboarding/profile-details'),
 
-  updatePushToken: (notification_token: string, device_type: 'android' | 'ios' | 'web') =>
-    client.post('/auth/update-push-token', { notification_token, device_type }),
-
-  addRequest:      () =>
-    client.post('/onboarding/add-request'),
-
-  checkApproval:   () =>
-    client.get('/onboarding/is-user-allowed'),
-
-  // Subscription / trial status. The dedicated /trial route was removed —
-  // status now comes from the user endpoint (subscriptionService.getSubscriptionStatus).
+  // Subscription / trial status (from the user endpoint).
   getTrialStatus:  () =>
     client.get('/user/plan-status'),
+
+  updatePushToken: (notification_token: string, device_type: 'android' | 'ios' | 'web') =>
+    client.post('/auth/update-push-token', { notification_token, device_type }),
 
   logout:          () =>
     client.post('/auth/logout'),

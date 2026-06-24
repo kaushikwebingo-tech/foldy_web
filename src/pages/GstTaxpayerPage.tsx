@@ -20,6 +20,24 @@ const FORM_TYPES = [
   { label: 'GSTR-9C', value: 'GSTR-9C' },
 ];
 
+// OTP request `type` (server enum, no hyphen)
+const OTP_TYPES = [
+  { label: 'GSTR1',  value: 'GSTR1'  },
+  { label: 'GSTR1A', value: 'GSTR1A' },
+  { label: 'GSTR3B', value: 'GSTR3B' },
+  { label: 'GSTR9',  value: 'GSTR9'  },
+  { label: 'GSTR9C', value: 'GSTR9C' },
+];
+
+// Comprehensive summary `:type` path param (lowercase)
+const SUMMARY_TYPES = [
+  { label: 'GSTR-1',  value: 'gstr1'  },
+  { label: 'GSTR-1A', value: 'gstr1a' },
+  { label: 'GSTR-3B', value: 'gstr3b' },
+  { label: 'GSTR-9',  value: 'gstr9'  },
+  { label: 'GSTR-9C', value: 'gstr9c' },
+];
+
 export default function GstTaxpayerPage() {
   const [username, setUsername]   = useState('');
   const [gstin, setGstin]         = useState('');
@@ -30,6 +48,10 @@ export default function GstTaxpayerPage() {
   const [fy, setFy]               = useState('2024-25');
   const [formType, setFormType]   = useState('GSTR-1');
   const [period, setPeriod]       = useState('');
+  const [otpType, setOtpType]     = useState('GSTR1');
+  const [otpTitle, setOtpTitle]   = useState('');
+  const [summaryType, setSummaryType] = useState('gstr1');
+  const [retPeriod, setRetPeriod] = useState('');
 
   return (
     <div className="max-w-3xl">
@@ -48,10 +70,6 @@ export default function GstTaxpayerPage() {
         </div>
       </div>
 
-      <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-        <strong>Heads-up:</strong> <code>get-business-info</code> (GSTIN lookup) is temporarily unavailable on WhiteBooks — the GSTIN-search endpoint is pending.
-      </div>
-
       <div className="space-y-4">
         {/* Step 1 */}
         <div className="relative">
@@ -60,11 +78,13 @@ export default function GstTaxpayerPage() {
             title="Generate GST Portal OTP"
             method="POST"
             endpoint="/api/v1/b2b/gst/otp"
-            description="Sends OTP to the mobile/email registered with the GST portal for this GSTIN."
-            onSubmit={() => b2bApi.generateGstOtp(username, gstin)}
+            description="Sends OTP to the mobile/email registered with the GST portal. type (return type) is required by the server; title is an optional label."
+            onSubmit={() => b2bApi.generateGstOtp(username, gstin, otpType, otpTitle || undefined)}
           >
             <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
             <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+            <SelectField label="Type" value={otpType} onChange={setOtpType} options={OTP_TYPES} />
+            <Field label="Title (optional)" value={otpTitle} onChange={setOtpTitle} placeholder="e.g. Q1 filing" />
           </ApiCard>
         </div>
 
@@ -121,6 +141,20 @@ export default function GstTaxpayerPage() {
           <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
           <SelectField label="Year" value={year} onChange={setYear} options={YEARS} />
           <SelectField label="Month" value={month} onChange={setMonth} options={MONTHS} />
+        </ApiCard>
+
+        {/* Comprehensive Summary */}
+        <ApiCard
+          title="Get Return Summary (GSTR-1/1A/3B/9/9C)"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/summary/:type"
+          description="One return type's summary. ret_period is MMYYYY (e.g. 042026). Type is a path param."
+          onSubmit={() => b2bApi.getGstSummary(summaryType, { taxpayer_token: tpToken, gstin, ret_period: retPeriod })}
+        >
+          <SelectField label="Type" value={summaryType} onChange={setSummaryType} options={SUMMARY_TYPES} />
+          <Field label="Taxpayer Token" value={tpToken} onChange={setTpToken} placeholder="Paste token from verify-otp" fullWidth />
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <Field label="Return Period (MMYYYY)" value={retPeriod} onChange={setRetPeriod} placeholder="e.g. 042026" />
         </ApiCard>
 
         {/* Sales Summary */}

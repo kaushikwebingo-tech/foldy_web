@@ -3,235 +3,149 @@ import ApiCard from "@/components/ApiCard";
 import { Field } from "@/components/Field";
 import PageHeader from "@/components/PageHeader";
 import { authApi } from "@/api/authApi";
+import { setToken } from "@/lib/utils";
 import { User } from "lucide-react";
 
+/*
+ * PAN-first onboarding. Single entry (POST /onboarding/pan) branches register vs
+ * login. Registration = 3 OTP layers (PAN → Phone → Email) → create-profile.
+ * Dev: every OTP is printed to the SERVER console ([DEV OTP] / [AuthBridge STUB]).
+ */
 export default function OnboardingPage() {
   const [pan, setPan] = useState("");
-  const [panName, setPanName] = useState("");
-  const [dob, setDob] = useState("");
-  const [gstin, setGstin] = useState("");
-  const [ifsc, setIfsc] = useState("");
-  const [account, setAccount] = useState("");
-  const [aadhaar, setAadhaar] = useState("");
-  const [aadhaarOtp, setAOtp] = useState("");
-  const [refId, setRefId] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [referenceId, setReferenceId] = useState("");
+  const [panOtp, setPanOtp] = useState("");
+  const [regToken, setRegToken] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
   const [email, setEmail] = useState("");
-  const [occupation, setOccupation] = useState("");
-  const [cinNo, setCin] = useState("");
-  const [tanNo, setTan] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [name, setName] = useState("");
 
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Onboarding & KYC Verification"
-        subtitle="All KYC verification steps. PAN, Aadhaar, GSTIN and Bank verification call the Sandbox API."
+        title="Onboarding (PAN-first)"
+        subtitle="One entry (PAN) handles register & login. Registration runs 3 OTP layers: PAN → Phone → Email."
         icon={<User size={18} />}
         badge="Public"
         postmanSection="onboarding"
       />
 
-      <ApiCard
-          step={1}
-          title="Create / Update Profile"
-          method="POST"
-          endpoint="/api/v1/onboarding/create-profile"
-          description="Saves profile fields (full_name, email, dob, occupation) onto the User record, plus financial details (FinanceDetails). Required: full_name, email, occupation. Note: email must not already belong to another account."
-          onSubmit={() =>
-            authApi.createProfile({
-              dob,
-              email,
-              occupation,
-              full_name: fullName,
-              ...(pan && { pan_no: pan }),
-              ...(gstin && { gstin_no: gstin }),
-              ...(cinNo && { cin_no: cinNo }),
-              ...(tanNo && { tan_no: tanNo }),
-              ...(ifsc && { ifsc_code: ifsc }),
-              ...(account && { account_no: account }),
-              ...(aadhaar && { adhaar_no: aadhaar }),
-            })
-          }
-        >
-          <Field
-            label="Full Name"
-            value={fullName}
-            onChange={setFullName}
-            placeholder="John Doe"
-          />
-          <Field
-            label="Email"
-            value={email}
-            onChange={setEmail}
-            placeholder="user@example.com"
-            type="email"
-          />
-          <Field
-            label="Date of Birth (optional)"
-            value={dob}
-            onChange={setDob}
-            placeholder="DD/MM/YYYY"
-          />
-          <Field
-            label="Occupation"
-            value={occupation}
-            onChange={setOccupation}
-            placeholder="Business Owner"
-          />
-          <Field
-            label="PAN (optional)"
-            value={pan}
-            onChange={setPan}
-            placeholder="ABCDE1234F"
-          />
-          <Field
-            label="GSTIN (optional)"
-            value={gstin}
-            onChange={setGstin}
-            placeholder="29ABCDE1234F1Z5"
-          />
-          <Field
-            label="Aadhaar (optional)"
-            value={aadhaar}
-            onChange={setAadhaar}
-            placeholder="1234 5678 9012"
-          />
-          <Field
-            label="CIN (optional)"
-            value={cinNo}
-            onChange={setCin}
-            placeholder="U12345MH2020PTC123456"
-          />
-          <Field
-            label="TAN (optional)"
-            value={tanNo}
-            onChange={setTan}
-            placeholder="MUMU12345A"
-          />
-        </ApiCard>
+      <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+        <strong>Flow:</strong> Enter PAN → verify PAN OTP. <strong>New PAN</strong> → returns a
+        <code className="mx-1">registrationToken</code> → verify Phone &amp; Email OTP → Create Profile (auto-login).
+        <strong> Existing PAN</strong> → PAN OTP returns a JWT (login). All OTPs are printed to the <strong>server console</strong>.
+      </div>
 
       <div className="space-y-4">
-        {/* Verify PAN */}
+        {/* 1. PAN entry */}
+        <ApiCard
+          step={1}
+          title="PAN Entry (Register or Login)"
+          method="POST"
+          endpoint="/api/v1/onboarding/pan"
+          description="Single entry. New PAN → sends OTP to the PAN-linked mobile (register). Existing PAN → SMS OTP to the registered mobile (login). Copy the returned referenceId into step 2."
+          onSubmit={() => authApi.panEntry(pan)}
+        >
+          <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" fullWidth />
+        </ApiCard>
+
+        {/* 2. Verify PAN OTP */}
         <ApiCard
           step={2}
-          title="Verify PAN"
+          title="Verify PAN OTP"
           method="POST"
-          endpoint="/api/v1/onboarding/verify-pan"
-          description="Verifies PAN number against the user's name and date of birth via Sandbox KYC."
-          onSubmit={() => authApi.verifyPan(pan, panName, dob)}
+          endpoint="/api/v1/onboarding/pan/verify-otp"
+          description="Layer 1. Register → returns registrationToken + name. Login → returns a JWT (auto-saved here)."
+          onSubmit={async () => {
+            const res = await authApi.verifyPanOtp(referenceId, panOtp);
+            const data = res.data?.data;
+            if (data?.mode === "login" && data?.token) {
+              setToken(data.token);
+              window.location.reload();
+            } else if (data?.registrationToken) {
+              setRegToken(data.registrationToken);
+            }
+            return res;
+          }}
         >
-          <Field
-            label="PAN Number"
-            value={pan}
-            onChange={setPan}
-            placeholder="ABCDE1234F"
-          />
-          <Field
-            label="Name as per PAN"
-            value={panName}
-            onChange={setPanName}
-            placeholder="John Doe"
-          />
-          <Field
-            label="Date of Birth"
-            value={dob}
-            onChange={setDob}
-            placeholder="DD/MM/YYYY"
-          />
+          <Field label="referenceId" value={referenceId} onChange={setReferenceId} placeholder="From PAN entry response" fullWidth />
+          <Field label="OTP" value={panOtp} onChange={setPanOtp} placeholder="6-digit OTP (server console)" />
         </ApiCard>
 
-        {/* Verify GSTIN */}
+        {/* 3. Phone OTP — send */}
         <ApiCard
           step={3}
-          title="Verify GSTIN"
+          title="Send Phone OTP"
           method="POST"
-          endpoint="/api/v1/onboarding/verify-gstin"
-          description="Verifies GSTIN and fetches business registration details via Sandbox."
-          onSubmit={() => authApi.verifyGstin(gstin)}
+          endpoint="/api/v1/onboarding/otp/send"
+          description="Layer 2. channel = phone. Requires a PAN-verified registrationToken."
+          onSubmit={() => authApi.sendOtp(regToken, "phone", phone)}
         >
-          <Field
-            label="GSTIN"
-            value={gstin}
-            onChange={setGstin}
-            placeholder="29ABCDE1234F1Z5"
-          />
+          <Field label="registrationToken" value={regToken} onChange={setRegToken} placeholder="From step 2 response" fullWidth />
+          <Field label="Phone" value={phone} onChange={setPhone} placeholder="9876543210" />
         </ApiCard>
 
-        {/* Verify Bank */}
+        {/* 4. Phone OTP — verify */}
         <ApiCard
           step={4}
-          title="Verify Bank Account"
+          title="Verify Phone OTP"
           method="POST"
-          endpoint="/api/v1/onboarding/verify-bank"
-          description="Penny-less verification — confirms the bank account exists and returns the account holder name."
-          onSubmit={() => authApi.verifyBank(ifsc, account)}
+          endpoint="/api/v1/onboarding/otp/verify"
+          description="Layer 2. channel = phone."
+          onSubmit={() => authApi.verifyOtp(regToken, "phone", phoneOtp)}
         >
-          <Field
-            label="IFSC Code"
-            value={ifsc}
-            onChange={setIfsc}
-            placeholder="SBIN0001234"
-          />
-          <Field
-            label="Account Number"
-            value={account}
-            onChange={setAccount}
-            placeholder="1234567890"
-          />
+          <Field label="registrationToken" value={regToken} onChange={setRegToken} placeholder="From step 2 response" fullWidth />
+          <Field label="OTP" value={phoneOtp} onChange={setPhoneOtp} placeholder="6-digit OTP (server console)" />
         </ApiCard>
 
-        {/* Aadhaar OTP generate */}
+        {/* 5. Email OTP — send */}
         <ApiCard
           step={5}
-          title="Generate Aadhaar OTP"
+          title="Send Email OTP"
           method="POST"
-          endpoint="/api/v1/onboarding/aadhaar/generate-otp"
-          description="Triggers an OTP to the mobile linked with the Aadhaar number. Returns reference_id for verification step."
-          onSubmit={() => authApi.generateAadhaarOtp(aadhaar)}
+          endpoint="/api/v1/onboarding/otp/send"
+          description="Layer 3. channel = email."
+          onSubmit={() => authApi.sendOtp(regToken, "email", email)}
         >
-          <Field
-            label="Aadhaar Number"
-            value={aadhaar}
-            onChange={setAadhaar}
-            placeholder="1234 5678 9012"
-          />
+          <Field label="registrationToken" value={regToken} onChange={setRegToken} placeholder="From step 2 response" fullWidth />
+          <Field label="Email" value={email} onChange={setEmail} placeholder="user@example.com" type="email" />
         </ApiCard>
 
-        {/* Aadhaar OTP verify */}
+        {/* 6. Email OTP — verify */}
         <ApiCard
           step={6}
-          title="Verify Aadhaar OTP"
+          title="Verify Email OTP"
           method="POST"
-          endpoint="/api/v1/onboarding/aadhaar/verify-otp"
-          description="Verifies the Aadhaar OTP using the reference_id from the previous step."
-          onSubmit={() => authApi.verifyAadhaarOtp(refId, aadhaarOtp)}
+          endpoint="/api/v1/onboarding/otp/verify"
+          description="Layer 3. channel = email."
+          onSubmit={() => authApi.verifyOtp(regToken, "email", emailOtp)}
         >
-          <Field
-            label="Reference ID"
-            value={refId}
-            onChange={setRefId}
-            placeholder="From generate-otp response"
-          />
-          <Field
-            label="OTP"
-            value={aadhaarOtp}
-            onChange={setAOtp}
-            placeholder="6-digit OTP"
-          />
+          <Field label="registrationToken" value={regToken} onChange={setRegToken} placeholder="From step 2 response" fullWidth />
+          <Field label="OTP" value={emailOtp} onChange={setEmailOtp} placeholder="6-digit OTP (server console)" />
         </ApiCard>
 
-        {/* Create Profile */}
-        
-
-        {/* Add pending request */}
+        {/* 7. Create profile */}
         <ApiCard
           step={7}
-          title="Add Pending Application Request"
+          title="Create Profile (auto-login)"
           method="POST"
-          endpoint="/api/v1/onboarding/add-request"
-          description="Creates or resets a pending application request for admin approval."
-          onSubmit={() => authApi.addRequest()}
-        />
+          endpoint="/api/v1/onboarding/create-profile"
+          description="Requires PAN + Phone + Email all verified. Name defaults to the PAN-fetched name. Returns a JWT (auto-saved here)."
+          onSubmit={async () => {
+            const res = await authApi.createProfile(regToken, name || undefined);
+            const token = res.data?.data?.token;
+            if (token) {
+              setToken(token);
+              window.location.reload();
+            }
+            return res;
+          }}
+        >
+          <Field label="registrationToken" value={regToken} onChange={setRegToken} placeholder="From step 2 response" fullWidth />
+          <Field label="Name (optional)" value={name} onChange={setName} placeholder="Defaults to PAN holder name" fullWidth />
+        </ApiCard>
       </div>
     </div>
   );

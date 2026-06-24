@@ -12,21 +12,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   auth: {
     key: 'auth',
     name: 'Auth & Session',
-    description: 'Email/password auth, push-token registration, logout, and the authenticated user\'s plan/storage status. The app\'s primary login is phone-OTP (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
+    description: 'Session helpers: push-token registration, logout, and the authenticated user\'s plan/storage status. Login & registration are PAN-first (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
     endpoints: [
-      {
-        name: 'Register (Email / Password)',
-        method: 'POST',
-        path: 'api/v1/auth/register',
-        description: 'Legacy email+password registration. All fields required (phoneno, email, password ≥ 8, fullName).',
-        body: { phoneno: '9876543210', email: 'user@example.com', password: 'password123', fullName: 'John Doe' }
-      },
-      {
-        name: 'Login (Email / Password)',
-        method: 'POST',
-        path: 'api/v1/auth/login',
-        body: { email: 'user@example.com', password: 'password123' }
-      },
       {
         name: 'Forgot Password',
         method: 'POST',
@@ -64,89 +51,48 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 
   onboarding: {
     key: 'onboarding',
-    name: 'Onboarding & KYC',
-    description: 'Phone-OTP login + KYC verification (PAN/GSTIN/Bank/Aadhaar via Sandbox) + profile creation + admin-approval request. verify-otp returns the JWT in data.token. Set {{token}} for the authenticated steps.',
+    name: 'Onboarding (PAN-first)',
+    description: 'Single entry: POST /onboarding/pan handles both registration and login. Registration runs 3 OTP layers — PAN (AuthBridge) → Phone → Email — then create-profile returns a JWT. Login (existing PAN) returns the JWT from pan/verify-otp. All OTPs print to the server console in dev.',
     endpoints: [
       {
-        name: 'Send OTP',
+        name: 'PAN Entry (Register or Login)',
         method: 'POST',
-        path: 'api/v1/onboarding/send-otp',
-        description: 'Sends a 6-digit OTP to the phone. (Dev: OTP is printed to the server console.)',
-        body: { phoneno: '9876543210' }
+        path: 'api/v1/onboarding/pan',
+        description: 'New PAN → AuthBridge sends OTP to the PAN-linked mobile (mode:"register"). Existing PAN → SMS OTP to the registered mobile (mode:"login"). Returns a referenceId for the next step.',
+        body: { pan: 'ABCDE1234F' }
       },
       {
-        name: 'Verify OTP',
+        name: 'Verify PAN OTP (Layer 1)',
         method: 'POST',
-        path: 'api/v1/onboarding/verify-otp',
-        description: 'Verifies the OTP and returns the JWT in data.token.',
-        body: { phoneno: '9876543210', otp: '123456' }
+        path: 'api/v1/onboarding/pan/verify-otp',
+        description: 'Register → returns registrationToken + name. Login → returns { token, user } (JWT).',
+        body: { referenceId: '<referenceId>', otp: '123456' }
       },
       {
-        name: 'Create / Update Profile',
+        name: 'Send OTP — Phone / Email (Layers 2 & 3)',
+        method: 'POST',
+        path: 'api/v1/onboarding/otp/send',
+        description: 'channel = "phone" or "email". Requires a PAN-verified registrationToken.',
+        body: { registrationToken: '<registrationToken>', channel: 'phone', value: '9876543210' }
+      },
+      {
+        name: 'Verify OTP — Phone / Email (Layers 2 & 3)',
+        method: 'POST',
+        path: 'api/v1/onboarding/otp/verify',
+        body: { registrationToken: '<registrationToken>', channel: 'phone', otp: '123456' }
+      },
+      {
+        name: 'Create Profile (auto-login)',
         method: 'POST',
         path: 'api/v1/onboarding/create-profile',
-        description: 'Saves profile + finance details. Required: full_name, email, occupation. KYC numbers optional.',
-        body: {
-          full_name: 'John Doe',
-          email: 'user@example.com',
-          occupation: 'Business Owner',
-          dob: '01/01/1990',
-          pan_no: 'ABCDE1234F',
-          gstin_no: GSTIN,
-          cin_no: 'U12345MH2020PTC123456',
-          tan_no: 'MUMU12345A',
-          ifsc_code: 'SBIN0001234',
-          account_no: '1234567890',
-          adhaar_no: '123456789012'
-        }
+        description: 'Requires PAN + Phone + Email all verified. Returns { token, user }. name defaults to the PAN-fetched name.',
+        body: { registrationToken: '<registrationToken>', name: 'John Doe' }
       },
       {
         name: 'Get Profile Details',
         method: 'GET',
-        path: 'api/v1/onboarding/profile-details'
-      },
-      {
-        name: 'Verify PAN',
-        method: 'POST',
-        path: 'api/v1/onboarding/verify-pan',
-        body: { pan_no: 'ABCDE1234F', full_name: 'John Doe', dob: '01/01/1990' }
-      },
-      {
-        name: 'Verify Bank Account',
-        method: 'POST',
-        path: 'api/v1/onboarding/verify-bank',
-        description: 'Penny-less verification — returns the account holder name.',
-        body: { ifsc_code: 'SBIN0001234', account_no: '1234567890' }
-      },
-      {
-        name: 'Verify GSTIN',
-        method: 'POST',
-        path: 'api/v1/onboarding/verify-gstin',
-        body: { gstin_no: GSTIN }
-      },
-      {
-        name: 'Aadhaar — Generate OTP',
-        method: 'POST',
-        path: 'api/v1/onboarding/aadhaar/generate-otp',
-        description: 'Triggers an OTP to the Aadhaar-linked mobile. Returns reference_id.',
-        body: { aadhaar_number: '123456789012' }
-      },
-      {
-        name: 'Aadhaar — Verify OTP',
-        method: 'POST',
-        path: 'api/v1/onboarding/aadhaar/verify-otp',
-        body: { reference_id: '<reference_id>', otp: '123456' }
-      },
-      {
-        name: 'Add Pending Application Request',
-        method: 'POST',
-        path: 'api/v1/onboarding/add-request',
-        description: 'Creates/resets the admin-approval request for this user.'
-      },
-      {
-        name: 'Check Approval Status',
-        method: 'GET',
-        path: 'api/v1/onboarding/is-user-allowed'
+        path: 'api/v1/onboarding/profile-details',
+        description: 'Post-login profile + finance details. Requires {{token}}.'
       }
     ]
   },
@@ -202,12 +148,38 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   gst: {
     key: 'gst',
     name: 'GST',
-    description: 'GST profile, finance status & taxpayer-session APIs (B2B), powered by WhiteBooks (GSP). Server supplies email/IP/state/txn from env; you pass username, GSTIN & OTP. Note: get-business-info (GSTIN lookup) is pending the WhiteBooks endpoint. Set {{token}}.',
+    description: 'GST profiles, finance status & taxpayer-session APIs (B2B), powered by WhiteBooks (GSP). Server supplies email/IP/state/txn from env; you pass username, GSTIN, type & OTP. Set {{token}}.',
     endpoints: [
+      {
+        name: 'Create GST Profile',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles',
+        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. title is the user label; type is auto-filled from the verification; gstUsername (GST portal username) is stored for the later txnId/OTP flow. One profile per (user, GSTIN).',
+        body: { gstin: GSTIN, title: 'Head Office', gstUsername: '<gst-portal-username>' }
+      },
+      {
+        name: 'List GST Profiles',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles',
+        description: 'All GST profiles saved by the logged-in Business.'
+      },
+      {
+        name: 'Get GST Profile',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Delete GST Profile',
+        method: 'DELETE',
+        path: 'api/v1/b2b/gst/profiles/:id',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
       {
         name: 'Get Business Info',
         method: 'POST',
         path: 'api/v1/b2b/gst/get-business-info',
+        description: 'Pure WhiteBooks GSTIN lookup (does not create a profile).',
         body: { gstin: GSTIN }
       },
       {
@@ -220,7 +192,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Taxpayer — Generate OTP',
         method: 'POST',
         path: 'api/v1/b2b/gst/otp',
-        body: { username: '<gst-portal-username>', gstin: GSTIN }
+        description: 'type is required (GSTR1|GSTR3B|GSTR9|GSTR9C|GSTR1A); title is optional.',
+        body: { username: '<gst-portal-username>', gstin: GSTIN, type: 'GSTR1', title: 'Q1 filing' }
       },
       {
         name: 'Taxpayer — Verify OTP',
@@ -245,6 +218,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'POST',
         path: 'api/v1/b2b/gst/gstr1/b2b',
         body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, year: '2024', month: '04' }
+      },
+      {
+        name: 'Return Summary (by type)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/summary/:type',
+        description: 'type path var = gstr1|gstr1a|gstr3b|gstr9|gstr9c. ret_period is MMYYYY (year/month optional).',
+        pathVars: [{ key: 'type', value: 'gstr1' }],
+        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, ret_period: '042024' }
       },
       {
         name: 'Annual Sales Summary',

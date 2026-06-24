@@ -2,6 +2,19 @@ import { client } from './client';
 
 // All B2B GST endpoints are mounted flat under /b2b/gst ; TDS under /b2b/tds
 export const b2bApi = {
+  // GST profiles (a Business can save multiple GSTINs; verified via WhiteBooks on create)
+  createGstProfile:   (gstin: string, title: string, gstUsername: string) =>
+    client.post('/b2b/gst/profiles', { gstin, title, gstUsername }),
+
+  listGstProfiles:    () =>
+    client.get('/b2b/gst/profiles'),
+
+  getGstProfile:      (id: string) =>
+    client.get(`/b2b/gst/profiles/${id}`),
+
+  deleteGstProfile:   (id: string) =>
+    client.delete(`/b2b/gst/profiles/${id}`),
+
   // GST — business info
   getBusinessInfo:    (gstin: string) =>
     client.post('/b2b/gst/get-business-info', { gstin }),
@@ -10,9 +23,9 @@ export const b2bApi = {
   trackGstReturns:    (gstin: string, financial_year: string, gstr?: string) =>
     client.post('/b2b/gst/get-finance-status', { gstin, financial_year, gstr }),
 
-  // GST — taxpayer session
-  generateGstOtp:     (username: string, gstin: string) =>
-    client.post('/b2b/gst/otp', { username, gstin }),
+  // GST — taxpayer session (type is required by the server: GSTR1|GSTR3B|GSTR9|GSTR9C|GSTR1A)
+  generateGstOtp:     (username: string, gstin: string, type: string, title?: string) =>
+    client.post('/b2b/gst/otp', { username, gstin, type, ...(title ? { title } : {}) }),
 
   verifyGstOtp:       (username: string, gstin: string, otp: string) =>
     client.post('/b2b/gst/otp/verify', { username, gstin, otp }),
@@ -25,6 +38,11 @@ export const b2bApi = {
 
   getGstr1B2b:        (taxpayer_token: string, gstin: string, year: string, month: string) =>
     client.post('/b2b/gst/gstr1/b2b', { taxpayer_token, gstin, year, month }),
+
+  // Comprehensive summary for one return type (gstr1|gstr1a|gstr3b|gstr9|gstr9c).
+  // ret_period is MMYYYY (e.g. 042026); year/month optional alternatives.
+  getGstSummary:      (type: string, data: { taxpayer_token: string; gstin: string; ret_period: string; [k: string]: unknown }) =>
+    client.post(`/b2b/gst/summary/${type}`, data),
 
   getSalesSummary:    (gstin: string, fy: string, taxpayer_token: string) =>
     client.get('/b2b/gst/sales-summary', { params: { gstin, fy, taxpayer_token } }),
