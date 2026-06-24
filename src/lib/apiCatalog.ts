@@ -176,6 +176,35 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'id', value: '<profileId>' }]
       },
       {
+        name: 'Profile — Authorise (Send OTP)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/authorize/otp',
+        description: 'Sends the GST-portal OTP using the profile\'s stored GST username + GSTIN.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Authorise (Verify OTP)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/authorize/verify',
+        description: 'Verifies the OTP and persists the 6h taxpayer token on the profile (server-side, auto-refreshed).',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { otp: '123456' }
+      },
+      {
+        name: 'Profile — Session Status',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/session',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Return Summary (stored token)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/summary/:type',
+        description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c; ret_period is MMYYYY.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr1' }],
+        body: { ret_period: '042024' }
+      },
+      {
         name: 'Get Business Info',
         method: 'POST',
         path: 'api/v1/b2b/gst/get-business-info',

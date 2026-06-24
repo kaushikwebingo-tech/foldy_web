@@ -15,6 +15,19 @@ export const b2bApi = {
   deleteGstProfile:   (id: string) =>
     client.delete(`/b2b/gst/profiles/${id}`),
 
+  // GST profile session (authorise → persisted 6h token → data calls)
+  requestGstSessionOtp: (id: string) =>
+    client.post(`/b2b/gst/profiles/${id}/authorize/otp`),
+
+  verifyGstSessionOtp:  (id: string, otp: string) =>
+    client.post(`/b2b/gst/profiles/${id}/authorize/verify`, { otp }),
+
+  getGstSessionStatus:  (id: string) =>
+    client.get(`/b2b/gst/profiles/${id}/session`),
+
+  getGstProfileSummary: (id: string, type: string, ret_period: string) =>
+    client.post(`/b2b/gst/profiles/${id}/summary/${type}`, { ret_period }),
+
   // GST — business info
   getBusinessInfo:    (gstin: string) =>
     client.post('/b2b/gst/get-business-info', { gstin }),

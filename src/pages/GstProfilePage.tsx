@@ -1,15 +1,26 @@
 import { useState } from 'react';
 import ApiCard from '@/components/ApiCard';
-import { Field } from '@/components/Field';
+import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { b2bApi } from '@/api/b2bApi';
 import { Building2 } from 'lucide-react';
+
+const SUMMARY_TYPES = [
+  { label: 'GSTR-1',  value: 'gstr1'  },
+  { label: 'GSTR-1A', value: 'gstr1a' },
+  { label: 'GSTR-3B', value: 'gstr3b' },
+  { label: 'GSTR-9',  value: 'gstr9'  },
+  { label: 'GSTR-9C', value: 'gstr9c' },
+];
 
 export default function GstProfilePage() {
   const [gstin, setGstin]   = useState('');
   const [title, setTitle]   = useState('');
   const [gstUsername, setGstUsername] = useState('');
   const [profileId, setProfileId] = useState('');
+  const [sessionOtp, setSessionOtp] = useState('');
+  const [summaryType, setSummaryType] = useState('gstr1');
+  const [retPeriod, setRetPeriod] = useState('');
 
   return (
     <div className="max-w-3xl">
@@ -85,6 +96,63 @@ export default function GstProfilePage() {
           onSubmit={() => b2bApi.getBusinessInfo(gstin)}
         >
           <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" fullWidth />
+        </ApiCard>
+
+        {/* Divider */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">GST Portal Session (persisted)</p>
+          <p className="text-xs text-slate-400 mb-3">Authorise a profile once (OTP) — the 6h token is stored server-side and auto-refreshed for data calls.</p>
+        </div>
+
+        {/* Authorise — request OTP */}
+        <ApiCard
+          step={6}
+          title="Authorise — Send OTP"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/profiles/:id/authorize/otp"
+          description="Sends the GST-portal OTP using the profile's stored GST username + GSTIN."
+          onSubmit={() => b2bApi.requestGstSessionOtp(profileId)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="From list response (_id)" fullWidth />
+        </ApiCard>
+
+        {/* Authorise — verify OTP */}
+        <ApiCard
+          step={7}
+          title="Authorise — Verify OTP"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/profiles/:id/authorize/verify"
+          description="Verifies the OTP and persists the 6h taxpayer token on the profile."
+          onSubmit={() => b2bApi.verifyGstSessionOtp(profileId, sessionOtp)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="From list response (_id)" fullWidth />
+          <Field label="OTP" value={sessionOtp} onChange={setSessionOtp} placeholder="6-digit OTP" />
+        </ApiCard>
+
+        {/* Session status */}
+        <ApiCard
+          step={8}
+          title="Session Status"
+          method="GET"
+          endpoint="/api/v1/b2b/gst/profiles/:id/session"
+          description="Whether the profile is authorised and when the token expires."
+          onSubmit={() => b2bApi.getGstSessionStatus(profileId)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="From list response (_id)" fullWidth />
+        </ApiCard>
+
+        {/* Profile summary (uses stored token) */}
+        <ApiCard
+          step={9}
+          title="Get Return Summary (stored token)"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/profiles/:id/summary/:type"
+          description="Fetches a return summary using the profile's stored token (auto-refreshed). ret_period is MMYYYY."
+          onSubmit={() => b2bApi.getGstProfileSummary(profileId, summaryType, retPeriod)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="From list response (_id)" fullWidth />
+          <SelectField label="Type" value={summaryType} onChange={setSummaryType} options={SUMMARY_TYPES} />
+          <Field label="Return Period (MMYYYY)" value={retPeriod} onChange={setRetPeriod} placeholder="e.g. 042026" />
         </ApiCard>
       </div>
     </div>
