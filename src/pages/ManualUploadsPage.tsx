@@ -46,6 +46,7 @@ export default function ManualUploadsPage() {
       <div className="space-y-4">
         {/* Categories */}
         <ApiCard
+          step={1}
           title="List Categories (for my plan)"
           method="GET"
           endpoint="/api/v1/manual-uploads/categories"
@@ -55,6 +56,7 @@ export default function ManualUploadsPage() {
 
         {/* Upload */}
         <ApiCard
+          step={2}
           title="Upload Document"
           method="POST"
           endpoint="/api/v1/manual-uploads/:category/upload"
@@ -81,6 +83,7 @@ export default function ManualUploadsPage() {
 
         {/* List items */}
         <ApiCard
+          step={3}
           title="List My Documents"
           method="GET"
           endpoint="/api/v1/manual-uploads/:category/items"
@@ -93,6 +96,7 @@ export default function ManualUploadsPage() {
 
         {/* Download */}
         <ApiCard
+          step={4}
           title="Get Download Link"
           method="GET"
           endpoint="/api/v1/manual-uploads/items/:id/download"
@@ -104,6 +108,7 @@ export default function ManualUploadsPage() {
 
         {/* Delete */}
         <ApiCard
+          step={5}
           title="Delete Document"
           method="DELETE"
           endpoint="/api/v1/manual-uploads/items/:id"

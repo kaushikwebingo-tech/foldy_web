@@ -26,6 +26,7 @@ function AlreadyLoggedIn() {
         subtitle="Manage your session."
         icon={<LogIn size={18} />}
         badge="Public"
+        postmanSection="auth"
       />
 
       {/* Session active card */}
@@ -96,6 +97,7 @@ function RawAuthCards({
   return (
     <div className="space-y-4">
       <ApiCard
+        step={1}
         title="Send OTP"
         method="POST"
         endpoint="/api/v1/onboarding/send-otp"
@@ -106,6 +108,7 @@ function RawAuthCards({
       </ApiCard>
 
       <ApiCard
+        step={2}
         title="Verify OTP"
         method="POST"
         endpoint="/api/v1/onboarding/verify-otp"
@@ -124,26 +127,30 @@ function RawAuthCards({
       </ApiCard>
 
       <ApiCard
+        step={3}
         title="Register (Email / Password)"
         method="POST"
         endpoint="/api/v1/auth/register"
-        description="Legacy email+password registration endpoint."
-        onSubmit={() => client.post('/auth/register', { email: regEmail, password: regPass, fullName: regName })}
+        description="Legacy email+password registration. Requires phone, email, password (≥ 8 chars) and full name."
+        onSubmit={() => client.post('/auth/register', { phoneno: phone, email: regEmail, password: regPass, fullName: regName })}
       >
-        <Field label="Full Name" value={regName}   onChange={setName}  placeholder="John Doe"          />
-        <Field label="Email"     value={regEmail}  onChange={setEmail} placeholder="user@example.com"  type="email"    />
-        <Field label="Password"  value={regPass}   onChange={setPass}  placeholder="••••••••"           type="password" />
+        <Field label="Phone Number" value={phone}   onChange={setPhone} placeholder="9876543210"        />
+        <Field label="Full Name"    value={regName}  onChange={setName}  placeholder="John Doe"          />
+        <Field label="Email"        value={regEmail} onChange={setEmail} placeholder="user@example.com"  type="email"    />
+        <Field label="Password"     value={regPass}  onChange={setPass}  placeholder="••••••••"          type="password" />
       </ApiCard>
 
       <ApiCard
+        step={4}
         title="Get Trial / Plan Status"
         method="GET"
-        endpoint="/api/v1/trial/status"
+        endpoint="/api/v1/user/plan-status"
         description="Returns current subscription status for the authenticated user."
         onSubmit={() => authApi.getTrialStatus()}
       />
 
       <ApiCard
+        step={5}
         title="Check Approval Status"
         method="GET"
         endpoint="/api/v1/onboarding/is-user-allowed"
@@ -169,6 +176,7 @@ export default function LoginPage() {
         subtitle="Phone-based OTP flow is the primary login. Token is auto-saved to localStorage on successful verify-otp."
         icon={<LogIn size={18} />}
         badge="Public"
+        postmanSection="auth"
       />
       <RawAuthCards phone="" otp="" regEmail="" regName="" regPass="" />
     </div>

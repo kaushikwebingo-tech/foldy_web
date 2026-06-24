@@ -9,6 +9,7 @@ interface Props {
   children?: ReactNode;
   onSubmit: () => Promise<unknown>;
   buttonLabel?: string;
+  step?: number;
 }
 
 const METHOD_COLORS = {
@@ -19,7 +20,7 @@ const METHOD_COLORS = {
   PATCH:  'bg-amber-100 text-amber-700',
 };
 
-export default function ApiCard({ title, method, endpoint, description, children, onSubmit, buttonLabel = 'Send Request' }: Props) {
+export default function ApiCard({ title, method, endpoint, description, children, onSubmit, buttonLabel = 'Send Request', step }: Props) {
   const [loading, setLoading] = useState(false);
   const [data, setData]       = useState<unknown>(undefined);
   const [error, setError]     = useState<unknown>(undefined);
@@ -43,15 +44,25 @@ export default function ApiCard({ title, method, endpoint, description, children
       {/* Card header */}
       <div className="px-5 py-4 border-b border-slate-100">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono ${METHOD_COLORS[method]}`}>
-                {method}
+          <div className="flex items-start gap-3">
+            {typeof step === 'number' && (
+              <span
+                className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#1A73E8] text-white text-xs font-bold"
+                title={`Step ${step} in this flow`}
+              >
+                {step}
               </span>
-              <code className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{endpoint}</code>
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono ${METHOD_COLORS[method]}`}>
+                  {method}
+                </span>
+                <code className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{endpoint}</code>
+              </div>
+              <h3 className="font-semibold text-slate-800 text-sm">{title}</h3>
+              {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
             </div>
-            <h3 className="font-semibold text-slate-800 text-sm">{title}</h3>
-            {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
           </div>
           <button
             onClick={handleSubmit}

@@ -25,14 +25,22 @@ export const authApi = {
   createProfile:   (data: Record<string, unknown>) =>
     client.post('/onboarding/create-profile', data),
 
+  getProfileDetails: () =>
+    client.get('/onboarding/profile-details'),
+
+  updatePushToken: (notification_token: string, device_type: 'android' | 'ios' | 'web') =>
+    client.post('/auth/update-push-token', { notification_token, device_type }),
+
   addRequest:      () =>
     client.post('/onboarding/add-request'),
 
   checkApproval:   () =>
     client.get('/onboarding/is-user-allowed'),
 
+  // Subscription / trial status. The dedicated /trial route was removed —
+  // status now comes from the user endpoint (subscriptionService.getSubscriptionStatus).
   getTrialStatus:  () =>
-    client.get('/trial/status'),
+    client.get('/user/plan-status'),
 
   logout:          () =>
     client.post('/auth/logout'),

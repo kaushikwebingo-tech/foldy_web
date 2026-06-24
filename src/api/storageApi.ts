@@ -21,19 +21,4 @@ export const storageApi = {
 
   deleteFolder:     (folderId: string) =>
     client.delete(`/storage/delete-folder/${folderId}`),
-
-  listPlans:        () =>
-    client.get('/storage/plans'),
-
-  createPlanOrder:  (planType: string) =>
-    client.post('/storage/plans/create-order', { planType }),
-
-  verifyPlanPayment:(data: Record<string, unknown>) =>
-    client.post('/storage/plans/verify-payment', data),
-
-  getPlanStatus:    () =>
-    client.get('/storage/plans/status'),
-
-  getPlanHistory:   () =>
-    client.get('/storage/plans/history'),
 };

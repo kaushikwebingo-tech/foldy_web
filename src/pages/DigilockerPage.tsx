@@ -6,10 +6,9 @@ import { digilockerApi } from '@/api/digilockerApi';
 import { HardDrive } from 'lucide-react';
 
 const DOC_TYPES = [
-  { label: 'Aadhaar (ADHAR)', value: 'ADHAR' },
-  { label: 'PAN (PANCR)',     value: 'PANCR' },
-  { label: 'Driving Licence (DRIVLC)', value: 'DRIVLC' },
-  { label: 'Vehicle RC (VHCLRC)', value: 'VHCLRC' },
+  { label: 'Aadhaar', value: 'aadhaar' },
+  { label: 'PAN',     value: 'pan' },
+  { label: 'Driving Licence', value: 'driving_license' },
 ];
 
 const FLOW_OPTIONS = [
@@ -20,7 +19,7 @@ const FLOW_OPTIONS = [
 export default function DigilockerPage() {
   const [aadhaar, setAadhaar]       = useState('');
   const [mobile, setMobile]         = useState('');
-  const [docType, setDocType]       = useState('ADHAR');
+  const [docType, setDocType]       = useState('aadhaar');
   const [redirectUrl, setRedirect]  = useState('http://localhost:3000/digilocker');
   const [flow, setFlow]             = useState('signin');
   const [sessionId, setSessionId]   = useState('');
@@ -42,6 +41,7 @@ export default function DigilockerPage() {
       <div className="space-y-4">
         {/* Verify account */}
         <ApiCard
+          step={1}
           title="Verify DigiLocker Account"
           method="POST"
           endpoint="/api/v1/digilocker/verify-account"
@@ -54,9 +54,10 @@ export default function DigilockerPage() {
 
         {/* Initiate session */}
         <ApiCard
+          step={2}
           title="Initiate DigiLocker Session"
           method="POST"
-          endpoint="/api/v1/digilocker/initiate-session"
+          endpoint="/api/v1/digilocker/sessions/init"
           description="Creates a DigiLocker session. The response includes a URL the user must visit to authorise document access."
           onSubmit={() => digilockerApi.initiateSession([docType], redirectUrl, flow)}
         >
@@ -67,35 +68,38 @@ export default function DigilockerPage() {
 
         {/* Session status */}
         <ApiCard
+          step={3}
           title="Get Session Status"
           method="GET"
-          endpoint="/api/v1/digilocker/session/:id/status"
+          endpoint="/api/v1/digilocker/sessions/:id/status"
           description="Checks if the user has completed DigiLocker authorisation."
           onSubmit={() => digilockerApi.getSessionStatus(sessionId)}
         >
-          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From initiate-session response" fullWidth />
+          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From Initiate Session response" fullWidth />
         </ApiCard>
 
         {/* User profile */}
         <ApiCard
+          step={4}
           title="Get DigiLocker User Profile"
           method="GET"
-          endpoint="/api/v1/digilocker/session/:id/profile"
+          endpoint="/api/v1/digilocker/sessions/:id/profile"
           description="Returns the user's DigiLocker profile after authorisation is complete."
           onSubmit={() => digilockerApi.getUserProfile(sessionId)}
         >
-          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From initiate-session response" fullWidth />
+          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From Initiate Session response" fullWidth />
         </ApiCard>
 
         {/* Get document */}
         <ApiCard
+          step={5}
           title="Fetch Document"
           method="GET"
-          endpoint="/api/v1/digilocker/session/:id/document/:type"
+          endpoint="/api/v1/digilocker/sessions/:id/documents/:type"
           description="Fetches the actual document (e.g. Aadhaar, PAN) from the user's DigiLocker after authorisation."
           onSubmit={() => digilockerApi.getDocument(sessionId, docType)}
         >
-          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From initiate-session response" />
+          <Field label="Session ID" value={sessionId} onChange={setSessionId} placeholder="From Initiate Session response" />
           <SelectField label="Document Type" value={docType} onChange={setDocType} options={DOC_TYPES} />
         </ApiCard>
       </div>

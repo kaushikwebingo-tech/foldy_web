@@ -39,6 +39,7 @@ export default function PaymentsPage() {
       <div className="space-y-4">
         {/* List active plans */}
         <ApiCard
+          step={1}
           title="List Active Plans"
           method="GET"
           endpoint="/api/v1/payments/plans"
@@ -48,6 +49,7 @@ export default function PaymentsPage() {
 
         {/* Create order */}
         <ApiCard
+          step={2}
           title="Create Payment Order"
           method="POST"
           endpoint="/api/v1/payments/create-order"
@@ -65,6 +67,7 @@ export default function PaymentsPage() {
 
         {/* Verify payment */}
         <ApiCard
+          step={3}
           title="Verify Payment & Upgrade Plan"
           method="POST"
           endpoint="/api/v1/payments/verify-payment"
@@ -85,6 +88,7 @@ export default function PaymentsPage() {
 
         {/* History */}
         <ApiCard
+          step={4}
           title="Payment History"
           method="GET"
           endpoint="/api/v1/payments/history"

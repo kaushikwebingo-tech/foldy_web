@@ -14,7 +14,7 @@ export default defineConfig({
     allowedHosts: ["localhost", "127.0.0.1","0.0.0.0"],
     proxy: {
       "/api": {
-        target: "https://apitest.foldy.co.in",
+        target: "http://localhost:5000",
         changeOrigin: true,
       },
     },

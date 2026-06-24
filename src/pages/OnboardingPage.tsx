@@ -28,9 +28,11 @@ export default function OnboardingPage() {
         subtitle="All KYC verification steps. PAN, Aadhaar, GSTIN and Bank verification call the Sandbox API."
         icon={<User size={18} />}
         badge="Public"
+        postmanSection="onboarding"
       />
 
       <ApiCard
+          step={1}
           title="Create / Update Profile"
           method="POST"
           endpoint="/api/v1/onboarding/create-profile"
@@ -111,6 +113,7 @@ export default function OnboardingPage() {
       <div className="space-y-4">
         {/* Verify PAN */}
         <ApiCard
+          step={2}
           title="Verify PAN"
           method="POST"
           endpoint="/api/v1/onboarding/verify-pan"
@@ -139,6 +142,7 @@ export default function OnboardingPage() {
 
         {/* Verify GSTIN */}
         <ApiCard
+          step={3}
           title="Verify GSTIN"
           method="POST"
           endpoint="/api/v1/onboarding/verify-gstin"
@@ -155,6 +159,7 @@ export default function OnboardingPage() {
 
         {/* Verify Bank */}
         <ApiCard
+          step={4}
           title="Verify Bank Account"
           method="POST"
           endpoint="/api/v1/onboarding/verify-bank"
@@ -177,6 +182,7 @@ export default function OnboardingPage() {
 
         {/* Aadhaar OTP generate */}
         <ApiCard
+          step={5}
           title="Generate Aadhaar OTP"
           method="POST"
           endpoint="/api/v1/onboarding/aadhaar/generate-otp"
@@ -193,6 +199,7 @@ export default function OnboardingPage() {
 
         {/* Aadhaar OTP verify */}
         <ApiCard
+          step={6}
           title="Verify Aadhaar OTP"
           method="POST"
           endpoint="/api/v1/onboarding/aadhaar/verify-otp"
@@ -218,6 +225,7 @@ export default function OnboardingPage() {
 
         {/* Add pending request */}
         <ApiCard
+          step={7}
           title="Add Pending Application Request"
           method="POST"
           endpoint="/api/v1/onboarding/add-request"

@@ -24,6 +24,7 @@ export default function GstProfilePage() {
 
       <div className="space-y-4">
         <ApiCard
+          step={1}
           title="Get Business Info by GSTIN"
           method="POST"
           endpoint="/api/v1/b2b/gst/get-business-info"

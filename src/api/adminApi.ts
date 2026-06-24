@@ -20,6 +20,19 @@ export const adminApi = {
   register:       (email: string, password: string, fullName: string) =>
     adminClient.post('/auth/register', { email, password, fullName }),
 
+  // --- Password recovery (OTP-based) ---
+  forgotPassword: (email: string) =>
+    adminClient.post('/auth/forgot-password', { email }),
+
+  verifyEmailOtp: (email: string, otp: string) =>
+    adminClient.post('/auth/verify-email-otp', { email, otp }),
+
+  updatePassword: (email: string, otp: string, newPassword: string) =>
+    adminClient.post('/auth/update-password', { email, otp, newPassword }),
+
+  logout:         () =>
+    adminClient.post('/auth/logout'),
+
   listAdmins:     (page = 1, limit = 10, search?: string) =>
     adminClient.get('/admin-users', { params: { page, limit, search } }),
 

@@ -9,6 +9,148 @@ import type { ApiSection } from './postman';
 const GSTIN = '29ABCDE1234F1Z5';
 
 export const API_SECTIONS: Record<string, ApiSection> = {
+  auth: {
+    key: 'auth',
+    name: 'Auth & Session',
+    description: 'Email/password auth, push-token registration, logout, and the authenticated user\'s plan/storage status. The app\'s primary login is phone-OTP (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
+    endpoints: [
+      {
+        name: 'Register (Email / Password)',
+        method: 'POST',
+        path: 'api/v1/auth/register',
+        description: 'Legacy email+password registration. All fields required (phoneno, email, password ≥ 8, fullName).',
+        body: { phoneno: '9876543210', email: 'user@example.com', password: 'password123', fullName: 'John Doe' }
+      },
+      {
+        name: 'Login (Email / Password)',
+        method: 'POST',
+        path: 'api/v1/auth/login',
+        body: { email: 'user@example.com', password: 'password123' }
+      },
+      {
+        name: 'Forgot Password',
+        method: 'POST',
+        path: 'api/v1/auth/forgot-password',
+        description: 'Always responds success (avoids account enumeration); sends a reset link if the email exists.',
+        body: { email: 'user@example.com' }
+      },
+      {
+        name: 'Update Push Token',
+        method: 'POST',
+        path: 'api/v1/auth/update-push-token',
+        description: 'Registers the device push token. Requires auth. device_type = android|ios|web.',
+        body: { notification_token: '<fcm-or-onesignal-token>', device_type: 'android' }
+      },
+      {
+        name: 'Logout',
+        method: 'POST',
+        path: 'api/v1/auth/logout',
+        description: 'Revokes the current JWT (token blacklist). Requires auth.'
+      },
+      {
+        name: 'Plan / Subscription Status',
+        method: 'GET',
+        path: 'api/v1/user/plan-status',
+        description: 'Current subscription/trial status + plan limits for the logged-in user.'
+      },
+      {
+        name: 'Storage Status',
+        method: 'GET',
+        path: 'api/v1/user/storage-status',
+        description: 'Storage usage summary for the logged-in user.'
+      }
+    ]
+  },
+
+  onboarding: {
+    key: 'onboarding',
+    name: 'Onboarding & KYC',
+    description: 'Phone-OTP login + KYC verification (PAN/GSTIN/Bank/Aadhaar via Sandbox) + profile creation + admin-approval request. verify-otp returns the JWT in data.token. Set {{token}} for the authenticated steps.',
+    endpoints: [
+      {
+        name: 'Send OTP',
+        method: 'POST',
+        path: 'api/v1/onboarding/send-otp',
+        description: 'Sends a 6-digit OTP to the phone. (Dev: OTP is printed to the server console.)',
+        body: { phoneno: '9876543210' }
+      },
+      {
+        name: 'Verify OTP',
+        method: 'POST',
+        path: 'api/v1/onboarding/verify-otp',
+        description: 'Verifies the OTP and returns the JWT in data.token.',
+        body: { phoneno: '9876543210', otp: '123456' }
+      },
+      {
+        name: 'Create / Update Profile',
+        method: 'POST',
+        path: 'api/v1/onboarding/create-profile',
+        description: 'Saves profile + finance details. Required: full_name, email, occupation. KYC numbers optional.',
+        body: {
+          full_name: 'John Doe',
+          email: 'user@example.com',
+          occupation: 'Business Owner',
+          dob: '01/01/1990',
+          pan_no: 'ABCDE1234F',
+          gstin_no: GSTIN,
+          cin_no: 'U12345MH2020PTC123456',
+          tan_no: 'MUMU12345A',
+          ifsc_code: 'SBIN0001234',
+          account_no: '1234567890',
+          adhaar_no: '123456789012'
+        }
+      },
+      {
+        name: 'Get Profile Details',
+        method: 'GET',
+        path: 'api/v1/onboarding/profile-details'
+      },
+      {
+        name: 'Verify PAN',
+        method: 'POST',
+        path: 'api/v1/onboarding/verify-pan',
+        body: { pan_no: 'ABCDE1234F', full_name: 'John Doe', dob: '01/01/1990' }
+      },
+      {
+        name: 'Verify Bank Account',
+        method: 'POST',
+        path: 'api/v1/onboarding/verify-bank',
+        description: 'Penny-less verification — returns the account holder name.',
+        body: { ifsc_code: 'SBIN0001234', account_no: '1234567890' }
+      },
+      {
+        name: 'Verify GSTIN',
+        method: 'POST',
+        path: 'api/v1/onboarding/verify-gstin',
+        body: { gstin_no: GSTIN }
+      },
+      {
+        name: 'Aadhaar — Generate OTP',
+        method: 'POST',
+        path: 'api/v1/onboarding/aadhaar/generate-otp',
+        description: 'Triggers an OTP to the Aadhaar-linked mobile. Returns reference_id.',
+        body: { aadhaar_number: '123456789012' }
+      },
+      {
+        name: 'Aadhaar — Verify OTP',
+        method: 'POST',
+        path: 'api/v1/onboarding/aadhaar/verify-otp',
+        body: { reference_id: '<reference_id>', otp: '123456' }
+      },
+      {
+        name: 'Add Pending Application Request',
+        method: 'POST',
+        path: 'api/v1/onboarding/add-request',
+        description: 'Creates/resets the admin-approval request for this user.'
+      },
+      {
+        name: 'Check Approval Status',
+        method: 'GET',
+        path: 'api/v1/onboarding/is-user-allowed'
+      }
+    ]
+  },
+
   'manual-uploads': {
     key: 'manual-uploads',
     name: 'Manual Uploads',
@@ -185,26 +327,26 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Initiate Session',
         method: 'POST',
-        path: 'api/v1/digilocker/initiate-session',
-        body: { doc_types: ['ADHAR', 'PANCR'], redirect_url: 'http://localhost:3000/digilocker', flow: 'signin' }
+        path: 'api/v1/digilocker/sessions/init',
+        body: { doc_types: ['aadhaar', 'pan'], redirect_url: 'http://localhost:3000/digilocker', flow: 'signin' }
       },
       {
         name: 'Session Status',
         method: 'GET',
-        path: 'api/v1/digilocker/session/:session_id/status',
+        path: 'api/v1/digilocker/sessions/:session_id/status',
         pathVars: [{ key: 'session_id', value: '<session_id>' }]
       },
       {
         name: 'User Profile',
         method: 'GET',
-        path: 'api/v1/digilocker/session/:session_id/profile',
+        path: 'api/v1/digilocker/sessions/:session_id/profile',
         pathVars: [{ key: 'session_id', value: '<session_id>' }]
       },
       {
         name: 'Fetch Document',
         method: 'GET',
-        path: 'api/v1/digilocker/session/:session_id/document/:doc_type',
-        pathVars: [{ key: 'session_id', value: '<session_id>' }, { key: 'doc_type', value: 'ADHAR' }]
+        path: 'api/v1/digilocker/sessions/:session_id/documents/:doc_type',
+        pathVars: [{ key: 'session_id', value: '<session_id>' }, { key: 'doc_type', value: 'aadhaar' }]
       }
     ]
   },
@@ -250,7 +392,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   storage: {
     key: 'storage',
     name: 'Documents (Storage)',
-    description: 'In-app document vault: folders, files (metadata), quota & paid storage plans. Set {{token}}.',
+    description: 'In-app document vault: folders, files (metadata) & quota. Storage limits come from the subscription plan (no separate storage purchase). Set {{token}}.',
     endpoints: [
       { name: 'Get Storage Info', method: 'GET', path: 'api/v1/storage/info' },
       { name: 'Get Storage Usage', method: 'GET', path: 'api/v1/storage/usage' },
@@ -272,22 +414,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         ]
       },
       { name: 'Delete File', method: 'DELETE', path: 'api/v1/storage/delete-file/:fileId', pathVars: [{ key: 'fileId', value: '<fileId>' }] },
-      { name: 'Delete Folder', method: 'DELETE', path: 'api/v1/storage/delete-folder/:folderId', pathVars: [{ key: 'folderId', value: '<folderId>' }] },
-      { name: 'List Storage Plans', method: 'GET', path: 'api/v1/storage/plans' },
-      { name: 'Create Plan Order', method: 'POST', path: 'api/v1/storage/plans/create-order', body: { planType: 'storage_8gb' } },
-      {
-        name: 'Verify Plan Payment',
-        method: 'POST',
-        path: 'api/v1/storage/plans/verify-payment',
-        body: {
-          razorpay_order_id: 'order_mock_123',
-          razorpay_payment_id: 'pay_mock_123',
-          razorpay_signature: 'mock_signature',
-          planType: 'storage_8gb'
-        }
-      },
-      { name: 'Plan Status', method: 'GET', path: 'api/v1/storage/plans/status' },
-      { name: 'Plan History', method: 'GET', path: 'api/v1/storage/plans/history' }
+      { name: 'Delete Folder', method: 'DELETE', path: 'api/v1/storage/delete-folder/:folderId', pathVars: [{ key: 'folderId', value: '<folderId>' }] }
     ]
   },
 
@@ -298,6 +425,33 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     endpoints: [
       { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
       { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
+      {
+        name: 'Admin Forgot Password',
+        method: 'POST',
+        path: 'api/admin/v1/auth/forgot-password',
+        description: 'Emails a 6-digit OTP to begin a password reset.',
+        body: { email: 'admin@foldy.in' }
+      },
+      {
+        name: 'Admin Verify Email OTP',
+        method: 'POST',
+        path: 'api/admin/v1/auth/verify-email-otp',
+        description: 'Verifies the 6-digit reset OTP.',
+        body: { email: 'admin@foldy.in', otp: '123456' }
+      },
+      {
+        name: 'Admin Update Password',
+        method: 'POST',
+        path: 'api/admin/v1/auth/update-password',
+        description: 'Sets a new password (≥ 6 chars) using the verified OTP.',
+        body: { email: 'admin@foldy.in', otp: '123456', newPassword: '<new-password>' }
+      },
+      {
+        name: 'Admin Logout',
+        method: 'POST',
+        path: 'api/admin/v1/auth/logout',
+        description: 'Revokes the current admin JWT (token denylist). Requires an admin {{token}}.'
+      },
       {
         name: 'List Admin Users',
         method: 'GET',

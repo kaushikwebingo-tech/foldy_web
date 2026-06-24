@@ -64,6 +64,7 @@ export default function TdsPage() {
 
         {/* Submit */}
         <ApiCard
+          step={1}
           title="Submit TDS Certificate Job"
           method="POST"
           endpoint={`/api/v1/b2b/tds/submit-job/${certType}`}
@@ -83,6 +84,7 @@ export default function TdsPage() {
 
         {/* Poll */}
         <ApiCard
+          step={2}
           title="Poll TDS Job Status"
           method="POST"
           endpoint={`/api/v1/b2b/tds/poll-job/${certType}`}
@@ -97,6 +99,7 @@ export default function TdsPage() {
 
         {/* Fetch jobs */}
         <ApiCard
+          step={3}
           title="Fetch TDS Job History"
           method="POST"
           endpoint={`/api/v1/b2b/tds/fetch-jobs/${certType}`}

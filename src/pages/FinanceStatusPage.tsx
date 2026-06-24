@@ -41,6 +41,7 @@ export default function FinanceStatusPage() {
 
       <div className="space-y-4">
         <ApiCard
+          step={1}
           title="Track GST Returns"
           method="POST"
           endpoint="/api/v1/b2b/gst/get-finance-status"
