@@ -3,18 +3,21 @@ import { client } from './client';
 /*
  * Onboarding (PAN-first) + session helpers.
  * Single entry: panEntry → server returns mode "register" or "login".
- * Registration runs 3 OTP layers: PAN → Phone → Email → create-profile.
+ *   - New PAN (+ name + DOB) → demographic match → registrationToken.
+ *   - Existing PAN → SMS OTP to the registered mobile (login).
+ * Registration then runs 2 OTP layers: Phone → Email → create-profile.
  */
 export const authApi = {
-  // Single entry — register (new PAN) or login (existing PAN).
-  panEntry:        (pan: string) =>
-    client.post('/onboarding/pan', { pan }),
+  // Single entry. Registration needs pan + name + dob (demographic match);
+  // login (existing PAN) only needs pan.
+  panEntry:        (pan: string, name?: string, dob?: string) =>
+    client.post('/onboarding/pan', { pan, ...(name ? { name } : {}), ...(dob ? { dob } : {}) }),
 
-  // Layer 1 — PAN OTP. Returns registrationToken (register) or token (login).
+  // Existing-PAN login — verify the SMS OTP. Returns { mode:'login', token, user }.
   verifyPanOtp:    (referenceId: string, otp: string) =>
     client.post('/onboarding/pan/verify-otp', { referenceId, otp }),
 
-  // Layers 2 & 3 — phone / email OTP (registration).
+  // Layers 1 & 2 — phone / email OTP (registration).
   sendOtp:         (registrationToken: string, channel: 'phone' | 'email', value: string) =>
     client.post('/onboarding/otp/send', { registrationToken, channel, value }),
 

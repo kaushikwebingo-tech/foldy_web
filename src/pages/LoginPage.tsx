@@ -25,7 +25,7 @@ function PanLoginCards() {
         title="PAN Entry"
         method="POST"
         endpoint="/api/v1/onboarding/pan"
-        description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → starts registration. Copy referenceId into step 2."
+        description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → use the Onboarding page (needs Name + DOB). Copy referenceId into step 2."
         onSubmit={() => authApi.panEntry(pan)}
       >
         <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" fullWidth />

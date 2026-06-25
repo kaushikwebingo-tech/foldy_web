@@ -72,40 +72,37 @@ export default function GstTaxpayerPage() {
 
       <div className="space-y-4">
         {/* Step 1 */}
-        <div className="relative">
-          <div className="absolute -left-3 top-4 w-6 h-6 bg-[#1A73E8] rounded-full flex items-center justify-center text-white text-xs font-bold">1</div>
-          <ApiCard
-            title="Generate GST Portal OTP"
-            method="POST"
-            endpoint="/api/v1/b2b/gst/otp"
-            description="Sends OTP to the mobile/email registered with the GST portal. type (return type) is required by the server; title is an optional label."
-            onSubmit={() => b2bApi.generateGstOtp(username, gstin, otpType, otpTitle || undefined)}
-          >
-            <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
-            <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
-            <SelectField label="Type" value={otpType} onChange={setOtpType} options={OTP_TYPES} />
-            <Field label="Title (optional)" value={otpTitle} onChange={setOtpTitle} placeholder="e.g. Q1 filing" />
-          </ApiCard>
-        </div>
+        <ApiCard
+          step={1}
+          title="Generate GST Portal OTP"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/otp"
+          description="Sends OTP to the mobile/email registered with the GST portal. type (return type) is required by the server; title is an optional label."
+          onSubmit={() => b2bApi.generateGstOtp(username, gstin, otpType, otpTitle || undefined)}
+        >
+          <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Type" value={otpType} onChange={setOtpType} options={OTP_TYPES} />
+          <Field label="Title (optional)" value={otpTitle} onChange={setOtpTitle} placeholder="e.g. Q1 filing" />
+        </ApiCard>
 
         {/* Step 2 */}
-        <div className="relative">
-          <div className="absolute -left-3 top-4 w-6 h-6 bg-[#1A73E8] rounded-full flex items-center justify-center text-white text-xs font-bold">2</div>
-          <ApiCard
-            title="Verify GST Portal OTP"
-            method="POST"
-            endpoint="/api/v1/b2b/gst/otp/verify"
-            description="Verifies OTP and returns a taxpayer_token. Copy the token for all subsequent calls."
-            onSubmit={() => b2bApi.verifyGstOtp(username, gstin, otp)}
-          >
-            <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
-            <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
-            <Field label="OTP" value={otp} onChange={setOtp} placeholder="OTP from GST portal" />
-          </ApiCard>
-        </div>
+        <ApiCard
+          step={2}
+          title="Verify GST Portal OTP"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/otp/verify"
+          description="Verifies OTP and returns a taxpayer_token. Copy the token for all subsequent calls."
+          onSubmit={() => b2bApi.verifyGstOtp(username, gstin, otp)}
+        >
+          <Field label="GST Portal Username" value={username} onChange={setUsername} placeholder="GST portal username" />
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <Field label="OTP" value={otp} onChange={setOtp} placeholder="OTP from GST portal" />
+        </ApiCard>
 
         {/* Refresh session */}
         <ApiCard
+          step={3}
           title="Refresh Taxpayer Session"
           method="POST"
           endpoint="/api/v1/b2b/gst/session/refresh"
@@ -117,6 +114,7 @@ export default function GstTaxpayerPage() {
 
         {/* GSTR-1 Summary */}
         <ApiCard
+          step={4}
           title="Get GSTR-1 Summary"
           method="POST"
           endpoint="/api/v1/b2b/gst/gstr1/summary"
@@ -131,6 +129,7 @@ export default function GstTaxpayerPage() {
 
         {/* GSTR-1 B2B */}
         <ApiCard
+          step={5}
           title="Get GSTR-1 B2B Invoices"
           method="POST"
           endpoint="/api/v1/b2b/gst/gstr1/b2b"
@@ -145,6 +144,7 @@ export default function GstTaxpayerPage() {
 
         {/* Comprehensive Summary */}
         <ApiCard
+          step={6}
           title="Get Return Summary (GSTR-1/1A/3B/9/9C)"
           method="POST"
           endpoint="/api/v1/b2b/gst/summary/:type"
@@ -159,6 +159,7 @@ export default function GstTaxpayerPage() {
 
         {/* Sales Summary */}
         <ApiCard
+          step={7}
           title="Get Annual Sales Summary"
           method="GET"
           endpoint="/api/v1/b2b/gst/sales-summary"
@@ -172,6 +173,7 @@ export default function GstTaxpayerPage() {
 
         {/* Mark as filed */}
         <ApiCard
+          step={8}
           title="Mark Return as Filed"
           method="POST"
           endpoint="/api/v1/b2b/gst/mark-as-filed"

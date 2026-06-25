@@ -116,6 +116,7 @@ export default function AdminPage() {
       <div className="space-y-4">
         {/* Admin Register */}
         <ApiCard
+          step={1}
           title="Register Admin"
           method="POST"
           endpoint="/api/admin/v1/auth/register"
@@ -146,6 +147,7 @@ export default function AdminPage() {
 
         {/* Admin Login */}
         <ApiCard
+          step={2}
           title="Admin Login"
           method="POST"
           endpoint="/api/admin/v1/auth/login"
@@ -174,6 +176,7 @@ export default function AdminPage() {
 
         {/* List admins */}
         <ApiCard
+          step={3}
           title="List Admin Users"
           method="GET"
           endpoint="/api/admin/v1/admin-users"
@@ -211,6 +214,7 @@ export default function AdminPage() {
 
         {/* List plans */}
         <ApiCard
+          step={4}
           title="List Plans"
           method="GET"
           endpoint="/api/admin/v1/plans"
@@ -218,8 +222,9 @@ export default function AdminPage() {
           onSubmit={() => adminApi.listPlans()}
         />
 
-        Create plan
+        {/* Create plan */}
         <ApiCard
+          step={5}
           title="Create Plan"
           method="POST"
           endpoint="/api/admin/v1/plans"
@@ -307,6 +312,7 @@ export default function AdminPage() {
 
         {/* Update plan */}
         <ApiCard
+          step={6}
           title="Update Plan (price / quotas)"
           method="PUT"
           endpoint="/api/admin/v1/plans/:id"
@@ -325,6 +331,7 @@ export default function AdminPage() {
 
         {/* Activate / deactivate plan */}
         <ApiCard
+          step={7}
           title="Activate / Deactivate Plan"
           method="PATCH"
           endpoint="/api/admin/v1/plans/:id/status"
@@ -366,6 +373,7 @@ export default function AdminPage() {
 
         {/* Overview */}
         <ApiCard
+          step={8}
           title="Statistics Overview"
           method="GET"
           endpoint="/api/admin/v1/stats/overview"
@@ -393,6 +401,7 @@ export default function AdminPage() {
 
         {/* Revenue */}
         <ApiCard
+          step={9}
           title="Revenue & Trend"
           method="GET"
           endpoint="/api/admin/v1/stats/revenue"
@@ -423,6 +432,7 @@ export default function AdminPage() {
 
         {/* List app users */}
         <ApiCard
+          step={10}
           title="List App Users"
           method="GET"
           endpoint="/api/admin/v1/users"
@@ -449,6 +459,7 @@ export default function AdminPage() {
 
         {/* Get user details */}
         <ApiCard
+          step={11}
           title="Get User Details"
           method="GET"
           endpoint="/api/admin/v1/users/:userId"
@@ -467,6 +478,7 @@ export default function AdminPage() {
 
         {/* Block user */}
         <ApiCard
+          step={12}
           title="Block User"
           method="PATCH"
           endpoint="/api/admin/v1/users/:userId/block"
@@ -493,6 +505,7 @@ export default function AdminPage() {
 
         {/* Unblock user */}
         <ApiCard
+          step={13}
           title="Unblock User"
           method="PATCH"
           endpoint="/api/admin/v1/users/:userId/unblock"
@@ -518,6 +531,7 @@ export default function AdminPage() {
 
         {/* Cancel subscription */}
         <ApiCard
+          step={14}
           title="Cancel Subscription"
           method="POST"
           endpoint="/api/admin/v1/users/:userId/cancel-subscription"
@@ -544,6 +558,7 @@ export default function AdminPage() {
 
         {/* Refund payment */}
         <ApiCard
+          step={15}
           title="Process Refund"
           method="POST"
           endpoint="/api/admin/v1/payments/:paymentId/refund"
@@ -581,6 +596,7 @@ export default function AdminPage() {
 
         {/* Audit logs */}
         <ApiCard
+          step={16}
           title="Audit Logs"
           method="GET"
           endpoint="/api/admin/v1/audit-logs"

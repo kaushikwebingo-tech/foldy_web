@@ -52,31 +52,31 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   onboarding: {
     key: 'onboarding',
     name: 'Onboarding (PAN-first)',
-    description: 'Single entry: POST /onboarding/pan handles both registration and login. Registration runs 3 OTP layers — PAN (AuthBridge) → Phone → Email — then create-profile returns a JWT. Login (existing PAN) returns the JWT from pan/verify-otp. All OTPs print to the server console in dev.',
+    description: 'Single entry: POST /onboarding/pan handles both registration and login. New PAN → PAN + name + DOB demographic match (Sandbox) → registrationToken; registration then runs 2 OTP layers — Phone → Email — and create-profile returns a JWT. Existing PAN → SMS OTP to the registered mobile, then pan/verify-otp returns the JWT. All OTPs print to the server console in dev.',
     endpoints: [
       {
         name: 'PAN Entry (Register or Login)',
         method: 'POST',
         path: 'api/v1/onboarding/pan',
-        description: 'New PAN → AuthBridge sends OTP to the PAN-linked mobile (mode:"register"). Existing PAN → SMS OTP to the registered mobile (mode:"login"). Returns a referenceId for the next step.',
-        body: { pan: 'ABCDE1234F' }
+        description: 'New PAN → demographic match on PAN + name + dob; on success returns mode:"register" + registrationToken + name. Existing PAN → SMS OTP to the registered mobile, returns mode:"login" + referenceId (name/dob ignored).',
+        body: { pan: 'ABCDE1234F', name: 'John Doe', dob: '01/01/1990' }
       },
       {
-        name: 'Verify PAN OTP (Layer 1)',
+        name: 'Verify OTP & Login (existing PAN)',
         method: 'POST',
         path: 'api/v1/onboarding/pan/verify-otp',
-        description: 'Register → returns registrationToken + name. Login → returns { token, user } (JWT).',
+        description: 'Login only: verifies the SMS OTP from PAN Entry and returns { mode:"login", token, user } (JWT).',
         body: { referenceId: '<referenceId>', otp: '123456' }
       },
       {
-        name: 'Send OTP — Phone / Email (Layers 2 & 3)',
+        name: 'Send OTP — Phone / Email (Layers 1 & 2)',
         method: 'POST',
         path: 'api/v1/onboarding/otp/send',
-        description: 'channel = "phone" or "email". Requires a PAN-verified registrationToken.',
+        description: 'channel = "phone" or "email". Requires the registrationToken from PAN Entry.',
         body: { registrationToken: '<registrationToken>', channel: 'phone', value: '9876543210' }
       },
       {
-        name: 'Verify OTP — Phone / Email (Layers 2 & 3)',
+        name: 'Verify OTP — Phone / Email (Layers 1 & 2)',
         method: 'POST',
         path: 'api/v1/onboarding/otp/verify',
         body: { registrationToken: '<registrationToken>', channel: 'phone', otp: '123456' }
@@ -85,7 +85,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create Profile (auto-login)',
         method: 'POST',
         path: 'api/v1/onboarding/create-profile',
-        description: 'Requires PAN + Phone + Email all verified. Returns { token, user }. name defaults to the PAN-fetched name.',
+        description: 'Requires Phone + Email verified. Returns { token, user }. name defaults to the identity-matched name.',
         body: { registrationToken: '<registrationToken>', name: 'John Doe' }
       },
       {
