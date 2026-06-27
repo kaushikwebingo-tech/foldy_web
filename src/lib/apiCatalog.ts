@@ -154,7 +154,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create GST Profile',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles',
-        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. No title is sent — the server builds it from the business name + an HQ/BR tag (first GSTIN added = "<name> HQ", rest = "<name> BR (<state code>)"). gstUsername (GST portal username) is stored for the later txnId/OTP flow. One profile per (user, GSTIN).',
+        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. No title is sent — the server builds it from the business name + an HQ/BR tag (first GSTIN added = "<name> HQ", rest = "<name> BR (<state code>)"). Also sends the GST-portal OTP to the registered mobile so you can authorise immediately (authorize/verify). gstUsername is stored for the session flow. One profile per (user, GSTIN).',
         body: { gstin: GSTIN, gstUsername: '<gst-portal-username>' }
       },
       {
@@ -176,10 +176,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'id', value: '<profileId>' }]
       },
       {
-        name: 'Profile — Authorise (Send OTP)',
+        name: 'Profile — Resend OTP',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles/:id/authorize/otp',
-        description: 'Sends the GST-portal OTP using the profile\'s stored GST username + GSTIN.',
+        description: 'Re-sends the GST-portal OTP for this profile (Create GST Profile already sends the first one).',
         pathVars: [{ key: 'id', value: '<profileId>' }]
       },
       {

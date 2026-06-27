@@ -1,8 +1,8 @@
 import { getToken } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import {
-  LogIn, User, Building2, BarChart2,
-  FileText, Receipt, FolderOpen, CreditCard,
+  LogIn, User, Building2,
+  Receipt, FolderOpen, CreditCard,
   HardDrive, ShieldCheck, ArrowRight,
 } from 'lucide-react';
 import PlanStatusCard from '@/components/PlanStatusCard';
@@ -10,9 +10,7 @@ import PlanStatusCard from '@/components/PlanStatusCard';
 const ALL_MODULES = [
   { label: 'Login / OTP',     path: '/login',          icon: <LogIn size={20} />,       desc: 'Phone OTP auth + trial status',          badge: 'Public', authHide: true  },
   { label: 'Onboarding',      path: '/onboarding',     icon: <User size={20} />,        desc: 'PAN · Aadhaar · GSTIN · Bank KYC',        badge: 'Public', authHide: true  },
-  { label: 'GST Profile',     path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'GSTIN public business info lookup',       badge: 'B2B',    authHide: false },
-  { label: 'Finance Status',  path: '/finance-status', icon: <BarChart2 size={20} />,   desc: 'Track GSTR filing status',                badge: 'B2B',    authHide: false },
-  { label: 'GST Taxpayer',    path: '/gst-taxpayer',   icon: <FileText size={20} />,    desc: 'GST portal session + GSTR-1 data',        badge: 'B2B',    authHide: false },
+  { label: 'GST',             path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'Profiles · authorise · summaries · filing status', badge: 'B2B', authHide: false },
   { label: 'TDS',             path: '/tds',            icon: <Receipt size={20} />,     desc: 'TRACES Form 16 / 16A jobs',               badge: 'B2B',    authHide: false },
   { label: 'Storage',         path: '/storage',        icon: <FolderOpen size={20} />,  desc: 'Document vault · folders · files',        badge: 'Auth',   authHide: false },
   { label: 'Payments',        path: '/payments',       icon: <CreditCard size={20} />,  desc: 'Razorpay order creation & verification',  badge: 'Auth',   authHide: false },
@@ -58,7 +56,7 @@ export default function DashboardPage() {
             </span>
           )}
           <span className="inline-flex items-center gap-1.5 text-xs bg-white/10 text-slate-300 border border-white/10 rounded-full px-3 py-1">
-            10 modules · {Object.keys(MODULES).length} API groups
+            {ALL_MODULES.length} modules · {Object.keys(MODULES).length} API groups
           </span>
         </div>
       </div>

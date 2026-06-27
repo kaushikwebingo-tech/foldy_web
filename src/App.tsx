@@ -4,8 +4,6 @@ import DashboardPage     from '@/pages/DashboardPage';
 import LoginPage         from '@/pages/LoginPage';
 import OnboardingPage    from '@/pages/OnboardingPage';
 import GstProfilePage    from '@/pages/GstProfilePage';
-import FinanceStatusPage from '@/pages/FinanceStatusPage';
-import GstTaxpayerPage   from '@/pages/GstTaxpayerPage';
 import TdsPage           from '@/pages/TdsPage';
 import StoragePage       from '@/pages/StoragePage';
 import ManualUploadsPage from '@/pages/ManualUploadsPage';
@@ -22,8 +20,6 @@ export default function App() {
           <Route path="/login"          element={<LoginPage />} />
           <Route path="/onboarding"     element={<OnboardingPage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
-          <Route path="/finance-status" element={<FinanceStatusPage />} />
-          <Route path="/gst-taxpayer"   element={<GstTaxpayerPage />} />
           <Route path="/tds"            element={<TdsPage />} />
           <Route path="/storage"        element={<StoragePage />} />
           <Route path="/manual-uploads" element={<ManualUploadsPage />} />

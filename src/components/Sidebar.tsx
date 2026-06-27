@@ -4,8 +4,6 @@ import {
   LayoutDashboard,
   LogIn,
   User,
-  FileText,
-  BarChart2,
   Building2,
   Receipt,
   HardDrive,
@@ -44,19 +42,9 @@ const GROUPS = [
     group: "B2B Features",
     items: [
       {
-        label: "GST Profile",
+        label: "GST",
         path: "/gst-profile",
         icon: <Building2 size={16} />,
-      },
-      {
-        label: "Finance Status",
-        path: "/finance-status",
-        icon: <BarChart2 size={16} />,
-      },
-      {
-        label: "GST Taxpayer",
-        path: "/gst-taxpayer",
-        icon: <FileText size={16} />,
       },
       { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
     ],
