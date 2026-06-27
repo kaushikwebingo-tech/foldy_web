@@ -39,6 +39,18 @@ export default function OnboardingPage() {
       </div>
 
       <div className="space-y-4">
+        {/* PAN presence check — decide register vs login (no OTP, no side effects) */}
+        <ApiCard
+          step={0}
+          method="POST"
+          title="Check PAN (registered?)"
+          endpoint="/api/v1/onboarding/pan/check"
+          onSubmit={() => authApi.checkPan(pan)}
+          description="Lightweight check — is this PAN already registered? Returns { exists, mode } so the app can route to login or register. No OTP, no side effects."
+        >
+          <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" fullWidth />
+        </ApiCard>
+
         {/* 1. Identity verification (demographic match) */}
         <ApiCard
           step={1}

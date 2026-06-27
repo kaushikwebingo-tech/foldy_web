@@ -8,6 +8,10 @@ import { client } from './client';
  * Registration then runs 2 OTP layers: Phone → Email → create-profile.
  */
 export const authApi = {
+  // Presence check — is this PAN already registered? (no OTP). Returns { exists, mode }.
+  checkPan:        (pan: string) =>
+    client.post('/onboarding/pan/check', { pan }),
+
   // Single entry. Registration needs pan + name + dob (demographic match);
   // login (existing PAN) only needs pan.
   panEntry:        (pan: string, name?: string, dob?: string) =>

@@ -55,6 +55,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'Single entry: POST /onboarding/pan handles both registration and login. New PAN → PAN + name + DOB demographic match (Sandbox) → registrationToken; registration then runs 2 OTP layers — Phone → Email — and create-profile returns a JWT. Existing PAN → SMS OTP to the registered mobile, then pan/verify-otp returns the JWT. All OTPs print to the server console in dev.',
     endpoints: [
       {
+        name: 'Check PAN (registered?)',
+        method: 'POST',
+        path: 'api/v1/onboarding/pan/check',
+        description: 'Presence check — is this PAN already registered? Returns { exists, mode } (login | register). No OTP, no side effects.',
+        body: { pan: 'ABCDE1234F' }
+      },
+      {
         name: 'PAN Entry (Register or Login)',
         method: 'POST',
         path: 'api/v1/onboarding/pan',
