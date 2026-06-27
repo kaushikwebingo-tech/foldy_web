@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import ResponseViewer from './ResponseViewer';
+import RequestViewer from './RequestViewer';
 
 interface Props {
   title: string;
@@ -24,15 +25,20 @@ export default function ApiCard({ title, method, endpoint, description, children
   const [loading, setLoading] = useState(false);
   const [data, setData]       = useState<unknown>(undefined);
   const [error, setError]     = useState<unknown>(undefined);
+  const [request, setRequest] = useState<unknown>(undefined);
 
   const handleSubmit = async () => {
     setLoading(true);
     setData(undefined);
     setError(undefined);
+    setRequest(undefined);
     try {
       const res = await onSubmit();
+      // axios response carries the actual request that was sent.
+      setRequest((res as { config?: unknown })?.config);
       setData((res as { data?: unknown })?.data ?? res);
     } catch (err) {
+      setRequest((err as { config?: unknown })?.config);
       setError(err);
     } finally {
       setLoading(false);
@@ -86,8 +92,9 @@ export default function ApiCard({ title, method, endpoint, description, children
         </div>
       )}
 
-      {/* Response */}
+      {/* Request + Response */}
       <div className="px-5 py-4">
+        <RequestViewer config={request} />
         <ResponseViewer data={data} error={error} loading={loading} />
       </div>
     </div>

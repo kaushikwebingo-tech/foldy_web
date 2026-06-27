@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Copy, Check } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import CopyButton from './CopyButton';
 
 interface Props {
   data: unknown;
@@ -9,8 +9,6 @@ interface Props {
 }
 
 export default function ResponseViewer({ data, error, loading, title = 'Response' }: Props) {
-  const [copied, setCopied] = useState(false);
-
   const resp = (error as { response?: { status?: number; data?: unknown } })?.response;
   const status = resp?.status;
   const message = (error as { message?: string })?.message;
@@ -27,13 +25,6 @@ export default function ResponseViewer({ data, error, loading, title = 'Response
         ? content
         : JSON.stringify(content, null, 2)
       : null;
-
-  const copy = () => {
-    if (!json) return;
-    navigator.clipboard.writeText(json);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <div className="mt-4">
@@ -71,15 +62,7 @@ export default function ResponseViewer({ data, error, loading, title = 'Response
           )}
         </div>
 
-        {json !== null && !routeMissing && !noResponse && (
-          <button
-            onClick={copy}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        )}
+        {json !== null && !routeMissing && !noResponse && <CopyButton text={json} />}
       </div>
 
       {loading && <div className="json-viewer text-slate-400">Waiting for response...</div>}

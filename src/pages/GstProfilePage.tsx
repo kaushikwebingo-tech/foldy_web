@@ -15,7 +15,6 @@ const SUMMARY_TYPES = [
 
 export default function GstProfilePage() {
   const [gstin, setGstin]   = useState('');
-  const [title, setTitle]   = useState('');
   const [gstUsername, setGstUsername] = useState('');
   const [profileId, setProfileId] = useState('');
   const [sessionOtp, setSessionOtp] = useState('');
@@ -26,7 +25,7 @@ export default function GstProfilePage() {
     <div className="max-w-3xl">
       <PageHeader
         title="GST Profile"
-        subtitle="Save multiple GSTINs per Business. Each is verified via WhiteBooks on create; title is your label, type is auto-filled."
+        subtitle="Save multiple GSTINs per Business. Each is verified via WhiteBooks on create; the title is auto-built from the business name (first GSTIN = HQ, rest = branches)."
         icon={<Building2 size={18} />}
         badge="B2B Only"
         postmanSection="gst"
@@ -43,11 +42,10 @@ export default function GstProfilePage() {
           title="Create GST Profile"
           method="POST"
           endpoint="/api/v1/b2b/gst/profiles"
-          description="Verifies the GSTIN via WhiteBooks, then saves the profile with business details auto-filled. title is your own label; type comes from the verification; gstUsername (GST portal username) is stored for the later OTP/returns flow."
-          onSubmit={() => b2bApi.createGstProfile(gstin, title, gstUsername)}
+          description="Verifies the GSTIN via WhiteBooks, then saves the profile with business details auto-filled. The title is auto-built as '<business name> HQ' for the first GSTIN you add and '<business name> BR (<state code>)' for every later one. gstUsername (GST portal username) is stored for the later OTP/returns flow."
+          onSubmit={() => b2bApi.createGstProfile(gstin, gstUsername)}
         >
           <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
-          <Field label="Title (your label)" value={title} onChange={setTitle} placeholder="e.g. Head Office" />
           <Field label="GST Portal Username" value={gstUsername} onChange={setGstUsername} placeholder="GST portal login username" />
         </ApiCard>
 

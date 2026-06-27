@@ -154,8 +154,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create GST Profile',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles',
-        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. title is the user label; type is auto-filled from the verification; gstUsername (GST portal username) is stored for the later txnId/OTP flow. One profile per (user, GSTIN).',
-        body: { gstin: GSTIN, title: 'Head Office', gstUsername: '<gst-portal-username>' }
+        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. No title is sent — the server builds it from the business name + an HQ/BR tag (first GSTIN added = "<name> HQ", rest = "<name> BR (<state code>)"). gstUsername (GST portal username) is stored for the later txnId/OTP flow. One profile per (user, GSTIN).',
+        body: { gstin: GSTIN, gstUsername: '<gst-portal-username>' }
       },
       {
         name: 'List GST Profiles',

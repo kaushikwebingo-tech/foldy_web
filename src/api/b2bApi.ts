@@ -2,9 +2,11 @@ import { client } from './client';
 
 // All B2B GST endpoints are mounted flat under /b2b/gst ; TDS under /b2b/tds
 export const b2bApi = {
-  // GST profiles (a Business can save multiple GSTINs; verified via WhiteBooks on create)
-  createGstProfile:   (gstin: string, title: string, gstUsername: string) =>
-    client.post('/b2b/gst/profiles', { gstin, title, gstUsername }),
+  // GST profiles (a Business can save multiple GSTINs; verified via WhiteBooks on create).
+  // No title — the server derives it from the GSTIN's business name + HQ/BR tag
+  // (first GSTIN = HQ, the rest = branches).
+  createGstProfile:   (gstin: string, gstUsername: string) =>
+    client.post('/b2b/gst/profiles', { gstin, gstUsername }),
 
   listGstProfiles:    () =>
     client.get('/b2b/gst/profiles'),
