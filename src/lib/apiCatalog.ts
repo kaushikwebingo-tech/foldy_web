@@ -35,6 +35,24 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Revokes the current JWT (token blacklist). Requires auth.'
       },
       {
+        name: 'My Profile',
+        method: 'GET',
+        path: 'api/v1/user/profile',
+        description: 'Profile section for the logged-in user: name, dob/incorporation date, email, mobile, PAN (masked to last 4).'
+      },
+      {
+        name: 'Active Sessions',
+        method: 'GET',
+        path: 'api/v1/user/sessions',
+        description: 'Lists the user\'s active device sessions (current flagged). Single-active-session policy keeps this to one.'
+      },
+      {
+        name: 'Log Out Other Devices',
+        method: 'POST',
+        path: 'api/v1/user/sessions/logout-others',
+        description: 'Signs out every device except the current one.'
+      },
+      {
         name: 'Plan / Subscription Status',
         method: 'GET',
         path: 'api/v1/user/plan-status',
@@ -94,12 +112,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/onboarding/create-profile',
         description: 'Requires Phone + Email verified. Returns { token, user }. name defaults to the identity-matched name.',
         body: { registrationToken: '<registrationToken>', name: 'John Doe' }
-      },
-      {
-        name: 'Get Profile Details',
-        method: 'GET',
-        path: 'api/v1/onboarding/profile-details',
-        description: 'Post-login profile + finance details. Requires {{token}}.'
       }
     ]
   },

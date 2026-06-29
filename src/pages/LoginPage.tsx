@@ -59,6 +59,33 @@ function PanLoginCards() {
         description="Returns the current subscription status for the authenticated user."
         onSubmit={() => authApi.getTrialStatus()}
       />
+
+      <ApiCard
+        step={4}
+        title="Get My Profile"
+        method="GET"
+        endpoint="/api/v1/user/profile"
+        description="Profile section for the logged-in user: name, dob/incorporation date, email, mobile, and PAN (masked to last 4)."
+        onSubmit={() => authApi.getProfile()}
+      />
+
+      <ApiCard
+        step={5}
+        title="Active Sessions"
+        method="GET"
+        endpoint="/api/v1/user/sessions"
+        description="Lists this account's active device sessions (current one flagged). Single-active-session policy keeps this to one."
+        onSubmit={() => authApi.listSessions()}
+      />
+
+      <ApiCard
+        step={6}
+        title="Log Out Other Devices"
+        method="POST"
+        endpoint="/api/v1/user/sessions/logout-others"
+        description="Signs out every device except this one."
+        onSubmit={() => authApi.logoutOtherSessions()}
+      />
     </div>
   );
 }

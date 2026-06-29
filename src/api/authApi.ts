@@ -32,9 +32,16 @@ export const authApi = {
   createProfile:   (registrationToken: string, name?: string) =>
     client.post('/onboarding/create-profile', { registrationToken, ...(name ? { name } : {}) }),
 
-  // Post-login profile read.
-  getProfileDetails: () =>
-    client.get('/onboarding/profile-details'),
+  // Profile section for the logged-in user (PAN masked).
+  getProfile:      () =>
+    client.get('/user/profile'),
+
+  // Active device sessions (single-active-session policy).
+  listSessions:    () =>
+    client.get('/user/sessions'),
+
+  logoutOtherSessions: () =>
+    client.post('/user/sessions/logout-others'),
 
   // Subscription / trial status (from the user endpoint).
   getTrialStatus:  () =>
