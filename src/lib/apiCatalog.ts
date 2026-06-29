@@ -285,7 +285,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   tds: {
     key: 'tds',
     name: 'TDS',
-    description: 'TRACES Form 16 / 16A jobs (B2B). certificate_type is a path variable. Set {{token}}.',
+    description: 'TRACES Form 16 / 16A jobs (B2B). Submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Set {{token}}.',
     endpoints: [
       {
         name: 'Submit TDS Job',
@@ -326,6 +326,23 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2b/tds/fetch-jobs/:certificate_type',
         pathVars: [{ key: 'certificate_type', value: 'form16' }],
         body: { tan: 'MUMU12345A', financial_year: 'FY 2024-25', quarter: 'Q1', form: '24Q', page_size: 10 }
+      },
+      {
+        name: 'List My TDS Jobs',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/jobs',
+        description: 'Persisted TDS jobs with status + summary (newest first). Low input — the progress tracker / history.',
+        query: [
+          { key: 'status', value: '', description: 'optional: processing|completed|failed' },
+          { key: 'certificate_type', value: '', description: 'optional: form16|form16a' }
+        ]
+      },
+      {
+        name: 'Get TDS Job Status',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/jobs/:jobId',
+        description: 'One job\'s status + summary (no credentials, no TRACES round-trip). Background-polled by the server.',
+        pathVars: [{ key: 'jobId', value: '<jobId>' }]
       }
     ]
   },

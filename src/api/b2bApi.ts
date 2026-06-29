@@ -47,4 +47,11 @@ export const b2bApi = {
 
   fetchTdsJobs:       (certificateType: string, data: Record<string, unknown>) =>
     client.post(`/b2b/tds/fetch-jobs/${certificateType}`, data),
+
+  // Persisted TDS jobs — low-input progress tracking (background-polled server-side).
+  listTdsJobs:        (params?: { status?: string; certificate_type?: string }) =>
+    client.get('/b2b/tds/jobs', { params }),
+
+  getTdsJob:          (jobId: string) =>
+    client.get(`/b2b/tds/jobs/${jobId}`),
 };
