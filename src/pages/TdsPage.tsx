@@ -3,6 +3,7 @@ import ApiCard from '@/components/ApiCard';
 import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { b2bApi } from '@/api/b2bApi';
+import { incomeTaxApi } from '@/api/incomeTaxApi';
 import { Receipt } from 'lucide-react';
 
 // Path slug Sandbox expects (no hyphen).
@@ -16,7 +17,6 @@ const FORM_TYPES = [
   { label: '24Q (Salary)',        value: '24Q'  },
   { label: '26Q (Non-salary)',    value: '26Q'  },
   { label: '27Q (Non-resident)',  value: '27Q'  },
-  { label: '27EQ (TCS)',          value: '27EQ' },
 ];
 
 const QUARTERS = [
@@ -78,6 +78,22 @@ export default function TdsPage() {
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
         <strong>Flow:</strong> Submit Job (returns a job id immediately) → the server background-polls TRACES →
         Check Job Status / My TDS Jobs with just the id (no credentials). Manual poll &amp; Sandbox history search are below as fallbacks.
+      </div>
+
+      {/* B2C — an individual's TDS credits come from Form 26AS (not the deductor flow below). */}
+      <div className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+          B2C · Individual — Form 26AS (via AuthBridge)
+        </p>
+        <ApiCard
+          title="My TDS Credits (Form 26AS)"
+          method="GET"
+          endpoint="/api/v1/income-tax/26as"
+          description="B2C view: an individual's TDS credits from Form 26AS, keyed on their PAN. Serves Individual + Business plans (requireSegment). NOTE: returns a 'not configured' error until AUTHBRIDGE_* env + the 26AS endpoint spec are set."
+          onSubmit={() => incomeTaxApi.getForm26AS(fy)}
+        >
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+        </ApiCard>
       </div>
 
       <div className="space-y-4">

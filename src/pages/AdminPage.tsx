@@ -36,6 +36,12 @@ export default function AdminPage() {
   const [mgSearch, setMgSearch] = useState("");
   const [mgAuditAction, setMgAuditAction] = useState("");
 
+  // Notifications (Super Admin)
+  const [ntfTitle, setNtfTitle] = useState("");
+  const [ntfMessage, setNtfMessage] = useState("");
+  const [ntfUserId, setNtfUserId] = useState("");
+  const [ntfAudience, setNtfAudience] = useState("");
+
   // Confirmation + reason modal for destructive actions.
   const [confirm, setConfirm] = useState<{
     open: boolean;
@@ -616,6 +622,118 @@ export default function AdminPage() {
               { label: "Unblock user", value: "unblock_user" },
               { label: "Cancel subscription", value: "cancel_subscription" },
               { label: "Refund payment", value: "refund_payment" },
+            ]}
+          />
+          <Field
+            label="Page"
+            value={page}
+            onChange={setPage}
+            placeholder="1"
+            type="number"
+          />
+        </ApiCard>
+
+        {/* --- Notifications (Super Admin) --- */}
+        <div className="pt-3 pb-1">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Notifications · Super Admin
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Push messages via OneSignal. Broadcast to all subscribed devices, or
+            send to one user by id. Every send is recorded to the notification
+            history below.
+          </p>
+        </div>
+
+        {/* Broadcast */}
+        <ApiCard
+          step={17}
+          title="Broadcast Notification"
+          method="POST"
+          endpoint="/api/admin/v1/notifications/broadcast"
+          description="Sends a push to every subscribed device (OneSignal 'Subscribed Users' segment)."
+          buttonLabel="Broadcast"
+          onSubmit={() =>
+            adminApi.broadcastNotification(ntfTitle.trim(), ntfMessage.trim())
+          }
+        >
+          <Field
+            label="Title"
+            value={ntfTitle}
+            onChange={setNtfTitle}
+            placeholder="Scheduled maintenance"
+          />
+          <Field
+            label="Message"
+            value={ntfMessage}
+            onChange={setNtfMessage}
+            placeholder="Foldy will be briefly unavailable tonight at 11 PM IST."
+            fullWidth
+          />
+        </ApiCard>
+
+        {/* Send to user */}
+        <ApiCard
+          step={18}
+          title="Send Notification to User"
+          method="POST"
+          endpoint="/api/admin/v1/notifications/users/:userId"
+          description="Sends a push to one app user. Targets by external id (userId), falling back to the user's stored device token."
+          buttonLabel="Send"
+          onSubmit={() =>
+            adminApi.sendUserNotification(
+              ntfUserId.trim(),
+              ntfTitle.trim(),
+              ntfMessage.trim(),
+            )
+          }
+        >
+          <Field
+            label="User ID"
+            value={ntfUserId}
+            onChange={setNtfUserId}
+            placeholder="MongoDB ObjectId of the user"
+            fullWidth
+          />
+          <Field
+            label="Title"
+            value={ntfTitle}
+            onChange={setNtfTitle}
+            placeholder="Your GST return is due"
+          />
+          <Field
+            label="Message"
+            value={ntfMessage}
+            onChange={setNtfMessage}
+            placeholder="GSTR-1 for 06-2026 is due in 3 days."
+            fullWidth
+          />
+        </ApiCard>
+
+        {/* Notification history */}
+        <ApiCard
+          step={19}
+          title="Notification History"
+          method="GET"
+          endpoint="/api/admin/v1/notifications"
+          description="Paginated history of sent notifications (newest first). Optionally filter by audience."
+          buttonLabel="Fetch History"
+          onSubmit={() =>
+            adminApi.listNotifications(
+              Number(page),
+              20,
+              (ntfAudience || undefined) as "broadcast" | "user" | undefined,
+            )
+          }
+        >
+          <SelectField
+            label="Audience (optional)"
+            value={ntfAudience}
+            onChange={setNtfAudience}
+            options={[
+              { label: "All", value: "" },
+              { label: "Broadcast", value: "broadcast" },
+              { label: "Direct (user)", value: "user" },
             ]}
           />
           <Field

@@ -355,6 +355,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2b/tds/jobs/:jobId',
         description: 'One job\'s status + summary (no credentials, no TRACES round-trip). Background-polled by the server.',
         pathVars: [{ key: 'jobId', value: '<jobId>' }]
+      },
+      {
+        name: 'My TDS Credits (Form 26AS) — B2C',
+        method: 'GET',
+        path: 'api/v1/income-tax/26as',
+        description: 'B2C individual TDS view: TDS credits from Form 26AS via AuthBridge (keyed on the JWT user\'s PAN). Serves Individual + Business plans. Pending AuthBridge endpoint/creds — returns a clear "not configured" error until set.',
+        query: [{ key: 'financialYear', value: '2024-25' }]
       }
     ]
   },
@@ -618,6 +625,32 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           { key: 'page', value: '1' },
           { key: 'limit', value: '20' },
           { key: 'action', value: '', description: 'block_user|unblock_user|cancel_subscription|refund_payment (optional)' }
+        ]
+      },
+      {
+        name: 'Broadcast Notification',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/broadcast',
+        description: 'Push to every subscribed device via OneSignal. Recorded in notification history.',
+        body: { title: 'Scheduled maintenance', message: 'Foldy will be briefly unavailable tonight at 11 PM IST.' }
+      },
+      {
+        name: 'Send Notification to User',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/users/:userId',
+        description: 'Push to one app user (targets external id = userId, falls back to stored device token).',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { title: 'Your GST return is due', message: 'GSTR-1 for 06-2026 is due in 3 days.' }
+      },
+      {
+        name: 'Notification History',
+        method: 'GET',
+        path: 'api/admin/v1/notifications',
+        description: 'Paginated history of sent notifications (newest first).',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' },
+          { key: 'audience', value: '', description: 'broadcast|user (optional)' }
         ]
       }
     ]

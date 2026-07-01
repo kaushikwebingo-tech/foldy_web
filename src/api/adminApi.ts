@@ -77,4 +77,14 @@ export const adminApi = {
 
   listAuditLogs:  (page = 1, limit = 20, action?: string) =>
     adminClient.get('/audit-logs', { params: { page, limit, action } }),
+
+  // --- Push notifications (Super Admin) ---
+  broadcastNotification: (title: string, message: string) =>
+    adminClient.post('/notifications/broadcast', { title, message }),
+
+  sendUserNotification: (userId: string, title: string, message: string) =>
+    adminClient.post(`/notifications/users/${userId}`, { title, message }),
+
+  listNotifications: (page = 1, limit = 20, audience?: 'broadcast' | 'user') =>
+    adminClient.get('/notifications', { params: { page, limit, audience } }),
 };
