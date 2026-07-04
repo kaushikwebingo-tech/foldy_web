@@ -41,6 +41,8 @@ export default function GstProfilePage() {
   const [sessionOtp, setSessionOtp] = useState('');
   const [summaryType, setSummaryType] = useState('gstr1');
   const [retPeriod, setRetPeriod] = useState('');
+  const [noticeDate, setNoticeDate] = useState('');
+  const [refid, setRefid] = useState('');
   const [fy, setFy]       = useState('FY 2024-25');
   const [gstr, setGstr]   = useState('');
 
@@ -155,15 +157,47 @@ export default function GstProfilePage() {
           <Field label="Return Period (MMYYYY)" value={retPeriod} onChange={setRetPeriod} placeholder="e.g. 042026" />
         </ApiCard>
 
+        {/* Divider — Notices */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Notices</p>
+          <p className="text-xs text-slate-400 mb-3">GST-portal notices issued in the ~last 60 days for an authorised profile, plus the detail (with attached-document metadata) for a single notice. Uses the profile's stored token; the reference date &amp; GSP email are supplied server-side.</p>
+        </div>
+
+        {/* 8. List notices (stored token) */}
+        <ApiCard
+          step={8}
+          title="List Notices"
+          method="GET"
+          endpoint="/api/v1/b2b/gst/profiles/:id/notices"
+          description="Notices issued in the ~last 60 days for the profile's GSTIN, using its stored token. Optional date (DD/MM/YYYY) sets the reference day; defaults to today. Copy a notice refId for the details step."
+          onSubmit={() => b2bApi.getGstProfileNotices(profileId, noticeDate || undefined)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="Auto-filled from Create" fullWidth />
+          <Field label="Reference Date (DD/MM/YYYY, optional)" value={noticeDate} onChange={setNoticeDate} placeholder="defaults to today" />
+        </ApiCard>
+
+        {/* 9. Notice details (stored token) */}
+        <ApiCard
+          step={9}
+          title="Notice Details"
+          method="GET"
+          endpoint="/api/v1/b2b/gst/profiles/:id/notices/:refid"
+          description="Full detail for one notice — type, tax period, due date of reply, and attached-document metadata (name/type/id/hash). refId comes from the List Notices response."
+          onSubmit={() => b2bApi.getGstProfileNoticeDetails(profileId, refid)}
+        >
+          <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="Auto-filled from Create" fullWidth />
+          <Field label="Notice Reference ID" value={refid} onChange={setRefid} placeholder="e.g. ZA2005190002553" fullWidth />
+        </ApiCard>
+
         {/* Divider — filing status (different purpose: tracks whether returns are filed) */}
         <div className="border-t border-slate-200 pt-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Returns Filing Status</p>
           <p className="text-xs text-slate-400 mb-3">Compliance tracker — which GSTR returns are filed / overdue for a GSTIN + FY. Public track; no profile or OTP needed (distinct from Return Summary above, which fetches a return's contents).</p>
         </div>
 
-        {/* 8. Track returns filing status */}
+        {/* 10. Track returns filing status */}
         <ApiCard
-          step={8}
+          step={10}
           title="Track GST Returns (filing status)"
           method="POST"
           endpoint="/api/v1/b2b/gst/get-finance-status"

@@ -224,6 +224,20 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { ret_period: '042024' }
       },
       {
+        name: 'Profile — List Notices (stored token)',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/notices',
+        description: 'Notices issued in the ~last 60 days for the profile\'s GSTIN, using its stored token. Optional ?date=DD/MM/YYYY reference day (defaults to today). No taxpayer_token / email needed — injected server-side.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Notice Details (stored token)',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/notices/:refid',
+        description: 'Full detail for one notice — type, tax period, due date of reply, and attached-document metadata. refid comes from the List Notices response.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'refid', value: '<noticeRefId>' }]
+      },
+      {
         name: 'Get Business Info',
         method: 'POST',
         path: 'api/v1/b2b/gst/get-business-info',

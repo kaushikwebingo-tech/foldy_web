@@ -30,6 +30,13 @@ export const b2bApi = {
   getGstProfileSummary: (id: string, type: string, ret_period: string) =>
     client.post(`/b2b/gst/profiles/${id}/summary/${type}`, { ret_period }),
 
+  // GST notices for a profile (server-held token; date defaults to today, ~last 60 days).
+  getGstProfileNotices: (id: string, date?: string) =>
+    client.get(`/b2b/gst/profiles/${id}/notices`, { params: date ? { date } : undefined }),
+
+  getGstProfileNoticeDetails: (id: string, refid: string) =>
+    client.get(`/b2b/gst/profiles/${id}/notices/${refid}`),
+
   // GST — business info
   getBusinessInfo:    (gstin: string) =>
     client.post('/b2b/gst/get-business-info', { gstin }),
