@@ -313,6 +313,40 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'Company MCA (ROC) documents from InstaFinancials. The categorizer groups an InstaDocs/LLPDocs report\'s documents into the product filing categories (AOC 4, MGT 7/7A, DIR 11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI, Other filling). Requires an active B2B plan. The order/download lifecycle is not yet mounted.',
     endpoints: [
       {
+        name: 'Place Document Order',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/profile',
+        description: 'Order the InstaDocs report for a company by CIN (or PAN). Returns an orderId. Requires InstaFinancials credentials on the server.',
+        body: { cin: 'L23209TG1989PLC010336' }
+      },
+      {
+        name: 'Order Status',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/profile/:orderId/status',
+        description: 'Poll the order until it is ready to download.',
+        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+      },
+      {
+        name: 'Download Report',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/profile/:orderId/download',
+        description: 'Fetch the completed report (raw InstaDocs/LLPDocs JSON) once the order is ready.',
+        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+      },
+      {
+        name: 'My ROC Records',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/profiles',
+        description: 'All ROC orders/records saved for the logged-in Business.'
+      },
+      {
+        name: 'Get ROC Record',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/profile/:rocDataId',
+        description: 'A single saved ROC record by its _id.',
+        pathVars: [{ key: 'rocDataId', value: '<rocDataId>' }]
+      },
+      {
         name: 'Categorize Documents',
         method: 'POST',
         path: 'api/v1/b2b/roc/documents/categorize',
@@ -338,6 +372,44 @@ export const API_SECTIONS: Record<string, ApiSection> = {
             }
           }
         }
+      }
+    ]
+  },
+
+  llp: {
+    key: 'llp',
+    name: 'LLP Documents',
+    description: 'LLP MCA documents from InstaFinancials (LLPDocs). Order lifecycle by LLPIN → status → download, then categorize via the shared ROC categorizer. Requires an active B2B plan + InstaFinancials credentials on the server.',
+    endpoints: [
+      {
+        name: 'Place Document Order',
+        method: 'POST',
+        path: 'api/v1/b2b/llp/profile',
+        description: 'Order the LLPDocs report for an LLP by LLPIN. Returns an orderId.',
+        body: { llpin: 'AAZ-9378' }
+      },
+      {
+        name: 'Order Status',
+        method: 'GET',
+        path: 'api/v1/b2b/llp/profile/:orderId/status',
+        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+      },
+      {
+        name: 'Download Report',
+        method: 'GET',
+        path: 'api/v1/b2b/llp/profile/:orderId/download',
+        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+      },
+      {
+        name: 'My LLP Records',
+        method: 'GET',
+        path: 'api/v1/b2b/llp/profiles'
+      },
+      {
+        name: 'Get LLP Record',
+        method: 'GET',
+        path: 'api/v1/b2b/llp/profile/:llpDataId',
+        pathVars: [{ key: 'llpDataId', value: '<llpDataId>' }]
       }
     ]
   },

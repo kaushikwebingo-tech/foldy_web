@@ -15,6 +15,7 @@ import {
   UploadCloud,
   Server,
   FileStack,
+  Landmark,
   LifeBuoy,
 } from "lucide-react";
 import { getToken, removeToken, getApiHost, setApiHost } from "@/lib/utils";
@@ -56,6 +57,7 @@ const GROUPS = [
       },
       { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
       { label: "ROC", path: "/roc-documents", icon: <FileStack size={16} /> },
+      { label: "LLP", path: "/llp-documents", icon: <Landmark size={16} /> },
     ],
   },
   {
