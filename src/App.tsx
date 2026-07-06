@@ -5,6 +5,8 @@ import LoginPage         from '@/pages/LoginPage';
 import OnboardingPage    from '@/pages/OnboardingPage';
 import GstProfilePage    from '@/pages/GstProfilePage';
 import TdsPage           from '@/pages/TdsPage';
+import RocDocumentsPage  from '@/pages/RocDocumentsPage';
+import SupportPage       from '@/pages/SupportPage';
 import StoragePage       from '@/pages/StoragePage';
 import ManualUploadsPage from '@/pages/ManualUploadsPage';
 import PaymentsPage      from '@/pages/PaymentsPage';
@@ -21,6 +23,8 @@ export default function App() {
           <Route path="/onboarding"     element={<OnboardingPage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
           <Route path="/tds"            element={<TdsPage />} />
+          <Route path="/roc-documents"  element={<RocDocumentsPage />} />
+          <Route path="/support"        element={<SupportPage />} />
           <Route path="/storage"        element={<StoragePage />} />
           <Route path="/manual-uploads" element={<ManualUploadsPage />} />
           <Route path="/payments"       element={<PaymentsPage />} />

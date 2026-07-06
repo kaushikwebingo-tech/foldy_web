@@ -95,7 +95,13 @@ function AlreadyLoggedIn() {
   const navigate = useNavigate();
   const token    = getToken()!;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the JWT + end the session server-side, then clear locally.
+    try {
+      await authApi.logout();
+    } catch {
+      /* ignore — proceed with local logout */
+    }
     removeToken();
     window.location.reload();
   };

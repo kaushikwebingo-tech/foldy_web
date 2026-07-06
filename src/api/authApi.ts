@@ -52,4 +52,8 @@ export const authApi = {
 
   logout:          () =>
     client.post('/auth/logout'),
+
+  // Delete Account — soft-deletes the logged-in user (both segments).
+  deleteAccount:   () =>
+    client.delete('/user/account'),
 };

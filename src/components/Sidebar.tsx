@@ -14,8 +14,11 @@ import {
   ChevronRight,
   UploadCloud,
   Server,
+  FileStack,
+  LifeBuoy,
 } from "lucide-react";
 import { getToken, removeToken, getApiHost, setApiHost } from "@/lib/utils";
+import { authApi } from "@/api/authApi";
 
 /* ── nav definition ──────────────────────────────────────────────── */
 const AUTH_NAV = [
@@ -36,6 +39,11 @@ const GROUPS = [
         path: "/onboarding",
         icon: <User size={16} />,
       },
+      {
+        label: "Support & Account",
+        path: "/support",
+        icon: <LifeBuoy size={16} />,
+      },
     ],
   },
   {
@@ -47,6 +55,7 @@ const GROUPS = [
         icon: <Building2 size={16} />,
       },
       { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
+      { label: "ROC", path: "/roc-documents", icon: <FileStack size={16} /> },
     ],
   },
   {
@@ -93,7 +102,14 @@ export default function Sidebar() {
     setSavedHost(effective);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the JWT + end the session server-side, then clear locally.
+    // Best-effort: log out locally even if the call fails (e.g. expired token).
+    try {
+      await authApi.logout();
+    } catch {
+      /* ignore — proceed with local logout */
+    }
     removeToken();
     navigate("/login");
     // force re-render by reloading

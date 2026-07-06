@@ -87,4 +87,11 @@ export const adminApi = {
 
   listNotifications: (page = 1, limit = 20, audience?: 'broadcast' | 'user') =>
     adminClient.get('/notifications', { params: { page, limit, audience } }),
+
+  // --- Contact Support triage (admin) ---
+  listSupportQueries: (page = 1, limit = 20, status?: string, search?: string) =>
+    adminClient.get('/support/queries', { params: { page, limit, status, search } }),
+
+  updateSupportQueryStatus: (id: string, status: string, response?: string) =>
+    adminClient.patch(`/support/queries/${id}/status`, { status, ...(response ? { response } : {}) }),
 };

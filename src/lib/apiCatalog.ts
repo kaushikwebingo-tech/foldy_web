@@ -307,6 +307,86 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       }
     ]
   },
+  roc: {
+    key: 'roc',
+    name: 'ROC Documents',
+    description: 'Company MCA (ROC) documents from InstaFinancials. The categorizer groups an InstaDocs/LLPDocs report\'s documents into the product filing categories (AOC 4, MGT 7/7A, DIR 11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI, Other filling). Requires an active B2B plan. The order/download lifecycle is not yet mounted.',
+    endpoints: [
+      {
+        name: 'Categorize Documents',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/documents/categorize',
+        description: 'Accepts the raw InstaDocs/LLPDocs report ({ ReportData: { InstaDocs|LLPDocs: { Document: [...] } } }), a { report } wrapper, or a bare Document array. Returns all 16 categories in order (empty ones included), each doc trimmed to name/date/size/downloadLink, newest-first.',
+        body: {
+          ReportData: {
+            InstaDocs: {
+              Document: [
+                {
+                  DocumentName: 'AOC-4 XBRL Form AOC-4(XBRL).pdf',
+                  DocumentCategory: 'Annual Returns and Balance Sheet eForms',
+                  DocumentFillingDate: '02-11-2024',
+                  DocumentSize: 7.76,
+                  DocumentLink: 'https://downloads.InstaFinancials.com/...'
+                },
+                {
+                  DocumentName: 'Form MGT-7.pdf',
+                  DocumentFillingDate: '20-09-2023',
+                  DocumentSize: 1.2,
+                  DocumentLink: 'https://downloads.InstaFinancials.com/...'
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+
+  support: {
+    key: 'support',
+    name: 'Support & Account',
+    description: 'Contact Support (raise + list own requests) and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. For the user calls set {{token}} to a user JWT; for the admin calls set {{token}} to an admin JWT.',
+    endpoints: [
+      {
+        name: 'Raise Support Request',
+        method: 'POST',
+        path: 'api/v1/support/queries',
+        description: 'Auto-linked to the logged-in user; starts in status "open".',
+        body: { name: 'Jane Doe', email: 'jane@example.com', mobile: '9876543210', description: 'I need help with my subscription.' }
+      },
+      {
+        name: 'My Support Requests',
+        method: 'GET',
+        path: 'api/v1/support/queries',
+        description: 'The logged-in user\'s own requests with status + any admin reply.'
+      },
+      {
+        name: 'Delete My Account',
+        method: 'DELETE',
+        path: 'api/v1/user/account',
+        description: 'Soft-deletes the account: revokes sessions, cancels subscription, frees phone/email/PAN for re-registration. Retains the record.'
+      },
+      {
+        name: 'Admin — List Support Queries',
+        method: 'GET',
+        path: 'api/admin/v1/support/queries',
+        description: 'Admin JWT. Filter by status + search, paginated.',
+        query: [
+          { key: 'status', value: 'open' },
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' }
+        ]
+      },
+      {
+        name: 'Admin — Update Query Status',
+        method: 'PATCH',
+        path: 'api/admin/v1/support/queries/:id/status',
+        description: 'Admin JWT. status = open|in_progress|resolved|closed; response is an optional reply shown to the user.',
+        pathVars: [{ key: 'id', value: '<queryId>' }],
+        body: { status: 'in_progress', response: 'We are looking into this.' }
+      }
+    ]
+  },
 
   tds: {
     key: 'tds',
