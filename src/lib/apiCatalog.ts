@@ -414,6 +414,46 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
+  profile: {
+    key: 'profile',
+    name: 'Profile',
+    description: 'View + edit the logged-in user\'s profile. Name/image update immediately; email/phone changes are OTP-verified (request-otp → verify) and apply only when every changed channel is verified. Set {{token}} to a user JWT.',
+    endpoints: [
+      {
+        name: 'Get Profile',
+        method: 'GET',
+        path: 'api/v1/user/profile',
+        description: 'Name, DOB, email, mobile, masked PAN, and a signed profile-image URL. Name/DOB/PAN are one-time onboarding inputs (read-only).'
+      },
+      {
+        name: 'Upload Profile Image',
+        method: 'POST',
+        path: 'api/v1/user/profile/image',
+        description: 'multipart/form-data; field "image" (jpg/png/webp, ≤5MB). Returns a signed URL.',
+        formdata: [{ key: 'image', type: 'file' }]
+      },
+      {
+        name: 'Remove Profile Image',
+        method: 'DELETE',
+        path: 'api/v1/user/profile/image'
+      },
+      {
+        name: 'Request Contact OTP',
+        method: 'POST',
+        path: 'api/v1/user/profile/contact/request-otp',
+        description: 'Send OTP to the new email and/or phone (only the changed field(s)). Leave one out to keep it unchanged.',
+        body: { email: 'new@example.com', phone: '9876543210' }
+      },
+      {
+        name: 'Verify Contact OTP',
+        method: 'POST',
+        path: 'api/v1/user/profile/contact/verify',
+        description: 'Applies the change only when every changed channel is verified; if one is unverified, nothing updates.',
+        body: { emailOtp: '123456', phoneOtp: '123456' }
+      }
+    ]
+  },
+
   support: {
     key: 'support',
     name: 'Support & Account',

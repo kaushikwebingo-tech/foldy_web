@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import DashboardPage     from '@/pages/DashboardPage';
 import LoginPage         from '@/pages/LoginPage';
 import OnboardingPage    from '@/pages/OnboardingPage';
+import ProfilePage       from '@/pages/ProfilePage';
 import GstProfilePage    from '@/pages/GstProfilePage';
 import TdsPage           from '@/pages/TdsPage';
 import RocDocumentsPage  from '@/pages/RocDocumentsPage';
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/"               element={<DashboardPage />} />
           <Route path="/login"          element={<LoginPage />} />
           <Route path="/onboarding"     element={<OnboardingPage />} />
+          <Route path="/profile"        element={<ProfilePage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
           <Route path="/tds"            element={<TdsPage />} />
           <Route path="/roc-documents"  element={<RocDocumentsPage />} />

@@ -17,6 +17,7 @@ import {
   FileStack,
   Landmark,
   LifeBuoy,
+  UserCircle,
 } from "lucide-react";
 import { getToken, removeToken, getApiHost, setApiHost } from "@/lib/utils";
 import { authApi } from "@/api/authApi";
@@ -39,6 +40,11 @@ const GROUPS = [
         label: "Onboarding",
         path: "/onboarding",
         icon: <User size={16} />,
+      },
+      {
+        label: "Profile",
+        path: "/profile",
+        icon: <UserCircle size={16} />,
       },
       {
         label: "Support & Account",
