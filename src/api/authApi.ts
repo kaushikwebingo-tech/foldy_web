@@ -12,10 +12,8 @@ export const authApi = {
   checkPan:        (pan: string) =>
     client.post('/onboarding/pan/check', { pan }),
 
-  // Single entry. Registration needs pan + name + dob (demographic match);
-  // login (existing PAN) only needs pan.
-  panEntry:        (pan: string, name?: string, dob?: string ) =>
-    client.post('/onboarding/pan', {workspace : "business", pan, ...(name ? { name } : {}), ...(dob ? { dob } : {}) }),
+  panEntry:        (pan: string, name?: string, dob?: string, workspace: 'business' | 'individual' = 'business') =>
+    client.post('/onboarding/pan', { workspace, pan, ...(name ? { name } : {}), ...(dob ? { dob } : {}) }),
 
   // Existing-PAN login — verify the SMS OTP. Returns { mode:'login', token, user }.
   verifyPanOtp:    (referenceId: string, otp: string) =>

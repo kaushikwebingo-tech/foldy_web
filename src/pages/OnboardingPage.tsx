@@ -1,6 +1,6 @@
 import { useState } from "react";
 import ApiCard from "@/components/ApiCard";
-import { Field } from "@/components/Field";
+import { Field, SelectField } from "@/components/Field";
 import PageHeader from "@/components/PageHeader";
 import { authApi } from "@/api/authApi";
 import { setToken } from "@/lib/utils";
@@ -16,6 +16,7 @@ export default function OnboardingPage() {
   const [pan, setPan] = useState("");
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
+  const [workspace, setWorkspace] = useState<"business" | "individual">("business");
   const [regToken, setRegToken] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneOtp, setPhoneOtp] = useState("");
@@ -59,7 +60,7 @@ export default function OnboardingPage() {
           endpoint="/api/v1/onboarding/pan"
           description="Demographic match via Sandbox. New PAN → returns a registrationToken + name (copied into the steps below). Existing PAN → returns mode:'login' (use the Login page instead)."
           onSubmit={async () => {
-            const res = await authApi.panEntry(pan, name, dob);
+            const res = await authApi.panEntry(pan, name, dob, workspace);
             const data = res.data?.data;
             if (data?.registrationToken) setRegToken(data.registrationToken);
             if (data?.name) setName(data.name);
@@ -69,6 +70,15 @@ export default function OnboardingPage() {
           <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" />
           <Field label="Name as per PAN" value={name} onChange={setName} placeholder="Full Legal Name" />
           <Field label="Date of Birth / Incorporation" value={dob} onChange={setDob} placeholder="DD/MM/YYYY" />
+          <SelectField
+            label="Workspace (register + login-as)"
+            value={workspace}
+            onChange={(v) => setWorkspace(v as "business" | "individual")}
+            options={[
+              { label: "Business", value: "business" },
+              { label: "Individual", value: "individual" },
+            ]}
+          />
         </ApiCard>
 
         {/* 2. Phone OTP — send */}
