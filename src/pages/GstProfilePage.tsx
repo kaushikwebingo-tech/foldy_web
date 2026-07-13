@@ -143,6 +143,27 @@ export default function GstProfilePage() {
           <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="Auto-filled from Create" fullWidth />
         </ApiCard>
 
+
+         {/* Divider — filing status (different purpose: tracks whether returns are filed) */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Returns Filing Status</p>
+          <p className="text-xs text-slate-400 mb-3">Compliance tracker — which GSTR returns are filed / overdue for a GSTIN + FY. Public track; no profile or OTP needed (distinct from Return Summary above, which fetches a return's contents).</p>
+        </div>
+
+        {/* 10. Track returns filing status */}
+        <ApiCard
+          step={10}
+          title="Track GST Returns (filing status)"
+          method="POST"
+          endpoint="/api/v1/b2b/gst/get-finance-status"
+          description="Returns the 12-month filing status (Filed / Overdue / Due) for GSTR-1, GSTR-3B, GSTR-9, etc. for a GSTIN and financial year. Tracks whether returns are filed — not their contents."
+          onSubmit={() => b2bApi.trackGstReturns(gstin, fy, gstr || undefined)}
+        >
+          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+          <SelectField label="Filter by Return (optional)" value={gstr} onChange={setGstr} options={GSTR_OPTIONS} />
+        </ApiCard>
+
         {/* 7. Return summary (stored token) */}
         <ApiCard
           step={7}
@@ -187,26 +208,6 @@ export default function GstProfilePage() {
         >
           <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="Auto-filled from Create" fullWidth />
           <Field label="Notice Reference ID" value={refid} onChange={setRefid} placeholder="e.g. ZA2005190002553" fullWidth />
-        </ApiCard>
-
-        {/* Divider — filing status (different purpose: tracks whether returns are filed) */}
-        <div className="border-t border-slate-200 pt-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Returns Filing Status</p>
-          <p className="text-xs text-slate-400 mb-3">Compliance tracker — which GSTR returns are filed / overdue for a GSTIN + FY. Public track; no profile or OTP needed (distinct from Return Summary above, which fetches a return's contents).</p>
-        </div>
-
-        {/* 10. Track returns filing status */}
-        <ApiCard
-          step={10}
-          title="Track GST Returns (filing status)"
-          method="POST"
-          endpoint="/api/v1/b2b/gst/get-finance-status"
-          description="Returns the 12-month filing status (Filed / Overdue / Due) for GSTR-1, GSTR-3B, GSTR-9, etc. for a GSTIN and financial year. Tracks whether returns are filed — not their contents."
-          onSubmit={() => b2bApi.trackGstReturns(gstin, fy, gstr || undefined)}
-        >
-          <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
-          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
-          <SelectField label="Filter by Return (optional)" value={gstr} onChange={setGstr} options={GSTR_OPTIONS} />
         </ApiCard>
       </div>
     </div>
