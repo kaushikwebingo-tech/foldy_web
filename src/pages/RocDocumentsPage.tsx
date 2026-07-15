@@ -34,14 +34,15 @@ const SAMPLE = `{
 }`;
 
 /*
- * ROC company documents (InstaFinancials InstaDocs). Two parts:
- *  1) Order lifecycle: place an order (CIN/PAN) → poll status → download report.
- *  2) Categorize a report into the MCA filing categories.
+ * ROC/LLP documents (InstaFinancials). Two parts:
+ *  1) The job lifecycle: order by identifier → poll our DB → read documents.
+ *     Completion normally arrives by webhook, not from anything this page calls.
+ *  2) The categorizer, which works offline on any pasted report.
  */
 export default function RocDocumentsPage() {
-  const [cin, setCin] = useState('');
-  const [pan, setPan] = useState('');
-  const [orderId, setOrderId] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [jobId, setJobId] = useState('');
+  const [category, setCategory] = useState('');
   const [rocDataId, setRocDataId] = useState('');
   const [reportJson, setReportJson] = useState('');
 
@@ -49,61 +50,91 @@ export default function RocDocumentsPage() {
     <div className="max-w-3xl">
       <PageHeader
         title="ROC Documents"
-        subtitle="InstaFinancials InstaDocs — order a company's MCA documents (by CIN/PAN), poll the order, download the report, then categorize it into the 16 MCA filing categories."
+        subtitle="InstaFinancials InstaDocs/LLPDocs — order a company's or LLP's MCA documents from one identifier, track the job, then read the documents grouped into the 16 MCA filing categories."
         icon={<FileStack size={18} />}
         badge="B2B Only"
         postmanSection="roc"
       />
 
       <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-        <strong>Needs InstaFinancials credentials:</strong> the order/status/download calls hit the live InstaFinancials API and require <code>INSTAFINANCIALS_ROC_API_KEY</code> set on the server. The categorizer works offline on any pasted report.
+        <strong>Ordering costs money and is rate-limited.</strong> Step 1 hits the live
+        InstaFinancials API (needs <code>INSTAFINANCIALS_ROC_API_KEY</code> on the server) and is
+        guarded: <strong>one active job per user</strong> (409) and <strong>one order per 90 days</strong>,
+        counted from when the job was created (429). Outside production the server serves its sample
+        report instead of calling the vendor.
+      </div>
+
+      <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+        <strong>Delivery is asynchronous and slow:</strong> ~30 min for LLPDocs, up to ~3 weeks for
+        InstaDocs. The report arrives at <code>POST /webhook/instafinancials</code> (the primary
+        path), which persists the documents and pushes a notification; a reconciler cron covers a
+        missed callback on a budgeted backoff (+2h/+24h/+5d/+14d), because the vendor allows only 4
+        status pulls per order. Step 2 never calls the vendor — it reads our DB, so poll it freely.
       </div>
 
       <div className="space-y-4">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Order Lifecycle</p>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Job Lifecycle</p>
 
-        {/* 1. Place order */}
+        {/* 1. Order documents */}
         <ApiCard
           step={1}
-          title="Place Document Order"
+          title="Order Documents"
           method="POST"
-          endpoint="/api/v1/b2b/roc/profile"
-          description="Order the InstaDocs report for a company by CIN (or PAN). Returns an orderId, auto-filled into the steps below."
-          buttonLabel="Place Order"
+          endpoint="/api/v1/b2b/roc/job"
+          description="Send ONE identifier — CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs). The type is detected from its shape, so there's no separate LLP call. Returns 202 + jobId, auto-filled below."
+          buttonLabel="Order Documents"
           onSubmit={async () => {
-            const res = await rocApi.placeOrder({ cin: cin || undefined, pan: pan || undefined });
-            const id = res.data?.data?.orderId;
-            if (id) setOrderId(String(id));
+            const res = await rocApi.createJob(identifier);
+            const id = res.data?.data?.jobId;
+            if (id) setJobId(String(id));
             return res;
           }}
         >
-          <Field label="CIN" value={cin} onChange={setCin} placeholder="L23209TG1989PLC010336" />
-          <Field label="PAN (if no CIN)" value={pan} onChange={setPan} placeholder="AAZ-9378 / ABCDE1234F" />
+          <Field
+            label="Identifier (CIN / PAN / LLPIN)"
+            value={identifier}
+            onChange={setIdentifier}
+            placeholder="U69202WB2024PTC269500 · AAP-7675 · AAACX1234F"
+            fullWidth
+          />
         </ApiCard>
 
-        {/* 2. Order status */}
+        {/* 2. Job status */}
         <ApiCard
           step={2}
-          title="Order Status"
+          title="Job Status"
           method="GET"
-          endpoint="/api/v1/b2b/roc/profile/:orderId/status"
-          description="Poll the order until it's ready to download."
-          onSubmit={() => rocApi.getOrderStatus(orderId)}
-        >
-          <Field label="Order ID" value={orderId} onChange={setOrderId} placeholder="Auto-filled from Place Order" fullWidth />
-        </ApiCard>
+          endpoint="/api/v1/b2b/roc/job"
+          description="The current job + cooldown. Reads our DB (0 vendor calls), so it's safe to poll. `canOrder` is the single flag the order button needs; `cooldown.daysRemaining` explains a 429."
+          onSubmit={() => rocApi.getJob()}
+        />
 
-        {/* 3. Download report */}
+        {/* 3. Documents */}
         <ApiCard
           step={3}
-          title="Download Report"
+          title="My Documents"
           method="GET"
-          endpoint="/api/v1/b2b/roc/profile/:orderId/download"
-          description="Fetches the completed report (raw InstaDocs/LLPDocs JSON). Copy reportData into the Categorize step."
-          onSubmit={() => rocApi.downloadReport(orderId)}
+          endpoint="/api/v1/b2b/roc/documents"
+          description="Documents the webhook delivered, grouped into the 16 MCA categories. Leave Job ID blank for the latest ready job. downloadUrl links are permanent InstaFinancials URLs — we store metadata only, never a file copy."
+          onSubmit={() =>
+            rocApi.getDocuments({
+              ...(jobId ? { jobId } : {}),
+              ...(category ? { category } : {}),
+            })
+          }
         >
-          <Field label="Order ID" value={orderId} onChange={setOrderId} placeholder="Auto-filled from Place Order" fullWidth />
+          <Field label="Job ID (optional)" value={jobId} onChange={setJobId} placeholder="Auto-filled from Order Documents" />
+          <Field label="Category (optional)" value={category} onChange={setCategory} placeholder="e.g. AOC 4" />
         </ApiCard>
+
+        {/* Divider — legacy */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Legacy Records</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Read-only <code>RocData</code> from the previous order flow. Superseded by Job Status +
+            My Documents; kept so existing records stay reachable.
+          </p>
+        </div>
 
         {/* 4. List records */}
         <ApiCard
@@ -111,7 +142,7 @@ export default function RocDocumentsPage() {
           title="My ROC Records"
           method="GET"
           endpoint="/api/v1/b2b/roc/profiles"
-          description="All ROC orders/records saved for the logged-in Business."
+          description="Legacy ROC records saved for the logged-in Business."
           onSubmit={() => rocApi.listCompanies()}
         />
 
@@ -121,7 +152,7 @@ export default function RocDocumentsPage() {
           title="Get ROC Record"
           method="GET"
           endpoint="/api/v1/b2b/roc/profile/:rocDataId"
-          description="A single saved ROC record by its _id (from the list response)."
+          description="A single legacy ROC record by its _id (from the list response)."
           onSubmit={() => rocApi.getCompany(rocDataId)}
         >
           <Field label="ROC Data ID" value={rocDataId} onChange={setRocDataId} placeholder="From My ROC Records (_id)" fullWidth />
@@ -130,7 +161,7 @@ export default function RocDocumentsPage() {
         {/* Divider — categorizer */}
         <div className="border-t border-slate-200 pt-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Categorize</p>
-          <p className="text-xs text-slate-400 mb-3">Groups a report's documents by MCA form code (AOC-4, MGT-7/7A, DIR-11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI); the rest → <code>Other filling</code>. Paste the <code>reportData</code> from Download Report, or any report JSON.</p>
+          <p className="text-xs text-slate-400 mb-3">Groups a report's documents by MCA form code (AOC-4, MGT-7/7A, DIR-11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI); the rest → <code>Other filling</code>. The webhook applies these same rules when it persists documents; this endpoint exposes them for any pasted report.</p>
         </div>
 
         {/* 6. Categorize */}

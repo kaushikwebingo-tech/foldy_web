@@ -1,21 +1,15 @@
 import { client } from './client';
 
 /*
- * LLP (LLP MCA documents) — InstaFinancials LLPDocs.
- * Order lifecycle: place an order (by LLPIN) → poll status → download report.
- * Reports categorize via the shared ROC categorizer (/b2b/roc/documents/categorize).
+ * LLP (LLP MCA documents) — legacy read-only LlpData records.
+ *
+ * Ordering LLP documents lives on the ROC module: rocApi.createJob() routes an
+ * LLPIN to the LLPDocs stack. That's deliberate — the one-active-job and
+ * 90-day-cooldown rules span both products, so a single guarded entry point is
+ * the only way to enforce them.
  * Paths match server/src/routes/app/v1/b2b/llp/index.ts.
  */
 export const llpApi = {
-  placeOrder: (llpin: string) =>
-    client.post('/b2b/llp/profile', { llpin }),
-
-  getOrderStatus: (orderId: string) =>
-    client.get(`/b2b/llp/profile/${orderId}/status`),
-
-  downloadReport: (orderId: string) =>
-    client.get(`/b2b/llp/profile/${orderId}/download`),
-
   listCompanies: () =>
     client.get('/b2b/llp/profiles'),
 

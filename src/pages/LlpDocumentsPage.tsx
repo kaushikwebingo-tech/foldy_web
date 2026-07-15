@@ -29,12 +29,14 @@ const SAMPLE = `{
 }`;
 
 /*
- * LLP company documents (InstaFinancials LLPDocs). Mirrors the ROC flow, keyed
- * by LLPIN. Reports categorize through the shared ROC categorizer.
+ * LLP documents (InstaFinancials LLPDocs).
+ *
+ * Ordering lives on the ROC page — POST /b2b/roc/job routes an LLPIN to the
+ * LLPDocs stack — because the one-active-job and 90-day-cooldown rules span both
+ * products and can only be enforced from a single entry point. What's left here
+ * is the legacy read-only LlpData and the shared categorizer.
  */
 export default function LlpDocumentsPage() {
-  const [llpin, setLlpin] = useState('');
-  const [orderId, setOrderId] = useState('');
   const [llpDataId, setLlpDataId] = useState('');
   const [reportJson, setReportJson] = useState('');
 
@@ -42,78 +44,44 @@ export default function LlpDocumentsPage() {
     <div className="max-w-3xl">
       <PageHeader
         title="LLP Documents"
-        subtitle="InstaFinancials LLPDocs — order an LLP's MCA documents (by LLPIN), poll the order, download the report, then categorize it. Mirrors the ROC flow."
+        subtitle="InstaFinancials LLPDocs — legacy LLP records and the shared categorizer. Ordering LLP documents happens on the ROC page: an LLPIN is routed to the LLPDocs stack automatically."
         icon={<Landmark size={18} />}
         badge="B2B Only"
         postmanSection="llp"
       />
 
-      <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-        <strong>Needs InstaFinancials credentials:</strong> the order/status/download calls hit the live InstaFinancials API and require <code>INSTAFINANCIALS_ROC_API_KEY</code> on the server. The categorizer works offline on any pasted report.
+      <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+        <strong>To order LLP documents, use the ROC page.</strong>{' '}
+        <code>POST /api/v1/b2b/roc/job</code> detects an LLPIN (e.g. <code>AAP-7675</code>) and
+        routes it to LLPDocs. There's no separate LLP order call: one active job per user and one
+        order per 90 days apply across <em>both</em> products, so a single guarded entry point is the
+        only way to enforce them.
       </div>
 
       <div className="space-y-4">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Order Lifecycle</p>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Legacy Records</p>
+        <p className="text-xs text-slate-400 -mt-2">
+          Read-only <code>LlpData</code> from the previous order flow. Superseded by ROC › Job Status
+          + My Documents; kept so existing records stay reachable.
+        </p>
 
-        {/* 1. Place order */}
+        {/* 1. List records */}
         <ApiCard
           step={1}
-          title="Place Document Order"
-          method="POST"
-          endpoint="/api/v1/b2b/llp/profile"
-          description="Order the LLPDocs report for an LLP by LLPIN. Returns an orderId, auto-filled into the steps below."
-          buttonLabel="Place Order"
-          onSubmit={async () => {
-            const res = await llpApi.placeOrder(llpin);
-            const id = res.data?.data?.orderId;
-            if (id) setOrderId(String(id));
-            return res;
-          }}
-        >
-          <Field label="LLPIN" value={llpin} onChange={setLlpin} placeholder="AAZ-9378" fullWidth />
-        </ApiCard>
-
-        {/* 2. Order status */}
-        <ApiCard
-          step={2}
-          title="Order Status"
-          method="GET"
-          endpoint="/api/v1/b2b/llp/profile/:orderId/status"
-          description="Poll the order until it's ready to download."
-          onSubmit={() => llpApi.getOrderStatus(orderId)}
-        >
-          <Field label="Order ID" value={orderId} onChange={setOrderId} placeholder="Auto-filled from Place Order" fullWidth />
-        </ApiCard>
-
-        {/* 3. Download report */}
-        <ApiCard
-          step={3}
-          title="Download Report"
-          method="GET"
-          endpoint="/api/v1/b2b/llp/profile/:orderId/download"
-          description="Fetches the completed report (raw LLPDocs JSON). Copy reportData into the Categorize step."
-          onSubmit={() => llpApi.downloadReport(orderId)}
-        >
-          <Field label="Order ID" value={orderId} onChange={setOrderId} placeholder="Auto-filled from Place Order" fullWidth />
-        </ApiCard>
-
-        {/* 4. List records */}
-        <ApiCard
-          step={4}
           title="My LLP Records"
           method="GET"
           endpoint="/api/v1/b2b/llp/profiles"
-          description="All LLP orders/records saved for the logged-in Business."
+          description="Legacy LLP records saved for the logged-in Business."
           onSubmit={() => llpApi.listCompanies()}
         />
 
-        {/* 5. Get one record */}
+        {/* 2. Get one record */}
         <ApiCard
-          step={5}
+          step={2}
           title="Get LLP Record"
           method="GET"
           endpoint="/api/v1/b2b/llp/profile/:llpDataId"
-          description="A single saved LLP record by its _id (from the list response)."
+          description="A single legacy LLP record by its _id (from the list response)."
           onSubmit={() => llpApi.getCompany(llpDataId)}
         >
           <Field label="LLP Data ID" value={llpDataId} onChange={setLlpDataId} placeholder="From My LLP Records (_id)" fullWidth />
@@ -125,9 +93,9 @@ export default function LlpDocumentsPage() {
           <p className="text-xs text-slate-400 mb-3">Uses the shared ROC categorizer (<code>/b2b/roc/documents/categorize</code>), which handles both LLPDocs and InstaDocs. LLP forms (Form 3/8/11 etc.) fall under <code>Other filling</code>; COI/MOA/AOA still match.</p>
         </div>
 
-        {/* 6. Categorize */}
+        {/* 3. Categorize */}
         <ApiCard
-          step={6}
+          step={3}
           title="Categorize Documents"
           method="POST"
           endpoint="/api/v1/b2b/roc/documents/categorize"

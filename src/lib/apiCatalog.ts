@@ -310,40 +310,42 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   roc: {
     key: 'roc',
     name: 'ROC Documents',
-    description: 'Company MCA (ROC) documents from InstaFinancials. The categorizer groups an InstaDocs/LLPDocs report\'s documents into the product filing categories (AOC 4, MGT 7/7A, DIR 11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI, Other filling). Requires an active B2B plan. The order/download lifecycle is not yet mounted.',
+    description: 'Company + LLP MCA documents from InstaFinancials. ONE guarded job drives everything: post an identifier and the server picks the stack (CIN/PAN → InstaDocs, LLPIN → LLPDocs). Delivery is asynchronous and slow (~30 min for LLPDocs, up to ~3 weeks for InstaDocs) and arrives by webhook, so poll GET /job — it reads our DB and costs no vendor call. Guards: one active job per user, and one order per 90 days counted from CREATION. Requires an active B2B plan.',
     endpoints: [
       {
-        name: 'Place Document Order',
+        name: 'Order Documents',
         method: 'POST',
-        path: 'api/v1/b2b/roc/profile',
-        description: 'Order the InstaDocs report for a company by CIN (or PAN). Returns an orderId. Requires InstaFinancials credentials on the server.',
-        body: { cin: 'L23209TG1989PLC010336' }
+        path: 'api/v1/b2b/roc/job',
+        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. Returns 202 + jobId. Refuses with 409 if a job is already in flight, or 429 while the 90-day cooldown is running.',
+        body: { identifier: 'U69202WB2024PTC269500' }
       },
       {
-        name: 'Order Status',
+        name: 'Job Status',
         method: 'GET',
-        path: 'api/v1/b2b/roc/profile/:orderId/status',
-        description: 'Poll the order until it is ready to download.',
-        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+        path: 'api/v1/b2b/roc/job',
+        description: 'The current job + cooldown for the logged-in user. Reads our DB only (the vendor allows just 4 status pulls per order, which the reconciler cron owns), so this is free to poll. `canOrder` is the single flag the order button needs. Key job state off `status` (queued|processing|ready|failed|expired) — `error` is only ever populated on a terminal status (failed|expired), never for a job still running.'
       },
       {
-        name: 'Download Report',
+        name: 'My Documents',
         method: 'GET',
-        path: 'api/v1/b2b/roc/profile/:orderId/download',
-        description: 'Fetch the completed report (raw InstaDocs/LLPDocs JSON) once the order is ready.',
-        pathVars: [{ key: 'orderId', value: '<orderId>' }]
+        path: 'api/v1/b2b/roc/documents',
+        description: 'Documents delivered by the webhook, grouped into the 16 MCA categories. Defaults to the latest ready job. downloadUrl links are permanent InstaFinancials URLs (we store metadata only, no file copy).',
+        query: [
+          { key: 'jobId', value: '', description: 'optional: a specific job (defaults to the latest ready one)' },
+          { key: 'category', value: '', description: 'optional: narrow to one category, e.g. AOC 4' }
+        ]
       },
       {
         name: 'My ROC Records',
         method: 'GET',
         path: 'api/v1/b2b/roc/profiles',
-        description: 'All ROC orders/records saved for the logged-in Business.'
+        description: 'Legacy RocData records (read-only). Superseded by Job Status + My Documents.'
       },
       {
         name: 'Get ROC Record',
         method: 'GET',
         path: 'api/v1/b2b/roc/profile/:rocDataId',
-        description: 'A single saved ROC record by its _id.',
+        description: 'A single saved legacy RocData record by its _id. Superseded by My Documents.',
         pathVars: [{ key: 'rocDataId', value: '<rocDataId>' }]
       },
       {
@@ -379,36 +381,19 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   llp: {
     key: 'llp',
     name: 'LLP Documents',
-    description: 'LLP MCA documents from InstaFinancials (LLPDocs). Order lifecycle by LLPIN → status → download, then categorize via the shared ROC categorizer. Requires an active B2B plan + InstaFinancials credentials on the server.',
+    description: 'Legacy read-only LlpData records. ORDERING LLP DOCUMENTS LIVES IN THE ROC SECTION: POST /b2b/roc/job routes an LLPIN to the LLPDocs stack. That is deliberate — the one-active-job and 90-day-cooldown rules span both products, so a single guarded entry point is the only way to enforce them. Requires an active B2B plan.',
     endpoints: [
-      {
-        name: 'Place Document Order',
-        method: 'POST',
-        path: 'api/v1/b2b/llp/profile',
-        description: 'Order the LLPDocs report for an LLP by LLPIN. Returns an orderId.',
-        body: { llpin: 'AAZ-9378' }
-      },
-      {
-        name: 'Order Status',
-        method: 'GET',
-        path: 'api/v1/b2b/llp/profile/:orderId/status',
-        pathVars: [{ key: 'orderId', value: '<orderId>' }]
-      },
-      {
-        name: 'Download Report',
-        method: 'GET',
-        path: 'api/v1/b2b/llp/profile/:orderId/download',
-        pathVars: [{ key: 'orderId', value: '<orderId>' }]
-      },
       {
         name: 'My LLP Records',
         method: 'GET',
-        path: 'api/v1/b2b/llp/profiles'
+        path: 'api/v1/b2b/llp/profiles',
+        description: 'Legacy LlpData records (read-only). Superseded by ROC › Job Status + My Documents.'
       },
       {
         name: 'Get LLP Record',
         method: 'GET',
         path: 'api/v1/b2b/llp/profile/:llpDataId',
+        description: 'A single saved legacy LlpData record by its _id.',
         pathVars: [{ key: 'llpDataId', value: '<llpDataId>' }]
       }
     ]
