@@ -43,7 +43,6 @@ export default function RocDocumentsPage() {
   const [identifier, setIdentifier] = useState('');
   const [jobId, setJobId] = useState('');
   const [category, setCategory] = useState('');
-  const [rocDataId, setRocDataId] = useState('');
   const [reportJson, setReportJson] = useState('');
 
   return (
@@ -127,46 +126,15 @@ export default function RocDocumentsPage() {
           <Field label="Category (optional)" value={category} onChange={setCategory} placeholder="e.g. AOC 4" />
         </ApiCard>
 
-        {/* Divider — legacy */}
-        <div className="border-t border-slate-200 pt-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Legacy Records</p>
-          <p className="text-xs text-slate-400 mb-3">
-            Read-only <code>RocData</code> from the previous order flow. Superseded by Job Status +
-            My Documents; kept so existing records stay reachable.
-          </p>
-        </div>
-
-        {/* 4. List records */}
-        <ApiCard
-          step={4}
-          title="My ROC Records"
-          method="GET"
-          endpoint="/api/v1/b2b/roc/profiles"
-          description="Legacy ROC records saved for the logged-in Business."
-          onSubmit={() => rocApi.listCompanies()}
-        />
-
-        {/* 5. Get one record */}
-        <ApiCard
-          step={5}
-          title="Get ROC Record"
-          method="GET"
-          endpoint="/api/v1/b2b/roc/profile/:rocDataId"
-          description="A single legacy ROC record by its _id (from the list response)."
-          onSubmit={() => rocApi.getCompany(rocDataId)}
-        >
-          <Field label="ROC Data ID" value={rocDataId} onChange={setRocDataId} placeholder="From My ROC Records (_id)" fullWidth />
-        </ApiCard>
-
         {/* Divider — categorizer */}
         <div className="border-t border-slate-200 pt-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Categorize</p>
           <p className="text-xs text-slate-400 mb-3">Groups a report's documents by MCA form code (AOC-4, MGT-7/7A, DIR-11/12, ADT-1/3, PAS-3, SH-7, INC-22, DPT-3, MGT-14, AOA, MOA, COI); the rest → <code>Other filling</code>. The webhook applies these same rules when it persists documents; this endpoint exposes them for any pasted report.</p>
         </div>
 
-        {/* 6. Categorize */}
+        {/* 4. Categorize */}
         <ApiCard
-          step={6}
+          step={4}
           title="Categorize Documents"
           method="POST"
           endpoint="/api/v1/b2b/roc/documents/categorize"

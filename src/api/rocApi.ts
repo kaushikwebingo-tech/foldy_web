@@ -30,13 +30,6 @@ export const rocApi = {
   getDocuments: (params?: { jobId?: string; category?: string }) =>
     client.get('/b2b/roc/documents', { params }),
 
-  // Legacy RocData records (read-only). Superseded by getJob + getDocuments.
-  listCompanies: () =>
-    client.get('/b2b/roc/profiles'),
-
-  getCompany: (rocDataId: string) =>
-    client.get(`/b2b/roc/profile/${rocDataId}`),
-
   // Group an InstaDocs/LLPDocs report into the MCA filing categories.
   categorizeDocuments: (report: unknown) =>
     client.post('/b2b/roc/documents/categorize', report),

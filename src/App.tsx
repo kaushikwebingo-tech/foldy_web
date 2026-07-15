@@ -7,7 +7,6 @@ import ProfilePage       from '@/pages/ProfilePage';
 import GstProfilePage    from '@/pages/GstProfilePage';
 import TdsPage           from '@/pages/TdsPage';
 import RocDocumentsPage  from '@/pages/RocDocumentsPage';
-import LlpDocumentsPage  from '@/pages/LlpDocumentsPage';
 import SupportPage       from '@/pages/SupportPage';
 import StoragePage       from '@/pages/StoragePage';
 import ManualUploadsPage from '@/pages/ManualUploadsPage';
@@ -27,7 +26,6 @@ export default function App() {
           <Route path="/gst-profile"    element={<GstProfilePage />} />
           <Route path="/tds"            element={<TdsPage />} />
           <Route path="/roc-documents"  element={<RocDocumentsPage />} />
-          <Route path="/llp-documents"  element={<LlpDocumentsPage />} />
           <Route path="/support"        element={<SupportPage />} />
           <Route path="/storage"        element={<StoragePage />} />
           <Route path="/manual-uploads" element={<ManualUploadsPage />} />

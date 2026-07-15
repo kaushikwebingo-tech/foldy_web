@@ -336,19 +336,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         ]
       },
       {
-        name: 'My ROC Records',
-        method: 'GET',
-        path: 'api/v1/b2b/roc/profiles',
-        description: 'Legacy RocData records (read-only). Superseded by Job Status + My Documents.'
-      },
-      {
-        name: 'Get ROC Record',
-        method: 'GET',
-        path: 'api/v1/b2b/roc/profile/:rocDataId',
-        description: 'A single saved legacy RocData record by its _id. Superseded by My Documents.',
-        pathVars: [{ key: 'rocDataId', value: '<rocDataId>' }]
-      },
-      {
         name: 'Categorize Documents',
         method: 'POST',
         path: 'api/v1/b2b/roc/documents/categorize',
@@ -374,27 +361,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
             }
           }
         }
-      }
-    ]
-  },
-
-  llp: {
-    key: 'llp',
-    name: 'LLP Documents',
-    description: 'Legacy read-only LlpData records. ORDERING LLP DOCUMENTS LIVES IN THE ROC SECTION: POST /b2b/roc/job routes an LLPIN to the LLPDocs stack. That is deliberate — the one-active-job and 90-day-cooldown rules span both products, so a single guarded entry point is the only way to enforce them. Requires an active B2B plan.',
-    endpoints: [
-      {
-        name: 'My LLP Records',
-        method: 'GET',
-        path: 'api/v1/b2b/llp/profiles',
-        description: 'Legacy LlpData records (read-only). Superseded by ROC › Job Status + My Documents.'
-      },
-      {
-        name: 'Get LLP Record',
-        method: 'GET',
-        path: 'api/v1/b2b/llp/profile/:llpDataId',
-        description: 'A single saved legacy LlpData record by its _id.',
-        pathVars: [{ key: 'llpDataId', value: '<llpDataId>' }]
       }
     ]
   },
