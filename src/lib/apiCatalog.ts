@@ -1,0 +1,821 @@
+import type { ApiSection } from './postman';
+
+/*
+ * Declarative endpoint catalog used to generate Postman collections.
+ * Keep paths in sync with the backend routes. Bearer auth + {{baseUrl}} are
+ * applied at the collection level by the generator.
+ */
+
+const GSTIN = '29ABCDE1234F1Z5';
+
+export const API_SECTIONS: Record<string, ApiSection> = {
+  auth: {
+    key: 'auth',
+    name: 'Auth & Session',
+    description: 'Session helpers: push-token registration, logout, and the authenticated user\'s plan/storage status. Login & registration are PAN-first (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
+    endpoints: [
+      {
+        name: 'Forgot Password',
+        method: 'POST',
+        path: 'api/v1/auth/forgot-password',
+        description: 'Always responds success (avoids account enumeration); sends a reset link if the email exists.',
+        body: { email: 'user@example.com' }
+      },
+      {
+        name: 'Update Push Token',
+        method: 'POST',
+        path: 'api/v1/auth/update-push-token',
+        description: 'Registers the device push token. Requires auth. device_type = android|ios|web.',
+        body: { notification_token: '<fcm-or-onesignal-token>', device_type: 'android' }
+      },
+      {
+        name: 'Logout',
+        method: 'POST',
+        path: 'api/v1/auth/logout',
+        description: 'Revokes the current JWT (token blacklist). Requires auth.'
+      },
+      {
+        name: 'My Profile',
+        method: 'GET',
+        path: 'api/v1/user/profile',
+        description: 'Profile section for the logged-in user: name, dob/incorporation date, email, mobile, PAN (masked to last 4).'
+      },
+      {
+        name: 'Active Sessions',
+        method: 'GET',
+        path: 'api/v1/user/sessions',
+        description: 'Lists the user\'s active device sessions (current flagged). Single-active-session policy keeps this to one.'
+      },
+      {
+        name: 'Log Out Other Devices',
+        method: 'POST',
+        path: 'api/v1/user/sessions/logout-others',
+        description: 'Signs out every device except the current one.'
+      },
+      {
+        name: 'Plan / Subscription Status',
+        method: 'GET',
+        path: 'api/v1/user/plan-status',
+        description: 'Current subscription/trial status + plan limits for the logged-in user.'
+      },
+      {
+        name: 'Storage Status',
+        method: 'GET',
+        path: 'api/v1/user/storage-status',
+        description: 'Storage usage summary for the logged-in user.'
+      }
+    ]
+  },
+
+  onboarding: {
+    key: 'onboarding',
+    name: 'Onboarding (PAN-first)',
+    description: 'Single entry: POST /onboarding/pan handles both registration and login. New PAN → PAN + name + DOB demographic match (Sandbox) → registrationToken; registration then runs 2 OTP layers — Phone → Email — and create-profile returns a JWT. Existing PAN → SMS OTP to the registered mobile, then pan/verify-otp returns the JWT. All OTPs print to the server console in dev.',
+    endpoints: [
+      {
+        name: 'Check PAN (registered?)',
+        method: 'POST',
+        path: 'api/v1/onboarding/pan/check',
+        description: 'Presence check — is this PAN already registered? Returns { exists, mode } (login | register). No OTP, no side effects.',
+        body: { pan: 'ABCDE1234F' }
+      },
+      {
+        name: 'PAN Entry (Register or Login)',
+        method: 'POST',
+        path: 'api/v1/onboarding/pan',
+        description: 'New PAN → demographic match on PAN + name + dob; on success returns mode:"register" + registrationToken + name. Existing PAN → SMS OTP to the registered mobile, returns mode:"login" + referenceId (name/dob ignored).',
+        body: { pan: 'ABCDE1234F', name: 'John Doe', dob: '01/01/1990' }
+      },
+      {
+        name: 'Verify OTP & Login (existing PAN)',
+        method: 'POST',
+        path: 'api/v1/onboarding/pan/verify-otp',
+        description: 'Login only: verifies the SMS OTP from PAN Entry and returns { mode:"login", token, user } (JWT).',
+        body: { referenceId: '<referenceId>', otp: '123456' }
+      },
+      {
+        name: 'Send OTP — Phone / Email (Layers 1 & 2)',
+        method: 'POST',
+        path: 'api/v1/onboarding/otp/send',
+        description: 'channel = "phone" or "email". Requires the registrationToken from PAN Entry.',
+        body: { registrationToken: '<registrationToken>', channel: 'phone', value: '9876543210' }
+      },
+      {
+        name: 'Verify OTP — Phone / Email (Layers 1 & 2)',
+        method: 'POST',
+        path: 'api/v1/onboarding/otp/verify',
+        body: { registrationToken: '<registrationToken>', channel: 'phone', otp: '123456' }
+      },
+      {
+        name: 'Create Profile (auto-login)',
+        method: 'POST',
+        path: 'api/v1/onboarding/create-profile',
+        description: 'Requires Phone + Email verified. Returns { token, user }. name defaults to the identity-matched name.',
+        body: { registrationToken: '<registrationToken>', name: 'John Doe' }
+      }
+    ]
+  },
+
+  'manual-uploads': {
+    key: 'manual-uploads',
+    name: 'Manual Uploads',
+    description: 'Upload & manage compliance documents (S3-backed). Set {{token}} to a logged-in JWT.',
+    endpoints: [
+      {
+        name: 'List Categories',
+        method: 'GET',
+        path: 'api/v1/manual-uploads/categories',
+        description: 'Categories visible to the logged-in user, with resolved frequencies.'
+      },
+      {
+        name: 'Upload Document',
+        method: 'POST',
+        path: 'api/v1/manual-uploads/:category/upload',
+        description: 'multipart/form-data. period/frequency required for filing categories.',
+        pathVars: [{ key: 'category', value: 'pf_esi' }],
+        formdata: [
+          { key: 'file', type: 'file', description: 'PDF/JPG/PNG/DOCX/XLSX, ≤ 5 MB' },
+          { key: 'period', type: 'text', value: '04-2026', description: 'MM-YYYY or YYYY-YY' },
+          { key: 'frequency', type: 'text', value: 'monthly', description: 'monthly|annual (only for PTAX)' }
+        ]
+      },
+      {
+        name: 'List My Documents',
+        method: 'GET',
+        path: 'api/v1/manual-uploads/:category/items',
+        pathVars: [{ key: 'category', value: 'pf_esi' }],
+        query: [
+          { key: 'period', value: '04-2026', description: 'optional' },
+          { key: 'frequency', value: 'monthly', description: 'optional' }
+        ]
+      },
+      {
+        name: 'Get Download Link',
+        method: 'GET',
+        path: 'api/v1/manual-uploads/items/:id/download',
+        pathVars: [{ key: 'id', value: '<documentId>' }]
+      },
+      {
+        name: 'Delete Document',
+        method: 'DELETE',
+        path: 'api/v1/manual-uploads/items/:id',
+        pathVars: [{ key: 'id', value: '<documentId>' }]
+      }
+    ]
+  },
+
+  gst: {
+    key: 'gst',
+    name: 'GST',
+    description: 'GST profiles, finance status & taxpayer-session APIs (B2B), powered by WhiteBooks (GSP). Server supplies email/IP/state/txn from env; you pass username, GSTIN, type & OTP. Set {{token}}.',
+    endpoints: [
+      {
+        name: 'Create GST Profile',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles',
+        description: 'Verifies the GSTIN via WhiteBooks then saves a profile. No title is sent — the server builds it from the business name + an HQ/BR tag (first GSTIN added = "<name> HQ", rest = "<name> BR (<state code>)"). Also sends the GST-portal OTP to the registered mobile so you can authorise immediately (authorize/verify). gstUsername is stored for the session flow. One profile per (user, GSTIN).',
+        body: { gstin: GSTIN, gstUsername: '<gst-portal-username>' }
+      },
+      {
+        name: 'List GST Profiles',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles',
+        description: 'All GST profiles saved by the logged-in Business.'
+      },
+      {
+        name: 'Get GST Profile',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Delete GST Profile',
+        method: 'DELETE',
+        path: 'api/v1/b2b/gst/profiles/:id',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Resend OTP',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/authorize/otp',
+        description: 'Re-sends the GST-portal OTP for this profile (Create GST Profile already sends the first one).',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Authorise (Verify OTP)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/authorize/verify',
+        description: 'Verifies the OTP and persists the 6h taxpayer token on the profile (server-side, auto-refreshed).',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { otp: '123456' }
+      },
+      {
+        name: 'Profile — Session Status',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/session',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Return Summary (stored token)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/summary/:type',
+        description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c; ret_period is MMYYYY.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr1' }],
+        body: { ret_period: '042024' }
+      },
+      {
+        name: 'Profile — List Notices (stored token)',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/notices',
+        description: 'Notices issued in the ~last 60 days for the profile\'s GSTIN, using its stored token. Optional ?date=DD/MM/YYYY reference day (defaults to today). No taxpayer_token / email needed — injected server-side.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Profile — Notice Details (stored token)',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/notices/:refid',
+        description: 'Full detail for one notice — type, tax period, due date of reply, and attached-document metadata. refid comes from the List Notices response.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'refid', value: '<noticeRefId>' }]
+      },
+      {
+        name: 'Get Business Info',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/get-business-info',
+        description: 'Pure WhiteBooks GSTIN lookup (does not create a profile).',
+        body: { gstin: GSTIN }
+      },
+      {
+        name: 'Get Finance / Returns Status',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/get-finance-status',
+        body: { gstin: GSTIN, financial_year: 'FY 2024-25', gstr: '' }
+      },
+      {
+        name: 'Taxpayer — Generate OTP',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/otp',
+        description: 'type is required (GSTR1|GSTR3B|GSTR9|GSTR9C|GSTR1A); title is optional.',
+        body: { username: '<gst-portal-username>', gstin: GSTIN, type: 'GSTR1', title: 'Q1 filing' }
+      },
+      {
+        name: 'Taxpayer — Verify OTP',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/otp/verify',
+        body: { username: '<gst-portal-username>', gstin: GSTIN, otp: '123456' }
+      },
+      {
+        name: 'Taxpayer — Refresh Session',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/session/refresh',
+        body: { taxpayer_token: '<taxpayer_token>' }
+      },
+      {
+        name: 'GSTR-1 Summary',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/gstr1/summary',
+        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, year: '2024', month: '04', summary_type: 'long' }
+      },
+      {
+        name: 'GSTR-1 B2B Invoices',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/gstr1/b2b',
+        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, year: '2024', month: '04' }
+      },
+      {
+        name: 'Return Summary (by type)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/summary/:type',
+        description: 'type path var = gstr1|gstr1a|gstr3b|gstr9|gstr9c. ret_period is MMYYYY (year/month optional).',
+        pathVars: [{ key: 'type', value: 'gstr1' }],
+        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, ret_period: '042024' }
+      },
+      {
+        name: 'Annual Sales Summary',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/sales-summary',
+        query: [
+          { key: 'gstin', value: GSTIN },
+          { key: 'fy', value: '2024-25' },
+          { key: 'taxpayer_token', value: '<taxpayer_token>' }
+        ]
+      },
+      {
+        name: 'Mark Return as Filed',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/mark-as-filed',
+        body: { gstin: GSTIN, formType: 'GSTR-1', period: '04-2024' }
+      }
+    ]
+  },
+  roc: {
+    key: 'roc',
+    name: 'ROC Documents',
+    description: 'Company + LLP MCA documents from InstaFinancials. ONE guarded job drives everything: post an identifier and the server picks the stack (CIN/PAN → InstaDocs, LLPIN → LLPDocs). Delivery is asynchronous and slow (~30 min for LLPDocs, up to ~3 weeks for InstaDocs) and arrives by webhook, so poll GET /job — it reads our DB and costs no vendor call. Guards: one active job per user, and one order per 90 days counted from CREATION. Requires an active B2B plan.',
+    endpoints: [
+      {
+        name: 'Order Documents',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/job',
+        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. Returns 202 + jobId. Refuses with 409 if a job is already in flight, or 429 while the 90-day cooldown is running.',
+        body: { identifier: 'U69202WB2024PTC269500' }
+      },
+      {
+        name: 'Job Status',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/job',
+        description: 'The current job + cooldown for the logged-in user. Reads our DB only (the vendor allows just 4 status pulls per order, which the reconciler cron owns), so this is free to poll. `canOrder` is the single flag the order button needs. Key job state off `status` (queued|processing|ready|failed|expired) — `error` is only ever populated on a terminal status (failed|expired), never for a job still running.'
+      },
+      {
+        name: 'My Documents',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/documents',
+        description: 'Documents delivered by the webhook. Without page/limit: grouped into the 16 MCA categories. With page/limit: a flat paginated slice (filingDate desc, stable order) + hasMore for infinite scroll — page 1 also carries categoryCounts for filter chips. Defaults to the latest ready job. downloadUrl links are permanent InstaFinancials URLs (we store metadata only, no file copy).',
+        query: [
+          { key: 'jobId', value: '', description: 'optional: a specific job (defaults to the latest ready one)' },
+          { key: 'category', value: '', description: 'optional: narrow to one category, e.g. AOC 4' },
+          { key: 'page', value: '', description: 'optional: switches to the flat paginated shape; 1-based' },
+          { key: 'limit', value: '', description: 'optional: docs per page (default 20, max 100)' }
+        ]
+      },
+      {
+        name: 'Categorize Documents',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/documents/categorize',
+        description: 'Accepts the raw InstaDocs/LLPDocs report ({ ReportData: { InstaDocs|LLPDocs: { Document: [...] } } }), a { report } wrapper, or a bare Document array. Returns all 16 categories in order (empty ones included), each doc trimmed to name/date/size/downloadLink, newest-first.',
+        body: {
+          ReportData: {
+            InstaDocs: {
+              Document: [
+                {
+                  DocumentName: 'AOC-4 XBRL Form AOC-4(XBRL).pdf',
+                  DocumentCategory: 'Annual Returns and Balance Sheet eForms',
+                  DocumentFillingDate: '02-11-2024',
+                  DocumentSize: 7.76,
+                  DocumentLink: 'https://downloads.InstaFinancials.com/...'
+                },
+                {
+                  DocumentName: 'Form MGT-7.pdf',
+                  DocumentFillingDate: '20-09-2023',
+                  DocumentSize: 1.2,
+                  DocumentLink: 'https://downloads.InstaFinancials.com/...'
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+
+  profile: {
+    key: 'profile',
+    name: 'Profile',
+    description: 'View + edit the logged-in user\'s profile. Name/image update immediately; email/phone changes are OTP-verified (request-otp → verify) and apply only when every changed channel is verified. Set {{token}} to a user JWT.',
+    endpoints: [
+      {
+        name: 'Get Profile',
+        method: 'GET',
+        path: 'api/v1/user/profile',
+        description: 'Name, DOB, email, mobile, masked PAN, and a signed profile-image URL. Name/DOB/PAN are one-time onboarding inputs (read-only).'
+      },
+      {
+        name: 'Upload Profile Image',
+        method: 'POST',
+        path: 'api/v1/user/profile/image',
+        description: 'multipart/form-data; field "image" (jpg/png/webp, ≤5MB). Returns a signed URL.',
+        formdata: [{ key: 'image', type: 'file' }]
+      },
+      {
+        name: 'Remove Profile Image',
+        method: 'DELETE',
+        path: 'api/v1/user/profile/image'
+      },
+      {
+        name: 'Request Contact OTP',
+        method: 'POST',
+        path: 'api/v1/user/profile/contact/request-otp',
+        description: 'Send OTP to the new email and/or phone (only the changed field(s)). Leave one out to keep it unchanged.',
+        body: { email: 'new@example.com', phone: '9876543210' }
+      },
+      {
+        name: 'Verify Contact OTP',
+        method: 'POST',
+        path: 'api/v1/user/profile/contact/verify',
+        description: 'Applies the change only when every changed channel is verified; if one is unverified, nothing updates.',
+        body: { emailOtp: '123456', phoneOtp: '123456' }
+      }
+    ]
+  },
+
+  support: {
+    key: 'support',
+    name: 'Support & Account',
+    description: 'Contact Support (raise + list own requests) and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. For the user calls set {{token}} to a user JWT; for the admin calls set {{token}} to an admin JWT.',
+    endpoints: [
+      {
+        name: 'Raise Support Request',
+        method: 'POST',
+        path: 'api/v1/support/queries',
+        description: 'Auto-linked to the logged-in user; starts in status "open".',
+        body: { name: 'Jane Doe', email: 'jane@example.com', mobile: '9876543210', description: 'I need help with my subscription.' }
+      },
+      {
+        name: 'My Support Requests',
+        method: 'GET',
+        path: 'api/v1/support/queries',
+        description: 'The logged-in user\'s own requests with status + any admin reply.'
+      },
+      {
+        name: 'Delete My Account',
+        method: 'DELETE',
+        path: 'api/v1/user/account',
+        description: 'Soft-deletes the account: revokes sessions, cancels subscription, frees phone/email/PAN for re-registration. Retains the record.'
+      },
+      {
+        name: 'Admin — List Support Queries',
+        method: 'GET',
+        path: 'api/admin/v1/support/queries',
+        description: 'Admin JWT. Filter by status + search, paginated.',
+        query: [
+          { key: 'status', value: 'open' },
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' }
+        ]
+      },
+      {
+        name: 'Admin — Update Query Status',
+        method: 'PATCH',
+        path: 'api/admin/v1/support/queries/:id/status',
+        description: 'Admin JWT. status = open|in_progress|resolved|closed; response is an optional reply shown to the user.',
+        pathVars: [{ key: 'id', value: '<queryId>' }],
+        body: { status: 'in_progress', response: 'We are looking into this.' }
+      }
+    ]
+  },
+
+  tds: {
+    key: 'tds',
+    name: 'TDS',
+    description: 'TRACES Form 16 / 16A jobs (B2B). Submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Set {{token}}.',
+    endpoints: [
+      {
+        name: 'Submit TDS Job',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/submit-job/:certificate_type',
+        pathVars: [{ key: 'certificate_type', value: 'form16' }],
+        body: {
+          username: '<traces-username>',
+          password: '<traces-password>',
+          tan: 'MUMU12345A',
+          security_captcha: {
+            quarter: 'Q1',
+            financial_year: 'FY 2024-25',
+            form: '24Q',
+            bsr_code: '0000000',
+            challan_date: '01/05/2024',
+            challan_serial_no: '00001',
+            provisional_receipt_number: '000000000000000',
+            challan_amount: 10000,
+            unique_pan_amount_combination_for_challan: [
+              ['sr_no', 'pan', 'total_amount_deposited_against_pan'],
+              [1, 'ABCDE1234F', 5000]
+            ]
+          },
+          remember_me: true
+        }
+      },
+      {
+        name: 'Poll TDS Job',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/poll-job/:certificate_type',
+        pathVars: [{ key: 'certificate_type', value: 'form16' }],
+        body: { job_id: '<job_id>', username: '<traces-username>', password: '<traces-password>', tan: 'MUMU12345A' }
+      },
+      {
+        name: 'Fetch TDS Jobs',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/fetch-jobs/:certificate_type',
+        pathVars: [{ key: 'certificate_type', value: 'form16' }],
+        body: { tan: 'MUMU12345A', financial_year: 'FY 2024-25', quarter: 'Q1', form: '24Q', page_size: 10 }
+      },
+      {
+        name: 'List My TDS Jobs',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/jobs',
+        description: 'Persisted TDS jobs with status + summary (newest first). Low input — the progress tracker / history.',
+        query: [
+          { key: 'status', value: '', description: 'optional: processing|completed|failed' },
+          { key: 'certificate_type', value: '', description: 'optional: form16|form16a' }
+        ]
+      },
+      {
+        name: 'Get TDS Job Status',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/jobs/:jobId',
+        description: 'One job\'s status + summary (no credentials, no TRACES round-trip). Background-polled by the server.',
+        pathVars: [{ key: 'jobId', value: '<jobId>' }]
+      },
+      {
+        name: 'My TDS Credits (Form 26AS) — B2C',
+        method: 'GET',
+        path: 'api/v1/income-tax/26as',
+        description: 'B2C individual TDS view: TDS credits from Form 26AS via AuthBridge (keyed on the JWT user\'s PAN). Serves Individual + Business plans. Pending AuthBridge endpoint/creds — returns a clear "not configured" error until set.',
+        query: [{ key: 'financialYear', value: '2024-25' }]
+      }
+    ]
+  },
+
+  digilocker: {
+    key: 'digilocker',
+    name: 'DigiLocker',
+    description: 'DigiLocker KYC — verify, start a consent session, fetch documents. Set {{token}}.',
+    endpoints: [
+      {
+        name: 'Verify Account',
+        method: 'POST',
+        path: 'api/v1/digilocker/verify-account',
+        body: { aadhaar_number: '123456789012', mobile: '9876543210' }
+      },
+      {
+        name: 'Initiate Session',
+        method: 'POST',
+        path: 'api/v1/digilocker/sessions/init',
+        body: { doc_types: ['aadhaar', 'pan'], redirect_url: 'http://localhost:3000/digilocker', flow: 'signin' }
+      },
+      {
+        name: 'Session Status',
+        method: 'GET',
+        path: 'api/v1/digilocker/sessions/:session_id/status',
+        pathVars: [{ key: 'session_id', value: '<session_id>' }]
+      },
+      {
+        name: 'User Profile',
+        method: 'GET',
+        path: 'api/v1/digilocker/sessions/:session_id/profile',
+        pathVars: [{ key: 'session_id', value: '<session_id>' }]
+      },
+      {
+        name: 'Fetch Document',
+        method: 'GET',
+        path: 'api/v1/digilocker/sessions/:session_id/documents/:doc_type',
+        pathVars: [{ key: 'session_id', value: '<session_id>' }, { key: 'doc_type', value: 'aadhaar' }]
+      }
+    ]
+  },
+
+  payments: {
+    key: 'payments',
+    name: 'Payments',
+    description: 'Razorpay order creation + signature verification, payment history. Set {{token}}.',
+    endpoints: [
+      {
+        name: 'List Active Plans',
+        method: 'GET',
+        path: 'api/v1/payments/plans',
+        description: 'Active catalog plans. A tier can have many plans — pick a plan _id to subscribe by planId.'
+      },
+      {
+        name: 'Create Order',
+        method: 'POST',
+        path: 'api/v1/payments/create-order',
+        description: 'Prefer planId (a tier has many plans). planType is a fallback that resolves the cheapest active plan of that tier; amount is a last-resort fallback. Price is server-authoritative from the catalog.',
+        body: { planId: '<planId>', amount: 999 }
+      },
+      {
+        name: 'Verify Payment & Upgrade',
+        method: 'POST',
+        path: 'api/v1/payments/verify-payment',
+        description: 'Send planId (preferred) or planType to choose which plan to upgrade to.',
+        body: {
+          razorpay_order_id: 'order_mock_123',
+          razorpay_payment_id: 'pay_mock_123',
+          razorpay_signature: 'mock_signature',
+          planId: '<planId>'
+        }
+      },
+      {
+        name: 'Payment History',
+        method: 'GET',
+        path: 'api/v1/payments/history'
+      }
+    ]
+  },
+
+  storage: {
+    key: 'storage',
+    name: 'Documents (Storage)',
+    description: 'In-app document vault: folders, files (metadata) & quota. Storage limits come from the subscription plan (no separate storage purchase). Set {{token}}.',
+    endpoints: [
+      { name: 'Get Storage Info', method: 'GET', path: 'api/v1/storage/info' },
+      { name: 'Get Storage Usage', method: 'GET', path: 'api/v1/storage/usage' },
+      { name: 'Create Folder', method: 'POST', path: 'api/v1/storage/create-folder', body: { name: 'ITR Documents' } },
+      {
+        name: 'Upload File (metadata)',
+        method: 'POST',
+        path: 'api/v1/storage/upload-file',
+        body: { folderId: '<folderId>', name: 'document.pdf', size: 1048576, mimeType: 'application/pdf' }
+      },
+      {
+        name: 'List Files',
+        method: 'GET',
+        path: 'api/v1/storage/list-files',
+        query: [
+          { key: 'folderId', value: '', description: 'optional' },
+          { key: 'page', value: '1' },
+          { key: 'pageSize', value: '10' }
+        ]
+      },
+      { name: 'Delete File', method: 'DELETE', path: 'api/v1/storage/delete-file/:fileId', pathVars: [{ key: 'fileId', value: '<fileId>' }] },
+      { name: 'Delete Folder', method: 'DELETE', path: 'api/v1/storage/delete-folder/:folderId', pathVars: [{ key: 'folderId', value: '<folderId>' }] }
+    ]
+  },
+
+  admin: {
+    key: 'admin',
+    name: 'Admin Panel',
+    description: 'Admin auth + admin-user management + Super-Admin plan catalog. Uses the /api/admin/v1 prefix; set {{token}} to an ADMIN JWT.',
+    endpoints: [
+      { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
+      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
+      {
+        name: 'Admin Forgot Password',
+        method: 'POST',
+        path: 'api/admin/v1/auth/forgot-password',
+        description: 'Emails a 6-digit OTP to begin a password reset.',
+        body: { email: 'admin@foldy.in' }
+      },
+      {
+        name: 'Admin Verify Email OTP',
+        method: 'POST',
+        path: 'api/admin/v1/auth/verify-email-otp',
+        description: 'Verifies the 6-digit reset OTP.',
+        body: { email: 'admin@foldy.in', otp: '123456' }
+      },
+      {
+        name: 'Admin Update Password',
+        method: 'POST',
+        path: 'api/admin/v1/auth/update-password',
+        description: 'Sets a new password (≥ 6 chars) using the verified OTP.',
+        body: { email: 'admin@foldy.in', otp: '123456', newPassword: '<new-password>' }
+      },
+      {
+        name: 'Admin Logout',
+        method: 'POST',
+        path: 'api/admin/v1/auth/logout',
+        description: 'Revokes the current admin JWT (token denylist). Requires an admin {{token}}.'
+      },
+      {
+        name: 'List Admin Users',
+        method: 'GET',
+        path: 'api/admin/v1/admin-users',
+        query: [{ key: 'page', value: '1' }, { key: 'limit', value: '10' }, { key: 'search', value: '', description: 'optional' }]
+      },
+      {
+        name: 'List Plans',
+        method: 'GET',
+        path: 'api/admin/v1/plans',
+        description: 'Subscription plan catalog (active + inactive).'
+      },
+      {
+        name: 'Create Plan',
+        method: 'POST',
+        path: 'api/admin/v1/plans',
+        description: 'Multiple plans allowed per tier (planType). price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none.',
+        body: {
+          planType: 'individual',
+          name: 'Individual',
+          description: 'For solo professionals.',
+          price: 1,
+          currency: 'INR',
+          interval: 'monthly',
+          storageLimit: 10737418240,
+          maxFolders: 10,
+          maxFilesPerFolder: 20,
+          isActive: true
+        }
+      },
+      {
+        name: 'Update Plan',
+        method: 'PUT',
+        path: 'api/admin/v1/plans/:id',
+        description: 'Edit price/quotas/details. Bumps version; does NOT affect active subscribers.',
+        pathVars: [{ key: 'id', value: '<planId>' }],
+        body: { price: 499, name: 'Individual' }
+      },
+      {
+        name: 'Activate / Deactivate Plan',
+        method: 'PATCH',
+        path: 'api/admin/v1/plans/:id/status',
+        pathVars: [{ key: 'id', value: '<planId>' }],
+        body: { isActive: false }
+      },
+      {
+        name: 'Statistics Overview',
+        method: 'GET',
+        path: 'api/admin/v1/stats/overview',
+        description: 'Users + subscriptions + revenue + compliance. Live from MongoDB.',
+        query: [
+          { key: 'activeDays', value: '30', description: 'active-user window (default 30)' },
+          { key: 'trendMonths', value: '6', description: 'revenue trend length (default 6)' }
+        ]
+      },
+      {
+        name: 'Revenue & Trend',
+        method: 'GET',
+        path: 'api/admin/v1/stats/revenue',
+        description: 'Revenue: gross/refunded/net, by module, last 30 days + monthly trend.',
+        query: [{ key: 'trendMonths', value: '6', description: 'default 6' }]
+      },
+      {
+        name: 'List App Users',
+        method: 'GET',
+        path: 'api/admin/v1/users',
+        description: 'App users with block status + subscription summary.',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '10' },
+          { key: 'search', value: '', description: 'phone / email / name (optional)' }
+        ]
+      },
+      {
+        name: 'Get User Details',
+        method: 'GET',
+        path: 'api/admin/v1/users/:userId',
+        description: 'Full per-user view: profile, subscription/plan, storage usage (used/available), and recent payments.',
+        pathVars: [{ key: 'userId', value: '<userId>' }]
+      },
+      {
+        name: 'Block User',
+        method: 'PATCH',
+        path: 'api/admin/v1/users/:userId/block',
+        description: 'Blocks app access. Audit-logged.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Fraudulent activity' }
+      },
+      {
+        name: 'Unblock User',
+        method: 'PATCH',
+        path: 'api/admin/v1/users/:userId/unblock',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Resolved' }
+      },
+      {
+        name: 'Cancel Subscription',
+        method: 'POST',
+        path: 'api/admin/v1/users/:userId/cancel-subscription',
+        description: 'Cancels the user subscription. reason is REQUIRED. Audit-logged.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Customer requested cancellation' }
+      },
+      {
+        name: 'Process Refund',
+        method: 'POST',
+        path: 'api/admin/v1/payments/:paymentId/refund',
+        description: 'Razorpay refund. Omit amount for full; include ₹ amount for partial. Audit-logged.',
+        pathVars: [{ key: 'paymentId', value: '<razorpayPaymentId>' }],
+        body: { amount: 499, reason: 'Service issue' }
+      },
+      {
+        name: 'Audit Logs',
+        method: 'GET',
+        path: 'api/admin/v1/audit-logs',
+        description: 'Management action trail (newest first).',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' },
+          { key: 'action', value: '', description: 'block_user|unblock_user|cancel_subscription|refund_payment (optional)' }
+        ]
+      },
+      {
+        name: 'Broadcast Notification',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/broadcast',
+        description: 'Push to every subscribed device via OneSignal. Recorded in notification history.',
+        body: { title: 'Scheduled maintenance', message: 'Foldy will be briefly unavailable tonight at 11 PM IST.' }
+      },
+      {
+        name: 'Send Notification to User',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/users/:userId',
+        description: 'Push to one app user (targets external id = userId, falls back to stored device token).',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { title: 'Your GST return is due', message: 'GSTR-1 for 06-2026 is due in 3 days.' }
+      },
+      {
+        name: 'Notification History',
+        method: 'GET',
+        path: 'api/admin/v1/notifications',
+        description: 'Paginated history of sent notifications (newest first).',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' },
+          { key: 'audience', value: '', description: 'broadcast|user (optional)' }
+        ]
+      }
+    ]
+  }
+};
+
+export function getSection(key: string): ApiSection | undefined {
+  return API_SECTIONS[key];
+}
