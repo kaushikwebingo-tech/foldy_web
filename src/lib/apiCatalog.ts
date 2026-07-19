@@ -811,7 +811,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         ]
       }
     ]
-  }
+  },
   chat: {
     key: 'chat',
     name: 'Chat',
