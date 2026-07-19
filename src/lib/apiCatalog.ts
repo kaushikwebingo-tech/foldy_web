@@ -812,6 +812,71 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       }
     ]
   }
+  chat: {
+    key: 'chat',
+    name: 'Chat',
+    description:
+      'Chat session tokens — common to both B2B and B2C (auth only, no segment gate). The privileged CometChat REST key stays server-side; this mints a short-lived token scoped to the logged-in user. The chat uid is taken from the JWT, so there is nothing to pass in the body. Set {{token}} to a user JWT.',
+    endpoints: [
+      {
+        name: 'Create Chat Session',
+        method: 'POST',
+        path: 'api/v1/chat/session',
+        description:
+          'Returns { uid, authToken, appId, region }. Creates the remote chat user on first call, so it is safe to call on every login. 503 if chat is not configured on the server.',
+        body: {}
+      }
+    ]
+  },
+
+  moneyone: {
+    key: 'moneyone',
+    name: 'Investment (Account Aggregator)',
+    description:
+      'MoneyOne / OneMoney Account Aggregator — B2C (individual). Flow: create a consent, send the user to webRedirectionUrl to approve at the AA, resolve the consentHandle into a consentId, then fetch data. Replace :template with mf-sip | equity | banking. Set {{token}} to a user JWT.',
+    endpoints: [
+      {
+        name: 'List Product Templates',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/templates',
+        description: 'The AA product templates this server exposes.'
+      },
+      {
+        name: 'Create Consent',
+        method: 'POST',
+        path: 'api/v1/b2c/moneyone/banking/consent',
+        description:
+          'Returns { webRedirectionUrl, consentHandle }. pan / fipID / redirectUrl are optional — the server falls back to the user\'s PAN and configured defaults. Swap "banking" for mf-sip or equity.',
+        body: {}
+      },
+      {
+        name: 'Resolve Consent',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/consent/resolve',
+        description:
+          'Exchanges the consentHandle from Create Consent for { consentID, status, accounts }.',
+        query: [{ key: 'handle', value: '', description: 'consentHandle from Create Consent' }]
+      },
+      {
+        name: 'Get All Data',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/data/:consentId/all',
+        description: 'All financial data available under a granted consent.'
+      },
+      {
+        name: 'Get Account Data',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef',
+        description: 'A single linked account.'
+      },
+      {
+        name: 'Get Account Balance',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef/balance',
+        description: 'Balance for a single linked account.'
+      }
+    ]
+  }
 };
 
 export function getSection(key: string): ApiSection | undefined {
