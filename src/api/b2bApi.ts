@@ -11,6 +11,16 @@ export const b2bApi = {
   listGstProfiles:    () =>
     client.get('/b2b/gst/profiles'),
 
+  // Filing alerts — returns due today or overdue and still unfiled. Written
+  // nightly by gstNotificationCron; the app shows these once a day on login.
+  listFilingAlerts:   () =>
+    client.get('/b2b/gst/filing-alerts'),
+
+  // "Already filed" — our filing status can lag the GST portal, so the user
+  // needs a way to clear a warning we can't yet verify.
+  dismissFilingAlert: (id: string) =>
+    client.patch(`/b2b/gst/filing-alerts/${id}/dismiss`, {}),
+
   getGstProfile:      (id: string) =>
     client.get(`/b2b/gst/profiles/${id}`),
 

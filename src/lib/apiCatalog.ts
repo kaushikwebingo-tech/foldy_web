@@ -170,6 +170,19 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'GST profiles, finance status & taxpayer-session APIs (B2B), powered by WhiteBooks (GSP). Server supplies email/IP/state/txn from env; you pass username, GSTIN, type & OTP. Set {{token}}.',
     endpoints: [
       {
+        name: 'List Filing Alerts',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/filing-alerts',
+        description: 'Returns due today or overdue and still unfiled, most overdue first. Written nightly by gstNotificationCron; the app shows these once a day on first open. Each item carries daysOverdue (0 = due today) and isDueToday. Self-heals: anything since filed is resolved on read.'
+      },
+      {
+        name: 'Dismiss Filing Alert',
+        method: 'PATCH',
+        path: 'api/v1/b2b/gst/filing-alerts/:id/dismiss',
+        description: '"Already filed" — clears one alert. Needed because our filing status only syncs when the user opens a GST screen, so a return filed directly on the GST portal can still show as unfiled.',
+        pathVars: [{ key: 'id', value: '<alertId>' }]
+      },
+      {
         name: 'Create GST Profile',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles',
@@ -788,8 +801,26 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Broadcast Notification',
         method: 'POST',
         path: 'api/admin/v1/notifications/broadcast',
-        description: 'Push to every subscribed device via OneSignal. Recorded in notification history.',
+        description: 'Push to every subscribed device via OneSignal, or to a filtered audience. Recorded in notification history. Omit "filters" entirely to reach everyone (original behaviour). With filters, the server resolves matching user ids and targets those instead.',
         body: { title: 'Scheduled maintenance', message: 'Foldy will be briefly unavailable tonight at 11 PM IST.' }
+      },
+      {
+        name: 'Broadcast to a Targeted Audience',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/broadcast',
+        description: 'Same endpoint, with audience targeting. Filters combine with AND: planTypes (trial|business|individual|enterprise), joinedDaysAgo (signed up EXACTLY N days ago, 0 = today), expiredOnly (subscription expired), workspace (business|individual). Blocked and deleted accounts are always excluded. Errors 400 if no user matches.',
+        body: {
+          title: 'Your plan has expired',
+          message: 'Renew now to keep access to your documents.',
+          filters: { planTypes: ['business'], expiredOnly: true }
+        }
+      },
+      {
+        name: 'Preview Broadcast Audience',
+        method: 'POST',
+        path: 'api/admin/v1/notifications/broadcast/preview',
+        description: 'Returns { count, summary } — how many users match these filters. Sends nothing. A broadcast cannot be recalled, so check this before sending. An empty filters object counts all eligible users.',
+        body: { filters: { planTypes: ['trial'], joinedDaysAgo: 30 } }
       },
       {
         name: 'Send Notification to User',

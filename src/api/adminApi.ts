@@ -1,5 +1,13 @@
 import { adminClient } from './client';
 
+/* Broadcast audience targeting. All fields optional; ANDed together. */
+export interface AudienceFilters {
+  planTypes?: Array<'trial' | 'business' | 'individual' | 'enterprise'>;
+  joinedDaysAgo?: number;   // signed up EXACTLY this many days ago (0 = today)
+  expiredOnly?: boolean;
+  workspace?: 'business' | 'individual';
+}
+
 export type PlanPayload = {
   planType: string;
   name: string;
@@ -79,8 +87,14 @@ export const adminApi = {
     adminClient.get('/audit-logs', { params: { page, limit, action } }),
 
   // --- Push notifications (Super Admin) ---
-  broadcastNotification: (title: string, message: string) =>
-    adminClient.post('/notifications/broadcast', { title, message }),
+  // Audience filters combine with AND; omit to reach every subscribed device.
+  broadcastNotification: (title: string, message: string, filters?: AudienceFilters) =>
+    adminClient.post('/notifications/broadcast', { title, message, ...(filters ? { filters } : {}) }),
+
+  // Recipient count for the filters, without sending. A broadcast can't be
+  // recalled, so check this first.
+  previewBroadcastAudience: (filters: AudienceFilters = {}) =>
+    adminClient.post('/notifications/broadcast/preview', { filters }),
 
   sendUserNotification: (userId: string, title: string, message: string) =>
     adminClient.post(`/notifications/users/${userId}`, { title, message }),
