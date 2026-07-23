@@ -77,6 +77,12 @@ export const adminApi = {
   unblockUser:    (userId: string, reason?: string) =>
     adminClient.patch(`/users/${userId}/unblock`, { reason }),
 
+  // Per-user module access — any subset; omitted flags are left unchanged.
+  updateUserModules: (
+    userId: string,
+    modules: Partial<{ gst: boolean; roc: boolean; tds: boolean; itr: boolean; investment: boolean }>,
+  ) => adminClient.patch(`/users/${userId}/modules`, modules),
+
   cancelSubscription: (userId: string, reason: string) =>
     adminClient.post(`/users/${userId}/cancel-subscription`, { reason }),
 

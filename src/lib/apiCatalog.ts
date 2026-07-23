@@ -229,12 +229,42 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'id', value: '<profileId>' }]
       },
       {
+        name: 'Profile — Set as Primary',
+        method: 'PATCH',
+        path: 'api/v1/b2b/gst/profiles/:id/primary',
+        description: 'Make this saved GSTIN the primary/default profile for the business (a business can hold several).',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
         name: 'Profile — Return Summary (stored token)',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles/:id/summary/:type',
         description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c; ret_period is MMYYYY.',
         pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr1' }],
         body: { ret_period: '042024' }
+      },
+      {
+        name: 'Profile — Return Summary PDF (stored token)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/summary/:type/pdf',
+        description: 'The same return summary rendered as a PDF and streamed back as bytes (Content-Disposition: attachment) — nothing is written to disk or S3. type = gstr1|gstr1a|gstr3b|gstr9|gstr9c; ret_period is MMYYYY.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr1' }],
+        body: { ret_period: '042024' }
+      },
+      {
+        name: 'Profile — Sales Summary',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/sales-summary',
+        description: 'GSTR-1 sales summary for the profile across a financial year (12-month roll-up), using the stored token. Also syncs filing status as a side effect.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        query: [{ key: 'fy', value: '2025-26', description: 'financial year, e.g. 2025-26' }]
+      },
+      {
+        name: 'Mark Return as Filed',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/mark-as-filed',
+        description: 'Records a return as filed so the reminder cron stops nudging for it. All three fields required; period is MMYYYY.',
+        body: { gstin: GSTIN, formType: 'GSTR-1', period: '042026' }
       },
       {
         name: 'Profile — List Notices (stored token)',
@@ -374,6 +404,25 @@ export const API_SECTIONS: Record<string, ApiSection> = {
             }
           }
         }
+      },
+      {
+        name: 'Search Documents',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/documents/search',
+        description: 'Case-insensitive name search across the job\'s delivered documents (server-side — the paged lists never hold the full set). Omit category to search everything; defaults to the latest ready job.',
+        query: [
+          { key: 'q', value: 'MGT', description: 'search term (min 2 chars)' },
+          { key: 'jobId', value: '', description: 'optional: a specific job (defaults to the latest ready one)' },
+          { key: 'category', value: '', description: 'optional: scope to one category' },
+          { key: 'limit', value: '20', description: 'optional page size' }
+        ]
+      },
+      {
+        name: 'MCA Company Master Data',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/mca/company/master-data',
+        description: 'Company/LLP master data from InstaFinancials by CIN or LLPIN (billable). Pass exactly one of cin | llpin.',
+        body: { cin: 'U72900KA2021PTC145000' }
       }
     ]
   },
@@ -771,6 +820,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { reason: 'Resolved' }
       },
       {
+        name: 'Update User Module Access',
+        method: 'PATCH',
+        path: 'api/admin/v1/users/:userId/modules',
+        description: 'Toggle per-user module access. Send any subset — omitted flags are left unchanged. A missing flag means ENABLED for that user. Audit-logged; busts the user cache.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { gst: false, roc: false, tds: true, itr: true, investment: true }
+      },
+      {
         name: 'Cancel Subscription',
         method: 'POST',
         path: 'api/admin/v1/users/:userId/cancel-subscription',
@@ -894,6 +951,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description:
           'PUBLIC — no auth. OneMoney redirects the user\'s browser here with ?token=<random>. The server verifies the real status against OneMoney (never trusts the URL), updates the consent, and 302-redirects to the app deep link (foldy://moneyone/callback?status=…). Not called by clients directly — documented for completeness.',
         query: [{ key: 'token', value: '', description: 'the token from Create Consent' }]
+      },
+      {
+        name: 'Webhook (PROVIDER → server, not /api)',
+        method: 'POST',
+        path: 'webhook/moneyone',
+        description:
+          'Provider-called (NOT under /api, NOT auth). OneMoney POSTs consent lifecycle events here — signature-verified via X-Webhook-Signature/X-Webhook-Timestamp against MONEYONE_WEBHOOK_SECRET, idempotent on transaction_id. Events: ANALYTICS_CALLBACK, NUDGES_CALLBACK, CONSENT_REVOKED_CALLBACK. Documented for reference; the console base URL targets /api so it can\'t drive this.',
+        body: { event: 'CONSENT_REVOKED_CALLBACK', transaction_id: '<txn>', timestamp: 1719400000, data: { consentId: '<consentId>' } }
       },
       {
         name: 'Resolve Consent',

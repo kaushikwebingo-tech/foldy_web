@@ -45,6 +45,10 @@ export const authApi = {
   getTrialStatus:  () =>
     client.get('/user/plan-status'),
 
+  // Storage usage summary (bytes used, folder/file counts vs plan limits).
+  getStorageStatus: () =>
+    client.get('/user/storage-status'),
+
   updatePushToken: (notification_token: string, device_type: 'android' | 'ios' | 'web') =>
     client.post('/auth/update-push-token', { notification_token, device_type }),
 

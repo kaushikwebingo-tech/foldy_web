@@ -35,4 +35,13 @@ export const rocApi = {
   // Group an InstaDocs/LLPDocs report into the MCA filing categories.
   categorizeDocuments: (report: unknown) =>
     client.post('/b2b/roc/documents/categorize', report),
+
+  // Case-insensitive name search across the job's documents (server-side; the
+  // paged lists never hold the full set). Omit category to search everything.
+  searchDocuments: (params: { q: string; jobId?: string; category?: string; limit?: number }) =>
+    client.get('/b2b/roc/documents/search', { params }),
+
+  // MCA company/LLP master data by CIN or LLPIN (billable). Pass exactly one.
+  getMcaCompanyMasterData: (body: { cin?: string; llpin?: string }) =>
+    client.post('/b2b/roc/mca/company/master-data', body),
 };
