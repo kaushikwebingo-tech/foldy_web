@@ -41,6 +41,7 @@ const SAMPLE = `{
  */
 export default function RocDocumentsPage() {
   const [identifier, setIdentifier] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [jobId, setJobId] = useState('');
   const [category, setCategory] = useState('');
   const [reportJson, setReportJson] = useState('');
@@ -80,15 +81,21 @@ export default function RocDocumentsPage() {
           title="Order Documents"
           method="POST"
           endpoint="/api/v1/b2b/roc/job"
-          description="Send ONE identifier — CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs). The type is detected from its shape, so there's no separate LLP call. Returns 202 + jobId, auto-filled below."
+          description="Send ONE identifier — CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs). The type is detected from its shape, so there's no separate LLP call. 'name' (the company/LLP name the user typed) is required and stored on the job for display. Returns 202 + jobId, auto-filled below."
           buttonLabel="Order Documents"
           onSubmit={async () => {
-            const res = await rocApi.createJob(identifier);
+            const res = await rocApi.createJob(identifier, companyName);
             const id = res.data?.data?.jobId;
             if (id) setJobId(String(id));
             return res;
           }}
         >
+          <Field
+            label="Company / LLP Name"
+            value={companyName}
+            onChange={setCompanyName}
+            placeholder="ACME Solutions Pvt Ltd"
+          />
           <Field
             label="Identifier (CIN / PAN / LLPIN)"
             value={identifier}

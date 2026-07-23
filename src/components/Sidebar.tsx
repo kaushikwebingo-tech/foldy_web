@@ -15,6 +15,7 @@ import {
   UploadCloud,
   Server,
   FileStack,
+  Landmark,
   LifeBuoy,
   UserCircle,
 } from "lucide-react";
@@ -62,6 +63,12 @@ const GROUPS = [
       },
       { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
       { label: "ROC", path: "/roc-documents", icon: <FileStack size={16} /> },
+    ],
+  },
+  {
+    group: "B2C Features",
+    items: [
+      { label: "Investment (AA)", path: "/investment", icon: <Landmark size={16} /> },
     ],
   },
   {
