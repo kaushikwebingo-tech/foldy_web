@@ -15,8 +15,10 @@ export const rocApi = {
    * LLPIN — detected server-side. Guarded by one-active-job (409) and the
    * 90-day cooldown (429).
    */
-  createJob: (identifier: string) =>
-    client.post('/b2b/roc/job', { identifier }),
+  // `name` is the company/LLP name as entered by the user — a required display
+  // label for their own entity, shown on the ROC profile beside the CIN.
+  createJob: (identifier: string, name: string) =>
+    client.post('/b2b/roc/job', { identifier, name }),
 
   /*
    * Current job + cooldown for the logged-in user. Reads our DB — the vendor's

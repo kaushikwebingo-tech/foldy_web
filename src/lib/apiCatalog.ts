@@ -329,8 +329,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Order Documents',
         method: 'POST',
         path: 'api/v1/b2b/roc/job',
-        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. Returns 202 + jobId. Refuses with 409 if a job is already in flight, or 429 while the 90-day cooldown is running.',
-        body: { identifier: 'U69202WB2024PTC269500' }
+        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. `name` is REQUIRED — the company/LLP name as entered by the user, stored on the job and shown on the ROC profile beside the CIN (accepted as `name` or `entityName`). Returns 202 + jobId. Refuses with 409 if a job is already in flight, or 429 while the 90-day cooldown is running.',
+        body: { identifier: 'U69202WB2024PTC269500', name: 'ACME Solutions Pvt Ltd' }
       },
       {
         name: 'Job Status',
@@ -877,8 +877,23 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'POST',
         path: 'api/v1/b2c/moneyone/banking/consent',
         description:
-          'Returns { webRedirectionUrl, consentHandle }. pan / fipID / redirectUrl are optional — the server falls back to the user\'s PAN and configured defaults. Swap "banking" for mf-sip or equity.',
+          'Returns { webRedirectionUrl, consentHandle, token }. The server persists a PENDING consent and sets the redirect to its own public callback carrying an unguessable token. Send the user to webRedirectionUrl; after they approve/decline, OneMoney redirects to the callback, which verifies the real status and deep-links back into the app. pan / fipID are optional. Swap "banking" for mf-sip or equity.',
         body: {}
+      },
+      {
+        name: 'Consent Status (am I linked?)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/consent/status',
+        description:
+          'Latest persisted consent for the logged-in user + template: { linked, status (pending|active|rejected|failed|expired|none), consentId, updatedAt }. Set by the callback after the user returns. This is the app\'s "am I linked?" check.'
+      },
+      {
+        name: 'Consent Callback (PUBLIC — server-to-server)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/callback',
+        description:
+          'PUBLIC — no auth. OneMoney redirects the user\'s browser here with ?token=<random>. The server verifies the real status against OneMoney (never trusts the URL), updates the consent, and 302-redirects to the app deep link (foldy://moneyone/callback?status=…). Not called by clients directly — documented for completeness.',
+        query: [{ key: 'token', value: '', description: 'the token from Create Consent' }]
       },
       {
         name: 'Resolve Consent',

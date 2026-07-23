@@ -22,6 +22,12 @@ export const moneyoneApi = {
   resolveConsent: (template: AaTemplate, handle: string) =>
     client.get(`/b2c/moneyone/${template}/consent/resolve`, { params: { handle } }),
 
+  // "Am I linked?" — latest persisted consent for this user + template.
+  // { linked, status, consentId, updatedAt }. Populated by the server callback
+  // after the user returns from OneMoney.
+  consentStatus: (template: AaTemplate) =>
+    client.get(`/b2c/moneyone/${template}/consent/status`),
+
   // All financial data available under a granted consent.
   getAllData: (template: AaTemplate, consentId: string) =>
     client.get(`/b2c/moneyone/${template}/data/${consentId}/all`),
