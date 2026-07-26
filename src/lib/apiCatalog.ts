@@ -945,6 +945,74 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           'Latest persisted consent for the logged-in user + template: { linked, status (pending|active|rejected|failed|expired|none), consentId, updatedAt }. Set by the callback after the user returns. This is the app\'s "am I linked?" check.'
       },
       {
+        name: 'Revoke Consent',
+        method: 'POST',
+        path: 'api/v1/b2c/moneyone/banking/consent/revoke',
+        description:
+          'Withdraws a linked account. Body { consentId? } — optional; the server falls back to the user\'s latest consent for this template. Revokes at OneMoney (/revokeconsent), then marks the local record status=revoked so the app immediately shows "not linked". Returns { consentId, status: "revoked" }.',
+        body: { consentId: '' }
+      },
+      {
+        name: 'Accounts List (bank-list screen)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/accounts',
+        description:
+          'STORE-AND-SYNC: reads the stored, normalized accounts from our DB (no FinPro call) → { accounts: [{ consentId, linkRefNumber, maskedAccountNumber, bank, holderName, fiType, category, headlineLabel, headlineValue, currency, lastSyncedAt, lastTxnDate, status }] }. holderName is decrypted for the list; the app card shows bank + holderName + masked account + category tag (balance intentionally hidden). Empty until the ingest job has run.'
+      },
+      {
+        name: 'Account Detail (profile + summary)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef',
+        description:
+          'Detail header for one account from DB → account fields + { profile (name, maskedPan, email, mobile, address, kyc, nominee, …; decrypted, PAN masked), summaryFields:[{label,value}], holdings:[], dataRangeFrom, dataRangeTo }. Transactions are a separate paged call.'
+      },
+      {
+        name: 'Transactions (paged + filtered)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions',
+        description:
+          'Lazy-loaded transactions from DB, newest first → { items:[…], page, limit, total, hasMore }. Unified bank (credit/debit) + investment (buy/sell) rows. Filters combine with AND.',
+        query: [
+          { key: 'page', value: '1', description: 'page number (1-based)' },
+          { key: 'limit', value: '20', description: 'page size (max 100)' },
+          { key: 'from', value: '', description: 'ISO date — start of range' },
+          { key: 'to', value: '', description: 'ISO date — end of range' },
+          { key: 'direction', value: '', description: 'CSV: credit,debit,buy,sell,installment' },
+          { key: 'minAmount', value: '', description: 'min amount' },
+          { key: 'maxAmount', value: '', description: 'max amount' },
+          { key: 'search', value: '', description: 'text match on description' }
+        ]
+      },
+      {
+        name: 'Transactions Export (CSV)',
+        method: 'GET',
+        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions/export',
+        description:
+          'Streams a CSV download of ALL matching transactions (same filters as the list, no pagination). Content-Disposition: attachment.',
+        query: [
+          { key: 'from', value: '', description: 'ISO date' },
+          { key: 'to', value: '', description: 'ISO date' },
+          { key: 'direction', value: '', description: 'CSV of directions' },
+          { key: 'search', value: '', description: 'text match' }
+        ]
+      },
+      {
+        name: 'Transactions Email',
+        method: 'POST',
+        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions/email',
+        description:
+          'Emails the filtered CSV statement to the user\'s OWN registered email (never an arbitrary address). Same filter query params as the list. Returns { to, count }.',
+        body: {}
+      },
+      {
+        name: 'Manual Sync (refresh now)',
+        method: 'POST',
+        path: 'api/v1/b2c/moneyone/banking/sync',
+        description:
+          'Forces a full re-ingest of the latest consent\'s data (getallfidata → normalize → upsert). Body { consentId? } optional. Returns the ingest summary { accounts, transactions, errors }.',
+        body: { consentId: '' }
+      },
+      {
         name: 'Consent Callback (PUBLIC — server-to-server)',
         method: 'GET',
         path: 'api/v1/b2c/moneyone/callback',
@@ -978,7 +1046,11 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Get Account Data',
         method: 'GET',
         path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef',
-        description: 'A single linked account.'
+        description: 'One linked account\'s transactions (FinPro /getfidata). Optional ?limit&offset page the transactions so the app pulls a bank\'s data in windows instead of every transaction at once; omit both to fetch all.',
+        query: [
+          { key: 'limit', value: '', description: 'optional: max transactions per page' },
+          { key: 'offset', value: '', description: 'optional: starting point' }
+        ]
       },
       {
         name: 'Get Account Balance',
