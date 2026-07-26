@@ -1,23 +1,27 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import ApiCard from '@/components/ApiCard';
-import { Field } from '@/components/Field';
-import PageHeader from '@/components/PageHeader';
-import { authApi } from '@/api/authApi';
-import { getToken, setToken, removeToken } from '@/lib/utils';
-import { LogIn, CheckCircle2, LogOut, LayoutDashboard } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ApiCard from "@/components/ApiCard";
+import { Field, SelectField } from "@/components/Field";
+import PageHeader from "@/components/PageHeader";
+import { authApi } from "@/api/authApi";
+import { getToken, setToken, removeToken } from "@/lib/utils";
+import { LogIn, CheckCircle2, LogOut, LayoutDashboard } from "lucide-react";
 
 /* ─── PAN login cards (shared) ─────────────────────────────────────── */
 function PanLoginCards() {
-  const [pan, setPan]                 = useState('');
-  const [referenceId, setReferenceId] = useState('');
-  const [otp, setOtp]                 = useState('');
+  const [pan, setPan] = useState("");
+  const [referenceId, setReferenceId] = useState("");
+  const [otp, setOtp] = useState("");
+  const [workspace, setWorkspace] = useState<"business" | "individual">(
+    "business",
+  );
 
   return (
     <div className="space-y-4">
       <div className="mb-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        Login is PAN-first: enter your PAN to receive an OTP on your registered mobile, then verify it.
-        New PAN? Use the <strong>Onboarding</strong> page to register. OTPs print to the server console.
+        Login is PAN-first: enter your PAN to receive an OTP on your registered
+        mobile, then verify it. New PAN? Use the <strong>Onboarding</strong>{" "}
+        page to register. OTPs print to the server console.
       </div>
 
       <ApiCard
@@ -26,9 +30,29 @@ function PanLoginCards() {
         method="POST"
         endpoint="/api/v1/onboarding/pan"
         description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → use the Onboarding page (needs Name + DOB). Copy referenceId into step 2."
-        onSubmit={() => authApi.panEntry(pan)}
+        onSubmit={async () => {
+          const { data } = await authApi.panEntry(pan, "", "", workspace);
+          const { referenceId } = data?.data;
+          if (referenceId) setReferenceId(referenceId);
+          return data;
+        }}
       >
-        <Field label="PAN" value={pan} onChange={setPan} placeholder="ABCDE1234F" fullWidth />
+        <Field
+          label="PAN"
+          value={pan}
+          onChange={setPan}
+          placeholder="ABCDE1234F"
+          fullWidth
+        />
+        <SelectField
+          label="Workspace (register + login-as)"
+          value={workspace}
+          onChange={(v) => setWorkspace(v as "business" | "individual")}
+          options={[
+            { label: "Business", value: "business" },
+            { label: "Individual", value: "individual" },
+          ]}
+        />
       </ApiCard>
 
       <ApiCard
@@ -40,15 +64,26 @@ function PanLoginCards() {
         onSubmit={async () => {
           const res = await authApi.verifyPanOtp(referenceId, otp);
           const data = res.data?.data;
-          if (data?.mode === 'login' && data?.token) {
+          if (data?.mode === "login" && data?.token) {
             setToken(data.token);
             window.location.reload();
           }
           return res;
         }}
       >
-        <Field label="referenceId" value={referenceId} onChange={setReferenceId} placeholder="From PAN entry response" fullWidth />
-        <Field label="OTP" value={otp} onChange={setOtp} placeholder="6-digit OTP (server console)" />
+        <Field
+          label="referenceId"
+          value={referenceId}
+          onChange={setReferenceId}
+          placeholder="From PAN entry response"
+          fullWidth
+        />
+        <Field
+          label="OTP"
+          value={otp}
+          onChange={setOtp}
+          placeholder="6-digit OTP (server console)"
+        />
       </ApiCard>
 
       <ApiCard
@@ -93,7 +128,7 @@ function PanLoginCards() {
 /* ─── Already-logged-in banner ─────────────────────────────────────── */
 function AlreadyLoggedIn() {
   const navigate = useNavigate();
-  const token    = getToken()!;
+  const token = getToken()!;
 
   const handleLogout = async () => {
     // Revoke the JWT + end the session server-side, then clear locally.
@@ -122,19 +157,27 @@ function AlreadyLoggedIn() {
             <CheckCircle2 size={20} className="text-green-600" />
           </div>
           <div>
-            <p className="font-bold text-green-800 text-sm">You are already logged in</p>
-            <p className="text-xs text-green-600">An active JWT session is stored in your browser.</p>
+            <p className="font-bold text-green-800 text-sm">
+              You are already logged in
+            </p>
+            <p className="text-xs text-green-600">
+              An active JWT session is stored in your browser.
+            </p>
           </div>
         </div>
 
         <div className="bg-white border border-green-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">Current Token</p>
-          <code className="text-xs text-slate-700 break-all leading-5">{token.slice(0, 60)}…</code>
+          <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+            Current Token
+          </p>
+          <code className="text-xs text-slate-700 break-all leading-5">
+            {token.slice(0, 60)}…
+          </code>
         </div>
 
         <div className="flex gap-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate("/")}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#1A73E8] hover:bg-[#1558C0] text-white text-sm font-semibold rounded-xl transition-colors"
           >
             <LayoutDashboard size={15} />
