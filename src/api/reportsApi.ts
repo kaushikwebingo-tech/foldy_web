@@ -7,9 +7,12 @@ import { client } from './client';
  * side effect of viewing GST summaries, so there are no write endpoints here
  * except marking a late-fee return as NIL.
  */
+// GST report query params — server reads req.query.fy and req.query.gstin.
+type GstReportParams = { fy?: string; gstin?: string };
+
 export const reportsApi = {
   // Late-fee exposure for overdue returns.
-  getLateFeeExposure: (params?: Record<string, unknown>) =>
+  getLateFeeExposure: (params?: GstReportParams) =>
     client.get('/b2b/reports/late-fee', { params }),
 
   // Turnover bands used to compute per-day late fee.
@@ -21,18 +24,18 @@ export const reportsApi = {
     client.patch(`/b2b/reports/late-fee/returns/${alertId}/nil`),
 
   // GSTINs × periods matrix: filed / pending / overdue.
-  getGstinGrid: (params?: Record<string, unknown>) =>
+  getGstinGrid: (params?: GstReportParams) =>
     client.get('/b2b/reports/gstin-grid', { params }),
 
   // Monthly turnover trend for a financial year (from snapshots).
-  getSalesTrend: (params?: { financialYear?: string; gstin?: string }) =>
+  getSalesTrend: (params?: GstReportParams) =>
     client.get('/b2b/reports/sales-trend', { params }),
 
   // What is due when, and what is already late.
-  getComplianceCalendar: (params?: Record<string, unknown>) =>
+  getComplianceCalendar: (params?: GstReportParams) =>
     client.get('/b2b/reports/compliance-calendar', { params }),
 
   // How much stored history the trend has to work with.
-  getSnapshotCoverage: (params?: Record<string, unknown>) =>
+  getSnapshotCoverage: (params?: GstReportParams) =>
     client.get('/b2b/reports/snapshot-coverage', { params }),
 };

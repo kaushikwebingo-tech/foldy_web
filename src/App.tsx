@@ -15,6 +15,8 @@ import ManualUploadsPage from '@/pages/ManualUploadsPage';
 import PaymentsPage      from '@/pages/PaymentsPage';
 import DigilockerPage    from '@/pages/DigilockerPage';
 import AdminPage         from '@/pages/AdminPage';
+import LoadTestPage      from '@/pages/LoadTestPage';
+import ReportsPage       from '@/pages/ReportsPage';
 
 export default function App() {
   return (
@@ -36,6 +38,8 @@ export default function App() {
           <Route path="/payments"       element={<PaymentsPage />} />
           <Route path="/digilocker"     element={<DigilockerPage />} />
           <Route path="/admin"          element={<AdminPage />} />
+          <Route path="/reports"        element={<ReportsPage />} />
+          <Route path="/load-testing"   element={<LoadTestPage />} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

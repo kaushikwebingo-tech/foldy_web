@@ -7,6 +7,8 @@ import {
   Building2,
   Receipt,
   FileText,
+  Gauge,
+  BarChart3,
   HardDrive,
   CreditCard,
   FolderOpen,
@@ -74,6 +76,13 @@ const GROUPS = [
     ],
   },
   {
+    // Read-only analytics for both segments.
+    group: "Reports (B2C + B2B)",
+    items: [
+      { label: "Reports", path: "/reports", icon: <BarChart3 size={16} /> },
+    ],
+  },
+  {
     group: "B2C Features",
     items: [
       { label: "Investment (AA)", path: "/investment", icon: <Landmark size={16} /> },
@@ -105,6 +114,12 @@ const GROUPS = [
     group: "Admin",
     items: [
       { label: "Admin Panel", path: "/admin", icon: <ShieldCheck size={16} /> },
+    ],
+  },
+  {
+    group: "Tools",
+    items: [
+      { label: "Load Testing", path: "/load-testing", icon: <Gauge size={16} /> },
     ],
   },
 ];
