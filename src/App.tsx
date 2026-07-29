@@ -6,6 +6,7 @@ import OnboardingPage    from '@/pages/OnboardingPage';
 import ProfilePage       from '@/pages/ProfilePage';
 import GstProfilePage    from '@/pages/GstProfilePage';
 import TdsPage           from '@/pages/TdsPage';
+import IncomeTaxPage     from '@/pages/IncomeTaxPage';
 import RocDocumentsPage  from '@/pages/RocDocumentsPage';
 import MoneyOnePage      from '@/pages/MoneyOnePage';
 import SupportPage       from '@/pages/SupportPage';
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/profile"        element={<ProfilePage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
           <Route path="/tds"            element={<TdsPage />} />
+          <Route path="/income-tax"     element={<IncomeTaxPage />} />
           <Route path="/roc-documents"  element={<RocDocumentsPage />} />
           <Route path="/investment"     element={<MoneyOnePage />} />
           <Route path="/support"        element={<SupportPage />} />

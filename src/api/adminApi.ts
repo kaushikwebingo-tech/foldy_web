@@ -114,4 +114,20 @@ export const adminApi = {
 
   updateSupportQueryStatus: (id: string, status: string, response?: string) =>
     adminClient.patch(`/support/queries/${id}/status`, { status, ...(response ? { response } : {}) }),
+
+  // --- Feature flags (admin) --- server: /admin/v1/features
+  listFeatures: () =>
+    adminClient.get('/features'),
+
+  createFeature: (payload: Record<string, unknown>) =>
+    adminClient.post('/features', payload),
+
+  updateFeature: (id: string, payload: Record<string, unknown>) =>
+    adminClient.put(`/features/${id}`, payload),
+
+  toggleFeature: (id: string) =>
+    adminClient.patch(`/features/${id}/toggle`),
+
+  deleteFeature: (id: string) =>
+    adminClient.delete(`/features/${id}`),
 };

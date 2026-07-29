@@ -41,6 +41,10 @@ export const b2bApi = {
   setPrimaryGstProfile: (id: string) =>
     client.patch(`/b2b/gst/profiles/${id}/primary`),
 
+  // Set the profile's turnover band (drives late-fee computation).
+  setGstTurnoverBand: (id: string, band: string) =>
+    client.patch(`/b2b/gst/profiles/${id}/turnover-band`, { band }),
+
   getGstProfileSummary: (id: string, type: string, ret_period: string) =>
     client.post(`/b2b/gst/profiles/${id}/summary/${type}`, { ret_period }),
 

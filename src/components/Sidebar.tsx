@@ -6,6 +6,7 @@ import {
   User,
   Building2,
   Receipt,
+  FileText,
   HardDrive,
   CreditCard,
   FolderOpen,
@@ -61,8 +62,15 @@ const GROUPS = [
         path: "/gst-profile",
         icon: <Building2 size={16} />,
       },
-      { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
       { label: "ROC", path: "/roc-documents", icon: <FileStack size={16} /> },
+    ],
+  },
+  {
+    // TDS and Income Tax are separate modules, both active for B2C and B2B.
+    group: "Tax (B2C + B2B)",
+    items: [
+      { label: "TDS", path: "/tds", icon: <Receipt size={16} /> },
+      { label: "Income Tax", path: "/income-tax", icon: <FileText size={16} /> },
     ],
   },
   {
