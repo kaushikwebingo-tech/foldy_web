@@ -897,7 +897,18 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           { key: 'limit', value: '20' },
           { key: 'audience', value: '', description: 'broadcast|user (optional)' }
         ]
-      }
+      },
+      { name: 'List Features', method: 'GET', path: 'api/admin/v1/features', description: 'Feature flags with status (operational | disabled-manual | api-error-auto) + killSwitch — the error-provider kill-switch registry.' },
+      { name: 'Create Feature', method: 'POST', path: 'api/admin/v1/features', description: 'redisKey is what the kill-switch middleware reads.', body: { title: 'Whitebooks GST', apiProvider: 'whitebooks', redisKey: 'killswitch:provider:whitebooks-gst', status: 'operational', killSwitch: true, description: '' } },
+      { name: 'Toggle Feature (kill-switch)', method: 'PATCH', path: 'api/admin/v1/features/:id/toggle', description: 'REQUIRES a killSwitch body; optionally a status.', pathVars: [{ key: 'id', value: '<featureId>' }], body: { killSwitch: false, status: 'disabled-manual' } },
+      { name: 'Update Feature', method: 'PUT', path: 'api/admin/v1/features/:id', pathVars: [{ key: 'id', value: '<featureId>' }], body: { status: 'operational', killSwitch: true } },
+      { name: 'Delete Feature', method: 'DELETE', path: 'api/admin/v1/features/:id', pathVars: [{ key: 'id', value: '<featureId>' }] },
+      { name: 'List Calendar Events', method: 'GET', path: 'api/admin/v1/calendar', description: 'All events; optional ?month=YYYY-MM.', query: [{ key: 'month', value: '', description: 'YYYY-MM (optional)' }] },
+      { name: 'Create Calendar Event', method: 'POST', path: 'api/admin/v1/calendar', body: { title: 'GSTR-1 due', date: '2026-07-11', timeStart: '09:00', timeEnd: '10:00', status: 'pending', eventType: 'compliance' } },
+      { name: 'Update Calendar Event', method: 'PUT', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }], body: { status: 'approval' } },
+      { name: 'Delete Calendar Event', method: 'DELETE', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }] },
+      { name: 'Bulk Create Calendar Events', method: 'POST', path: 'api/admin/v1/calendar/bulk', body: { events: [{ title: 'GSTR-3B due', date: '2026-07-20' }] } },
+      { name: 'Import Previous Year', method: 'POST', path: 'api/admin/v1/calendar/import-previous-year', body: { targetMonth: '2026-07' } }
     ]
   },
   chat: {
@@ -917,6 +928,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
+  calendar: {
+    key: 'calendar',
+    name: 'Calendar',
+    description: 'Compliance / events calendar the user reads. Admins curate the entries via the Admin Panel section (calendar CRUD). Set {{token}} to a user JWT.',
+    endpoints: [
+      { name: 'Get Calendar Events', method: 'GET', path: 'api/v1/calendar', description: 'All events (compliance + general), sorted by date then start time.' }
+    ]
+  },
   moneyone: {
     key: 'moneyone',
     name: 'Investment (Account Aggregator)',

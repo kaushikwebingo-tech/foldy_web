@@ -115,19 +115,47 @@ export const adminApi = {
   updateSupportQueryStatus: (id: string, status: string, response?: string) =>
     adminClient.patch(`/support/queries/${id}/status`, { status, ...(response ? { response } : {}) }),
 
-  // --- Feature flags (admin) --- server: /admin/v1/features
+  // --- Feature flags / kill-switches (admin) --- server: /admin/v1/features
+  // A feature can be operational, disabled-manual, or api-error-auto (auto-off
+  // when its provider errors). killSwitch is the on/off the error-provider reads.
   listFeatures: () =>
     adminClient.get('/features'),
 
+  // Body: { title, apiProvider, redisKey?, status?, killSwitch?, description?, targetPlanId? }
   createFeature: (payload: Record<string, unknown>) =>
     adminClient.post('/features', payload),
 
   updateFeature: (id: string, payload: Record<string, unknown>) =>
     adminClient.put(`/features/${id}`, payload),
 
-  toggleFeature: (id: string) =>
-    adminClient.patch(`/features/${id}/toggle`),
+  // Toggle REQUIRES a killSwitch body (and optionally a status). This was
+  // out of sync — the server rejects a bodyless toggle.
+  toggleFeature: (id: string, killSwitch: boolean, status?: string) =>
+    adminClient.patch(`/features/${id}/toggle`, { killSwitch, ...(status ? { status } : {}) }),
 
   deleteFeature: (id: string) =>
     adminClient.delete(`/features/${id}`),
+
+  // --- Compliance / events calendar (admin CRUD) --- server: /admin/v1/calendar
+  // Body: { title, description?, date (YYYY-MM-DD), timeStart (HH:mm), timeEnd (HH:mm),
+  //         status? (pending|approval|reschedule|cancel), eventType? (event|compliance) }
+  listCalendarEvents: (month?: string) =>
+    adminClient.get('/calendar', { params: month ? { month } : undefined }),
+
+  createCalendarEvent: (payload: Record<string, unknown>) =>
+    adminClient.post('/calendar', payload),
+
+  updateCalendarEvent: (id: string, payload: Record<string, unknown>) =>
+    adminClient.put(`/calendar/${id}`, payload),
+
+  deleteCalendarEvent: (id: string) =>
+    adminClient.delete(`/calendar/${id}`),
+
+  // events: [{ title, date, timeStart?, timeEnd?, status?, eventType? }]
+  bulkCreateCalendarEvents: (events: Record<string, unknown>[]) =>
+    adminClient.post('/calendar/bulk', { events }),
+
+  // Clone a whole month's compliance events from the previous year.
+  importCalendarFromPreviousYear: (targetMonth: string) =>
+    adminClient.post('/calendar/import-previous-year', { targetMonth }),
 };

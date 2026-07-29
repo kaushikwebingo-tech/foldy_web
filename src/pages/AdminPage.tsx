@@ -42,6 +42,26 @@ export default function AdminPage() {
   const [ntfUserId, setNtfUserId] = useState("");
   const [ntfAudience, setNtfAudience] = useState("");
 
+  // Feature flags / kill-switches
+  const [featId, setFeatId] = useState("");
+  const [featTitle, setFeatTitle] = useState("");
+  const [featProvider, setFeatProvider] = useState("");
+  const [featRedisKey, setFeatRedisKey] = useState("");
+  const [featStatus, setFeatStatus] = useState("operational");
+  const [featKill, setFeatKill] = useState("true");
+  const [featDesc, setFeatDesc] = useState("");
+
+  // Calendar (compliance / events)
+  const [calId, setCalId] = useState("");
+  const [calMonth, setCalMonth] = useState("");
+  const [calTitle, setCalTitle] = useState("");
+  const [calDate, setCalDate] = useState("");
+  const [calStart, setCalStart] = useState("09:00");
+  const [calEnd, setCalEnd] = useState("10:00");
+  const [calStatus, setCalStatus] = useState("pending");
+  const [calType, setCalType] = useState("event");
+  const [calTargetMonth, setCalTargetMonth] = useState("");
+
   // Confirmation + reason modal for destructive actions.
   const [confirm, setConfirm] = useState<{
     open: boolean;
@@ -743,6 +763,202 @@ export default function AdminPage() {
             placeholder="1"
             type="number"
           />
+        </ApiCard>
+
+        {/* ---------- Feature flags / kill-switches ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
+          Feature flags · kill-switches (error provider)
+        </p>
+
+        <ApiCard
+          title="List Features"
+          method="GET"
+          endpoint="/api/admin/v1/features"
+          description="All feature flags with their status (operational / disabled-manual / api-error-auto) and killSwitch."
+          onSubmit={() => adminApi.listFeatures()}
+        />
+
+        <ApiCard
+          title="Create Feature"
+          method="POST"
+          endpoint="/api/admin/v1/features"
+          description="Register a feature flag. redisKey is what the error-provider middleware reads (e.g. killswitch:provider:whitebooks-gst)."
+          onSubmit={() =>
+            adminApi.createFeature({
+              title: featTitle,
+              apiProvider: featProvider,
+              ...(featRedisKey ? { redisKey: featRedisKey } : {}),
+              status: featStatus,
+              killSwitch: featKill === "true",
+              ...(featDesc ? { description: featDesc } : {}),
+            })
+          }
+        >
+          <Field label="Title" value={featTitle} onChange={setFeatTitle} placeholder="Whitebooks GST" />
+          <Field label="API Provider" value={featProvider} onChange={setFeatProvider} placeholder="whitebooks" />
+          <Field label="Redis Key (optional)" value={featRedisKey} onChange={setFeatRedisKey} placeholder="killswitch:provider:whitebooks-gst" fullWidth />
+          <SelectField
+            label="Status"
+            value={featStatus}
+            onChange={setFeatStatus}
+            options={[
+              { label: "operational", value: "operational" },
+              { label: "disabled-manual", value: "disabled-manual" },
+              { label: "api-error-auto", value: "api-error-auto" },
+            ]}
+          />
+          <SelectField
+            label="Kill Switch (on = usable)"
+            value={featKill}
+            onChange={setFeatKill}
+            options={[
+              { label: "true (on)", value: "true" },
+              { label: "false (off)", value: "false" },
+            ]}
+          />
+          <Field label="Description (optional)" value={featDesc} onChange={setFeatDesc} placeholder="" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Toggle Feature (kill-switch)"
+          method="PATCH"
+          endpoint="/api/admin/v1/features/:id/toggle"
+          description="Turn a feature on/off. REQUIRES a killSwitch body (this was previously out of sync). Optionally set the status too."
+          onSubmit={() => adminApi.toggleFeature(featId, featKill === "true", featStatus)}
+        >
+          <Field label="Feature ID" value={featId} onChange={setFeatId} placeholder="feature _id" fullWidth />
+          <SelectField
+            label="Kill Switch"
+            value={featKill}
+            onChange={setFeatKill}
+            options={[
+              { label: "true (on)", value: "true" },
+              { label: "false (off)", value: "false" },
+            ]}
+          />
+        </ApiCard>
+
+        <ApiCard
+          title="Update Feature"
+          method="PUT"
+          endpoint="/api/admin/v1/features/:id"
+          description="Edit a feature's fields (title / apiProvider / redisKey / status / description)."
+          onSubmit={() =>
+            adminApi.updateFeature(featId, {
+              ...(featTitle ? { title: featTitle } : {}),
+              ...(featProvider ? { apiProvider: featProvider } : {}),
+              ...(featRedisKey ? { redisKey: featRedisKey } : {}),
+              status: featStatus,
+              killSwitch: featKill === "true",
+              ...(featDesc ? { description: featDesc } : {}),
+            })
+          }
+        >
+          <Field label="Feature ID" value={featId} onChange={setFeatId} placeholder="feature _id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Delete Feature"
+          method="DELETE"
+          endpoint="/api/admin/v1/features/:id"
+          description="Remove a feature flag."
+          onSubmit={() => adminApi.deleteFeature(featId)}
+        >
+          <Field label="Feature ID" value={featId} onChange={setFeatId} placeholder="feature _id" fullWidth />
+        </ApiCard>
+
+        {/* ---------- Calendar (compliance / events) ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
+          Calendar · compliance / events (admin CRUD)
+        </p>
+
+        <ApiCard
+          title="List Calendar Events"
+          method="GET"
+          endpoint="/api/admin/v1/calendar"
+          description="All events, optionally filtered to one month (YYYY-MM)."
+          onSubmit={() => adminApi.listCalendarEvents(calMonth || undefined)}
+        >
+          <Field label="Month (optional)" value={calMonth} onChange={setCalMonth} placeholder="2026-07" />
+        </ApiCard>
+
+        <ApiCard
+          title="Create Calendar Event"
+          method="POST"
+          endpoint="/api/admin/v1/calendar"
+          description="Add a compliance / general event. Date YYYY-MM-DD, times HH:mm."
+          onSubmit={() =>
+            adminApi.createCalendarEvent({
+              title: calTitle,
+              date: calDate,
+              timeStart: calStart,
+              timeEnd: calEnd,
+              status: calStatus,
+              eventType: calType,
+            })
+          }
+        >
+          <Field label="Title" value={calTitle} onChange={setCalTitle} placeholder="GSTR-1 due" />
+          <Field label="Date (YYYY-MM-DD)" value={calDate} onChange={setCalDate} placeholder="2026-07-11" />
+          <Field label="Start (HH:mm)" value={calStart} onChange={setCalStart} placeholder="09:00" />
+          <Field label="End (HH:mm)" value={calEnd} onChange={setCalEnd} placeholder="10:00" />
+          <SelectField
+            label="Status"
+            value={calStatus}
+            onChange={setCalStatus}
+            options={[
+              { label: "pending", value: "pending" },
+              { label: "approval", value: "approval" },
+              { label: "reschedule", value: "reschedule" },
+              { label: "cancel", value: "cancel" },
+            ]}
+          />
+          <SelectField
+            label="Type"
+            value={calType}
+            onChange={setCalType}
+            options={[
+              { label: "event", value: "event" },
+              { label: "compliance", value: "compliance" },
+            ]}
+          />
+        </ApiCard>
+
+        <ApiCard
+          title="Update Calendar Event"
+          method="PUT"
+          endpoint="/api/admin/v1/calendar/:id"
+          description="Edit an event (any subset of fields)."
+          onSubmit={() =>
+            adminApi.updateCalendarEvent(calId, {
+              ...(calTitle ? { title: calTitle } : {}),
+              ...(calDate ? { date: calDate } : {}),
+              status: calStatus,
+              eventType: calType,
+            })
+          }
+        >
+          <Field label="Event ID" value={calId} onChange={setCalId} placeholder="event _id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Delete Calendar Event"
+          method="DELETE"
+          endpoint="/api/admin/v1/calendar/:id"
+          description="Remove an event."
+          onSubmit={() => adminApi.deleteCalendarEvent(calId)}
+        >
+          <Field label="Event ID" value={calId} onChange={setCalId} placeholder="event _id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Import Previous Year"
+          method="POST"
+          endpoint="/api/admin/v1/calendar/import-previous-year"
+          description="Clone a whole month's compliance events from the previous year into the target month (YYYY-MM)."
+          onSubmit={() => adminApi.importCalendarFromPreviousYear(calTargetMonth)}
+        >
+          <Field label="Target Month (YYYY-MM)" value={calTargetMonth} onChange={setCalTargetMonth} placeholder="2026-07" fullWidth />
         </ApiCard>
       </div>
 
