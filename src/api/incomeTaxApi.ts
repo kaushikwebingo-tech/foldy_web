@@ -10,23 +10,26 @@ export const incomeTaxApi = {
   getStatus: () =>
     client.get('/income-tax/itr-client/status'),
 
-  // Link (or re-authenticate) the income-tax portal account.
-  linkPortalAccount: (payload: Record<string, unknown> = {}) =>
+  // Link (or re-authenticate) the e-filing portal account. Body REQUIRES the
+  // portal username (PAN) and password — server: createItrClientSchema.
+  linkPortalAccount: (payload: { username: string; password: string }) =>
     client.post('/income-tax/itr-client', payload),
 
-  // Trigger a download of the ITR list (async job on the server).
-  downloadItrList: (payload: Record<string, unknown> = {}) =>
-    client.post('/income-tax/itr/download', payload),
+  // Trigger a download of the ITR list (async job). No body — uses the session.
+  downloadItrList: () =>
+    client.post('/income-tax/itr/download'),
 
   // Fetch a specific downloaded ITR's details.
   getItrDetails: (itrId: string) =>
     client.get(`/income-tax/itr/${itrId}`),
 
-  // Trigger a Form 26AS download (async job).
-  download26AS: (payload: Record<string, unknown> = {}) =>
-    client.post('/income-tax/26as/download', payload),
+  // Trigger a Form 26AS download (async job). No body — uses the session.
+  download26AS: () =>
+    client.post('/income-tax/26as/download'),
 
-  // Fetch a specific downloaded 26AS's details.
-  get26ASDetails: (tdsId: string) =>
-    client.get(`/income-tax/26as/${tdsId}`),
+  // Fetch a specific downloaded 26AS's details. Optional financialYear query.
+  get26ASDetails: (tdsId: string, financialYear?: string) =>
+    client.get(`/income-tax/26as/${tdsId}`, {
+      params: financialYear ? { financialYear } : {},
+    }),
 };

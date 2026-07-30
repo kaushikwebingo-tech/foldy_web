@@ -14,6 +14,8 @@ export default function IncomeTaxPage() {
   const [fy, setFy] = useState('2024-25');
   const [itrId, setItrId] = useState('');
   const [tdsId, setTdsId] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   return (
     <div className="max-w-3xl">
@@ -45,9 +47,12 @@ export default function IncomeTaxPage() {
           title="Link Portal Account"
           method="POST"
           endpoint="/api/v1/income-tax/itr-client"
-          description="Link (or re-authenticate) the income-tax portal account. The body may require portal credentials that are configured server-side."
-          onSubmit={() => incomeTaxApi.linkPortalAccount({})}
-        />
+          description="Link (or re-authenticate) the e-filing portal account. Both fields are REQUIRED: the portal username (PAN) and password. They are forwarded to the provider and never stored."
+          onSubmit={() => incomeTaxApi.linkPortalAccount({ username, password })}
+        >
+          <Field label="Portal Username (PAN)" value={username} onChange={setUsername} placeholder="ABCDE1234F" />
+          <Field label="Portal Password" value={password} onChange={setPassword} type="password" placeholder="e-filing portal password" />
+        </ApiCard>
 
         {/* ITR */}
         <ApiCard
@@ -55,11 +60,9 @@ export default function IncomeTaxPage() {
           title="Download ITR List"
           method="POST"
           endpoint="/api/v1/income-tax/itr/download"
-          description="Triggers an ITR-list download (async job) for the linked PAN. Returns id(s) to fetch details with."
-          onSubmit={() => incomeTaxApi.downloadItrList({ financialYear: fy })}
-        >
-          <Field label="Financial Year" value={fy} onChange={setFy} placeholder="2024-25" fullWidth />
-        </ApiCard>
+          description="Triggers an ITR-list download (async job) for the linked PAN. No body — it uses the linked portal session. Returns id(s) to fetch details with."
+          onSubmit={() => incomeTaxApi.downloadItrList()}
+        />
 
         <ApiCard
           title="Get ITR Details"
@@ -77,20 +80,19 @@ export default function IncomeTaxPage() {
           title="Download Form 26AS"
           method="POST"
           endpoint="/api/v1/income-tax/26as/download"
-          description="Triggers a Form 26AS download (async job) for the user's PAN. Returns a tdsId to fetch details with."
-          onSubmit={() => incomeTaxApi.download26AS({ financialYear: fy })}
-        >
-          <Field label="Financial Year" value={fy} onChange={setFy} placeholder="2024-25" fullWidth />
-        </ApiCard>
+          description="Triggers a Form 26AS download (async job) for the user's PAN. No body — it uses the linked portal session. Returns a tdsId to fetch details with."
+          onSubmit={() => incomeTaxApi.download26AS()}
+        />
 
         <ApiCard
           title="Get Form 26AS Details"
           method="GET"
           endpoint="/api/v1/income-tax/26as/:tdsId"
-          description="Fetch a downloaded Form 26AS's parsed details by its tdsId."
-          onSubmit={() => incomeTaxApi.get26ASDetails(tdsId)}
+          description="Fetch a downloaded Form 26AS's parsed details by its tdsId. Optional ?financialYear= narrows it."
+          onSubmit={() => incomeTaxApi.get26ASDetails(tdsId, fy || undefined)}
         >
-          <Field label="TDS ID" value={tdsId} onChange={setTdsId} placeholder="From the download response" fullWidth />
+          <Field label="TDS ID" value={tdsId} onChange={setTdsId} placeholder="From the download response" />
+          <Field label="Financial Year (optional)" value={fy} onChange={setFy} placeholder="2024-25" />
         </ApiCard>
       </div>
     </div>
