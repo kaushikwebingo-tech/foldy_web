@@ -138,7 +138,9 @@ export const adminApi = {
 
   // --- Compliance / events calendar (admin CRUD) --- server: /admin/v1/calendar
   // Body: { title, description?, date (YYYY-MM-DD), timeStart (HH:mm), timeEnd (HH:mm),
-  //         status? (pending|approval|reschedule|cancel), eventType? (event|compliance) }
+  //         status? (pending|approval|reschedule|cancel),
+  //         eventType? (event|compliance|holiday),
+  //         module? (GST|TDS|ROC|ITR — omit/'' for holidays) }
   listCalendarEvents: (month?: string) =>
     adminClient.get('/calendar', { params: month ? { month } : undefined }),
 

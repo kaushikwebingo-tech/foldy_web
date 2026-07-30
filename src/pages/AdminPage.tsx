@@ -60,6 +60,7 @@ export default function AdminPage() {
   const [calEnd, setCalEnd] = useState("10:00");
   const [calStatus, setCalStatus] = useState("pending");
   const [calType, setCalType] = useState("event");
+  const [calModule, setCalModule] = useState(""); // GST/TDS/ROC/ITR or "" (none, e.g. holiday)
   const [calTargetMonth, setCalTargetMonth] = useState("");
 
   // Confirmation + reason modal for destructive actions.
@@ -886,7 +887,7 @@ export default function AdminPage() {
           title="Create Calendar Event"
           method="POST"
           endpoint="/api/admin/v1/calendar"
-          description="Add a compliance / general event. Date YYYY-MM-DD, times HH:mm."
+          description="Add a compliance / general / holiday event. Date YYYY-MM-DD, times HH:mm. Holidays render red; leave Module blank for a holiday."
           onSubmit={() =>
             adminApi.createCalendarEvent({
               title: calTitle,
@@ -895,6 +896,7 @@ export default function AdminPage() {
               timeEnd: calEnd,
               status: calStatus,
               eventType: calType,
+              module: calModule,
             })
           }
         >
@@ -920,6 +922,19 @@ export default function AdminPage() {
             options={[
               { label: "event", value: "event" },
               { label: "compliance", value: "compliance" },
+              { label: "holiday (red)", value: "holiday" },
+            ]}
+          />
+          <SelectField
+            label="Module (optional — blank for holiday)"
+            value={calModule}
+            onChange={setCalModule}
+            options={[
+              { label: "— none —", value: "" },
+              { label: "GST", value: "GST" },
+              { label: "TDS", value: "TDS" },
+              { label: "ROC", value: "ROC" },
+              { label: "ITR", value: "ITR" },
             ]}
           />
         </ApiCard>
@@ -928,13 +943,14 @@ export default function AdminPage() {
           title="Update Calendar Event"
           method="PUT"
           endpoint="/api/admin/v1/calendar/:id"
-          description="Edit an event (any subset of fields)."
+          description="Edit an event (any subset of fields). Sends the current Type/Module/Status picks from the Create card above; blank Module clears it (e.g. switching to a holiday)."
           onSubmit={() =>
             adminApi.updateCalendarEvent(calId, {
               ...(calTitle ? { title: calTitle } : {}),
               ...(calDate ? { date: calDate } : {}),
               status: calStatus,
               eventType: calType,
+              module: calModule,
             })
           }
         >
