@@ -3,12 +3,14 @@ import ApiCard from '@/components/ApiCard';
 import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { moneyoneApi, type AaTemplate } from '@/api/moneyoneApi';
+import { bankApi } from '@/api/bankApi';
 import { Landmark } from 'lucide-react';
 
 const TEMPLATES: { label: string; value: AaTemplate }[] = [
   { label: 'Banking (bank statements)', value: 'banking' },
   { label: 'Equity (shares / demat)', value: 'equity' },
   { label: 'Mutual Funds / SIP', value: 'mf-sip' },
+  { label: 'Insurance Policies', value: 'insurance_policies' },
 ];
 
 function Divider({ label, note }: { label: string; note?: string }) {
@@ -36,6 +38,7 @@ export default function MoneyOnePage() {
   const [minAmount, setMinAmount] = useState('');
   const [maxAmount, setMaxAmount] = useState('');
   const [search, setSearch] = useState('');
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
 
   const txnQuery = () => ({
     page: page ? Number(page) : undefined,
@@ -180,24 +183,49 @@ export default function MoneyOnePage() {
         </ApiCard>
 
         <ApiCard
-          title="Transactions Export (CSV)"
+          title="Transactions Export (PDF / CSV statement)"
           method="GET"
           endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef/transactions/export`}
-          description="Streams a CSV of ALL matching rows (same filters, no pagination). Response is CSV text."
-          onSubmit={() => moneyoneApi.transactions(template, linkRef, { ...txnQuery(), page: undefined, limit: undefined })}
+          description="Downloads the formatted statement — PDF by default (product-aware: bank ledger vs investment ledger), or format=csv for the raw CSV grid. Same filters as the transactions list; no pagination. Returns a binary file (blob)."
+          onSubmit={() => moneyoneApi.exportTransactions(template, linkRef, {
+            format: exportFormat,
+            from: from || undefined,
+            to: to || undefined,
+            direction: direction || undefined,
+            minAmount: minAmount ? Number(minAmount) : undefined,
+            maxAmount: maxAmount ? Number(maxAmount) : undefined,
+            search: search || undefined,
+          })}
         >
           <Field label="Link Reference No." value={linkRef} onChange={setLinkRef} placeholder="linkRefNumber" fullWidth />
+          <SelectField
+            label="Format"
+            value={exportFormat}
+            onChange={(v) => setExportFormat(v as 'pdf' | 'csv')}
+            options={[{ label: 'PDF statement', value: 'pdf' }, { label: 'CSV grid', value: 'csv' }]}
+          />
         </ApiCard>
 
         <ApiCard
           title="Transactions Email"
           method="POST"
           endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef/transactions/email`}
-          description="Emails the filtered CSV to the user's OWN registered email. Same filter query params. Returns { to, count }."
+          description="Emails the formatted PDF statement to the user's OWN registered email. Same filter query params. Returns { to, count }."
           onSubmit={() => moneyoneApi.emailTransactions(template, linkRef, txnQuery())}
         >
           <Field label="Link Reference No." value={linkRef} onChange={setLinkRef} placeholder="linkRefNumber" fullWidth />
         </ApiCard>
+
+        {/* ---------- Utilities ---------- */}
+        <Divider label="Utilities" note="Shared helpers (used across the app)." />
+
+        <ApiCard
+          title="Bank Info (logos + names)"
+          method="GET"
+          endpoint="/api/v1/bank-info"
+          description="Returns the bank-logo mapping the app renders in the bank list → [{ ifscCode, bankName, iconUrl (signed, 24h) }]. No params."
+          onSubmit={() => bankApi.getBankInfo()}
+        />
 
         {/* ---------- Legacy live FinPro reads ---------- */}
         <Divider label="Legacy — live FinPro reads" note="Kept for debugging. Not the app path." />

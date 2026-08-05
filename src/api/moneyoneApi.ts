@@ -4,7 +4,7 @@ import { client } from './client';
 //
 // Flow: createConsent → user approves at the AA (webRedirectionUrl) →
 // resolveConsent(handle) → consentId → fetch data.
-export type AaTemplate = 'mf-sip' | 'equity' | 'banking';
+export type AaTemplate = 'mf-sip' | 'equity' | 'banking' | 'insurance_policies';
 
 export const moneyoneApi = {
   // Product templates the server exposes.
@@ -59,9 +59,29 @@ export const moneyoneApi = {
     } = {},
   ) => client.get(`/b2c/moneyone/${template}/accounts/${linkRef}/transactions`, { params: query }),
 
-  // Email the filtered CSV statement to the user's own address.
+  // Email the filtered PDF statement to the user's own address.
   emailTransactions: (template: AaTemplate, linkRef: string, query: Record<string, unknown> = {}) =>
     client.post(`/b2c/moneyone/${template}/accounts/${linkRef}/transactions/email`, {}, { params: query }),
+
+  // Download the statement — PDF by default, or ?format=csv for the raw CSV grid.
+  // Product-aware (bank ledger vs investment ledger); accepts the same filters.
+  // Returns a binary file, so responseType is 'blob'.
+  exportTransactions: (
+    template: AaTemplate,
+    linkRef: string,
+    query: {
+      format?: 'csv' | 'pdf';
+      from?: string;
+      to?: string;
+      direction?: string;
+      minAmount?: number;
+      maxAmount?: number;
+      search?: string;
+    } = {},
+  ) => client.get(`/b2c/moneyone/${template}/accounts/${linkRef}/transactions/export`, {
+    params: query,
+    responseType: 'blob',
+  }),
 
   // Manual "refresh now" — re-ingests the latest consent's data.
   sync: (template: AaTemplate, consentId?: string) =>

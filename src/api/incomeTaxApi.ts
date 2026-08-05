@@ -36,4 +36,10 @@ export const incomeTaxApi = {
     client.get(`/income-tax/26as/${tdsId}`, {
       params: financialYear ? { financialYear } : {},
     }),
+
+  // Render a Form 26AS / ITR PDF from a stored JSON. itType = '26as' or 'itr-x'
+  // (e.g. 'itr-1'). Body carries the S3 `jsonUrl` (validated server-side) plus
+  // any template fields. Returns a binary PDF (responseType: 'blob').
+  renderPdf: (itType: string, payload: { jsonUrl: string; [k: string]: unknown }) =>
+    client.post(`/income-tax/${itType}`, payload, { responseType: 'blob' }),
 };

@@ -16,6 +16,8 @@ export default function IncomeTaxPage() {
   const [tdsId, setTdsId] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [itType, setItType] = useState('26as');
+  const [jsonUrl, setJsonUrl] = useState('');
 
   return (
     <div className="max-w-3xl">
@@ -101,6 +103,17 @@ export default function IncomeTaxPage() {
         >
           <Field label="TDS ID" value={tdsId} onChange={setTdsId} placeholder="From the download response" />
           <Field label="Financial Year (optional)" value={fy} onChange={setFy} placeholder="2024-25" />
+        </ApiCard>
+
+        <ApiCard
+          title="Render PDF (26AS / ITR)"
+          method="POST"
+          endpoint="/api/v1/income-tax/:itType"
+          description="Renders a Form 26AS or ITR PDF from a stored JSON. itType is '26as' or 'itr-x' (e.g. 'itr-1'). Body REQUIRES jsonUrl — a secure S3 URL to the parsed JSON (validated server-side). Returns a binary PDF."
+          onSubmit={() => incomeTaxApi.renderPdf(itType, { jsonUrl })}
+        >
+          <Field label="itType" value={itType} onChange={setItType} placeholder="26as | itr-1" />
+          <Field label="JSON URL (S3)" value={jsonUrl} onChange={setJsonUrl} placeholder="https://<bucket>.s3.<region>.amazonaws.com/…json" fullWidth />
         </ApiCard>
       </div>
     </div>
