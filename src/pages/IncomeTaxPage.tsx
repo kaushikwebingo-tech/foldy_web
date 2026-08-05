@@ -54,6 +54,14 @@ export default function IncomeTaxPage() {
           <Field label="Portal Password" value={password} onChange={setPassword} type="password" placeholder="e-filing portal password" />
         </ApiCard>
 
+        <ApiCard
+          title="Revoke Portal Access"
+          method="DELETE"
+          endpoint="/api/v1/income-tax/itr-client"
+          description="Revoke access — deletes the stored e-filing portal session (only the opaque client id is held; nothing else is cached). Idempotent: succeeds even if nothing is linked. Status then reports linked: false."
+          onSubmit={() => incomeTaxApi.unlinkPortalAccount()}
+        />
+
         {/* ITR */}
         <ApiCard
           step={2}

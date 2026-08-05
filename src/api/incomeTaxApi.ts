@@ -15,6 +15,10 @@ export const incomeTaxApi = {
   linkPortalAccount: (payload: { username: string; password: string }) =>
     client.post('/income-tax/itr-client', payload),
 
+  // Revoke access — delete the stored e-filing portal session. Idempotent.
+  unlinkPortalAccount: () =>
+    client.delete('/income-tax/itr-client'),
+
   // Trigger a download of the ITR list (async job). No body — uses the session.
   downloadItrList: () =>
     client.post('/income-tax/itr/download'),
