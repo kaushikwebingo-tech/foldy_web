@@ -160,4 +160,24 @@ export const adminApi = {
   // Clone a whole month's compliance events from the previous year.
   importCalendarFromPreviousYear: (targetMonth: string) =>
     adminClient.post('/calendar/import-previous-year', { targetMonth }),
+
+  // Sample .xlsx an admin fills in for the spreadsheet import. Generated from
+  // the same column spec the importer validates against, so it cannot drift.
+  downloadCalendarImportTemplate: () =>
+    adminClient.get('/calendar/import/template', { responseType: 'blob' }),
+
+  /*
+   * Import a whole spreadsheet of events (multipart, field name "file";
+   * .xlsx/.xls/.csv, max 5MB). Required columns: Title, Date, Module.
+   *
+   * All-or-nothing: any invalid row, any duplicate inside the file, or any
+   * event that already exists (same title + date) rejects the entire upload
+   * with 400 and { reason, errors: [{ row, column, message }] } — nothing is
+   * written. Pass dryRun to validate and preview without importing.
+   */
+  importCalendarSheet: (file: File, dryRun = false) => {
+    const form = new FormData();
+    form.append('file', file);
+    return adminClient.post('/calendar/import', form, { params: { dryRun } });
+  },
 };

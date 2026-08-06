@@ -62,6 +62,8 @@ export default function AdminPage() {
   const [calType, setCalType] = useState("event");
   const [calModule, setCalModule] = useState(""); // GST/TDS/ROC/ITR or "" (none, e.g. holiday)
   const [calTargetMonth, setCalTargetMonth] = useState("");
+  const [calSheet, setCalSheet] = useState<File | null>(null);
+  const [calDryRun, setCalDryRun] = useState("true");
 
   // Confirmation + reason modal for destructive actions.
   const [confirm, setConfirm] = useState<{
@@ -975,6 +977,36 @@ export default function AdminPage() {
           onSubmit={() => adminApi.importCalendarFromPreviousYear(calTargetMonth)}
         >
           <Field label="Target Month (YYYY-MM)" value={calTargetMonth} onChange={setCalTargetMonth} placeholder="2026-07" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Download Import Template"
+          method="GET"
+          endpoint="/api/admin/v1/calendar/import/template"
+          description="Sample .xlsx an admin fills in: an Events sheet with the exact headings the importer expects, plus an Instructions tab. Returns a binary file, so the response below is a Blob."
+          onSubmit={() => adminApi.downloadCalendarImportTemplate()}
+        />
+
+        <ApiCard
+          title="Import Events from Spreadsheet"
+          method="POST"
+          endpoint="/api/admin/v1/calendar/import"
+          description="Bulk-import a year of events from .xlsx/.xls/.csv (max 5MB). Required columns: Title, Date, Module (GST/TDS/ROC/ITR or NONE). All-or-nothing: any invalid row, any duplicate inside the file, or any event that already exists (same title + date) rejects the whole upload with a row-by-row report and writes nothing. Use dryRun to validate and preview first."
+          onSubmit={() => {
+            if (!calSheet) return Promise.reject(new Error("Choose a spreadsheet first."));
+            return adminApi.importCalendarSheet(calSheet, calDryRun === "true");
+          }}
+        >
+          <label className="block w-full">
+            <span className="block text-xs font-medium text-slate-600 mb-1">Spreadsheet (.xlsx / .xls / .csv)</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => setCalSheet(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+            />
+          </label>
+          <Field label="dryRun (true = validate only)" value={calDryRun} onChange={setCalDryRun} placeholder="true" fullWidth />
         </ApiCard>
       </div>
 
