@@ -5,6 +5,10 @@ export const paymentApi = {
   listPlans:    () =>
     client.get('/payments/plans'),
 
+  // Buy-credit packs. Optionally filter by module (gst | roc | tds | itr | itr_26as).
+  listCreditPacks: (module?: string) =>
+    client.get('/payments/credit-packs', { params: module ? { module } : undefined }),
+
   // planId is preferred (a tier can have many plans); planType is a fallback.
   createOrder:  (payload: { planId?: string; planType?: string; amount?: number }) =>
     client.post('/payments/create-order', payload),

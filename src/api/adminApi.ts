@@ -180,4 +180,66 @@ export const adminApi = {
     form.append('file', file);
     return adminClient.post('/calendar/import', form, { params: { dryRun } });
   },
+
+  // --- Credits: per-module costs + buyable packs (Super Admin) --- /credits
+  getCreditCosts: () =>
+    adminClient.get('/credits/costs'),
+  updateCreditCosts: (payload: Record<string, unknown>) =>
+    adminClient.put('/credits/costs', payload),
+  listAdminCreditPacks: () =>
+    adminClient.get('/credits/packs'),
+  createCreditPack: (payload: Record<string, unknown>) =>
+    adminClient.post('/credits/packs', payload),
+  updateCreditPack: (id: string, payload: Record<string, unknown>) =>
+    adminClient.put(`/credits/packs/${id}`, payload),
+
+  // --- Custom reports (Super Admin) --- /reports
+  createReport: (payload: Record<string, unknown>) =>
+    adminClient.post('/reports', payload),
+  listReports: () =>
+    adminClient.get('/reports'),
+  getReportsDashboard: () =>
+    adminClient.get('/reports/dashboard'),
+  getReportData: (reportId: string) =>
+    adminClient.get(`/reports/${reportId}/data`),
+
+  // --- Saved searches (Super Admin) --- /saved-searches
+  createSavedSearch: (payload: Record<string, unknown>) =>
+    adminClient.post('/saved-searches', payload),
+  listSavedSearches: () =>
+    adminClient.get('/saved-searches'),
+  getSavedSearch: (id: string) =>
+    adminClient.get(`/saved-searches/${id}`),
+  updateSavedSearch: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/saved-searches/${id}`, payload),
+  deleteSavedSearch: (id: string) =>
+    adminClient.delete(`/saved-searches/${id}`),
+  executeSavedSearch: (id: string) =>
+    adminClient.post(`/saved-searches/${id}/execute`),
+
+  // --- Cron jobs: status, run history, manual trigger (Super Admin) --- /crons
+  listCronStatus: () =>
+    adminClient.get('/crons/status'),
+  listCronRuns: () =>
+    adminClient.get('/crons/runs'),
+  getCronRun: (id: string) =>
+    adminClient.get(`/crons/runs/${id}`),
+  runCron: (name: string) =>
+    adminClient.post(`/crons/${name}/run`),
+
+  // --- Advanced user search (Super Admin) --- POST /users/search
+  searchUsers: (payload: Record<string, unknown>) =>
+    adminClient.post('/users/search', payload),
+
+  // --- Sub-admin (admin user) management (Super Admin) --- /admin-users
+  createAdminUser: (payload: Record<string, unknown>) =>
+    adminClient.post('/admin-users', payload),
+  getAdminUser: (id: string) =>
+    adminClient.get(`/admin-users/${id}`),
+  updateAdminUser: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/admin-users/${id}`, payload),
+  setAdminUserRole: (id: string, role: string) =>
+    adminClient.patch(`/admin-users/${id}/role`, { role }),
+  deleteAdminUser: (id: string) =>
+    adminClient.delete(`/admin-users/${id}`),
 };

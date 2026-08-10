@@ -63,7 +63,11 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'GET',
         path: 'api/v1/user/storage-status',
         description: 'Storage usage summary for the logged-in user.'
-      }
+      },
+      { name: 'Credits Wallet', method: 'GET', path: 'api/v1/user/credits', description: 'Remaining credits per module for the logged-in user.' },
+      { name: 'Manual Refresh', method: 'POST', path: 'api/v1/user/manualRefresh/:type', description: 'Re-fetch a module\'s data, spending a credit. type = module key (gst | roc | tds | itr | itr_26as).', pathVars: [{ key: 'type', value: 'gst' }], body: {} },
+      { name: 'Reminders', method: 'GET', path: 'api/v1/user/reminders', description: 'Compliance reminders (due/overdue nudges) for the user.' },
+      { name: 'Dismiss Reminder', method: 'POST', path: 'api/v1/user/reminders/:id/dismiss', pathVars: [{ key: 'id', value: '<reminderId>' }] }
     ]
   },
 
@@ -485,6 +489,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/support/queries',
         description: 'The logged-in user\'s own requests with status + any admin reply.'
       },
+      { name: 'Unread Reply Count', method: 'GET', path: 'api/v1/support/unread-count', description: 'Total unread admin replies across the user\'s tickets (for a badge).' },
+      { name: 'Ticket Thread', method: 'GET', path: 'api/v1/support/queries/:id', description: 'One ticket with its full message thread.', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Add Reply', method: 'POST', path: 'api/v1/support/queries/:id/messages', pathVars: [{ key: 'id', value: '<queryId>' }], body: { message: 'Any update on this?' } },
+      { name: 'Mark Ticket Read', method: 'PATCH', path: 'api/v1/support/queries/:id/read', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Rate Ticket', method: 'POST', path: 'api/v1/support/queries/:id/rating', pathVars: [{ key: 'id', value: '<queryId>' }], body: { rating: 5, feedback: 'Quick help, thanks!' } },
+      { name: 'Upload Attachment', method: 'POST', path: 'api/v1/support/queries/:id/attachments', description: 'multipart, field "file".', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Download Attachment', method: 'GET', path: 'api/v1/support/queries/:id/attachments/:attachmentId/download', pathVars: [{ key: 'id', value: '<queryId>' }, { key: 'attachmentId', value: '<attachmentId>' }] },
+      { name: 'Delete Attachment', method: 'DELETE', path: 'api/v1/support/queries/:id/attachments/:attachmentId', pathVars: [{ key: 'id', value: '<queryId>' }, { key: 'attachmentId', value: '<attachmentId>' }] },
       {
         name: 'Delete My Account',
         method: 'DELETE',
@@ -634,6 +646,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/payments/plans',
         description: 'Active catalog plans. A tier can have many plans — pick a plan _id to subscribe by planId.'
       },
+      { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable credit packs; optional ?module= filter.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|itr_26as (optional)' }] },
       {
         name: 'Create Order',
         method: 'POST',
@@ -908,7 +921,32 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Update Calendar Event', method: 'PUT', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }], body: { status: 'approval' } },
       { name: 'Delete Calendar Event', method: 'DELETE', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }] },
       { name: 'Bulk Create Calendar Events', method: 'POST', path: 'api/admin/v1/calendar/bulk', body: { events: [{ title: 'GSTR-3B due', date: '2026-07-20' }] } },
-      { name: 'Import Previous Year', method: 'POST', path: 'api/admin/v1/calendar/import-previous-year', body: { targetMonth: '2026-07' } }
+      { name: 'Import Previous Year', method: 'POST', path: 'api/admin/v1/calendar/import-previous-year', body: { targetMonth: '2026-07' } },
+      { name: 'Credit Costs', method: 'GET', path: 'api/admin/v1/credits/costs', description: 'Per-module credit costs (refresh / download).' },
+      { name: 'Update Credit Costs', method: 'PUT', path: 'api/admin/v1/credits/costs', body: { gst: { refresh: 1, download: 1 } } },
+      { name: 'List Credit Packs (admin)', method: 'GET', path: 'api/admin/v1/credits/packs' },
+      { name: 'Create Credit Pack', method: 'POST', path: 'api/admin/v1/credits/packs', body: { name: 'Starter', credits: 100, price: 499, module: 'gst' } },
+      { name: 'Update Credit Pack', method: 'PUT', path: 'api/admin/v1/credits/packs/:id', pathVars: [{ key: 'id', value: '<packId>' }], body: { price: 599 } },
+      { name: 'Create Report', method: 'POST', path: 'api/admin/v1/reports', body: { name: 'Active users', type: 'users', filters: {} } },
+      { name: 'List Reports', method: 'GET', path: 'api/admin/v1/reports' },
+      { name: 'Reports Dashboard', method: 'GET', path: 'api/admin/v1/reports/dashboard' },
+      { name: 'Report Data', method: 'GET', path: 'api/admin/v1/reports/:reportId/data', pathVars: [{ key: 'reportId', value: '<reportId>' }] },
+      { name: 'Create Saved Search', method: 'POST', path: 'api/admin/v1/saved-searches', body: { name: 'Expiring trials', query: {} } },
+      { name: 'List Saved Searches', method: 'GET', path: 'api/admin/v1/saved-searches' },
+      { name: 'Get Saved Search', method: 'GET', path: 'api/admin/v1/saved-searches/:savedSearchId', pathVars: [{ key: 'savedSearchId', value: '<id>' }] },
+      { name: 'Update Saved Search', method: 'PATCH', path: 'api/admin/v1/saved-searches/:savedSearchId', pathVars: [{ key: 'savedSearchId', value: '<id>' }], body: { name: 'Renamed' } },
+      { name: 'Delete Saved Search', method: 'DELETE', path: 'api/admin/v1/saved-searches/:savedSearchId', pathVars: [{ key: 'savedSearchId', value: '<id>' }] },
+      { name: 'Execute Saved Search', method: 'POST', path: 'api/admin/v1/saved-searches/:savedSearchId/execute', pathVars: [{ key: 'savedSearchId', value: '<id>' }] },
+      { name: 'Cron Status', method: 'GET', path: 'api/admin/v1/crons/status' },
+      { name: 'Cron Runs', method: 'GET', path: 'api/admin/v1/crons/runs' },
+      { name: 'Cron Run Detail', method: 'GET', path: 'api/admin/v1/crons/runs/:id', pathVars: [{ key: 'id', value: '<runId>' }] },
+      { name: 'Run Cron Now', method: 'POST', path: 'api/admin/v1/crons/:name/run', pathVars: [{ key: 'name', value: 'complianceStatsCron' }] },
+      { name: 'Search Users', method: 'POST', path: 'api/admin/v1/users/search', body: { query: '', filters: {} } },
+      { name: 'Create Admin User', method: 'POST', path: 'api/admin/v1/admin-users', body: { email: 'admin@foldy.co.in', password: '<password>', fullName: 'New Admin', role: 'admin' } },
+      { name: 'Get Admin User', method: 'GET', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }] },
+      { name: 'Update Admin User', method: 'PATCH', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }], body: { fullName: 'Updated' } },
+      { name: 'Set Admin Role', method: 'PATCH', path: 'api/admin/v1/admin-users/:id/role', pathVars: [{ key: 'id', value: '<adminId>' }], body: { role: 'superadmin' } },
+      { name: 'Delete Admin User', method: 'DELETE', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }] }
     ]
   },
   chat: {
@@ -1077,6 +1115,85 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef/balance',
         description: 'Balance for a single linked account.'
       }
+    ]
+  },
+
+  incomeTax: {
+    key: 'incomeTax',
+    name: 'Income Tax (ITR + 26AS)',
+    description: 'Deepvue-backed e-filing portal: link once (username/password → opaque client id), then pull filed ITRs and Form 26AS. Common to B2B + B2C (itr module). Set {{token}}.',
+    endpoints: [
+      { name: 'Portal Link Status', method: 'GET', path: 'api/v1/income-tax/itr-client/status', description: 'Is the e-filing portal linked, and when data was last pulled.' },
+      { name: 'Link Portal Account', method: 'POST', path: 'api/v1/income-tax/itr-client', description: 'Exchange e-filing portal credentials for a client id (once). Password is never stored.', body: { username: 'ABCDE1234F', password: '<portal-password>' } },
+      { name: 'Unlink Portal Account', method: 'DELETE', path: 'api/v1/income-tax/itr-client', description: 'Removes the stored client id.' },
+      { name: 'Download ITR List', method: 'POST', path: 'api/v1/income-tax/itr/download', description: 'Triggers a fetch; returns { panNo, items[] } of filed ITRs. Charges an ITR download credit.', body: {} },
+      { name: 'ITR Details', method: 'GET', path: 'api/v1/income-tax/itr/:itrId', description: 'Curated ITR detail: personal + income + bank accounts (no raw dump).', pathVars: [{ key: 'itrId', value: '<itrId>' }] },
+      { name: 'Download 26AS List', method: 'POST', path: 'api/v1/income-tax/26as/download', description: 'Triggers a fetch; returns { panNo, items[] } of 26AS statements. Charges a 26AS download credit.', body: {} },
+      { name: '26AS Details', method: 'GET', path: 'api/v1/income-tax/26as/:tdsId', description: 'Parsed Form 26AS TDS entries + total.', pathVars: [{ key: 'tdsId', value: '<tdsId>' }], query: [{ key: 'financialYear', value: '2024-25' }] },
+      { name: 'Render Statement PDF', method: 'POST', path: 'api/v1/income-tax/:itType', description: 'Renders the statement PDF server-side (itType: 26as or itr-x). Charges a download credit.', pathVars: [{ key: 'itType', value: '26as' }], body: { downloadLink: '<s3-json-url>', pan: 'ABCDE1234F', financialYear: '2024-25' } }
+    ]
+  },
+
+  reports: {
+    key: 'reports',
+    name: 'Reports (B2B)',
+    description: 'GST compliance reports & analytics for business users. Set {{token}} (business JWT, gst module).',
+    endpoints: [
+      { name: 'Late-Fee Exposure', method: 'GET', path: 'api/v1/b2b/reports/late-fee' },
+      { name: 'Turnover Bands', method: 'GET', path: 'api/v1/b2b/reports/late-fee/turnover-bands' },
+      { name: 'Mark Return Nil', method: 'PATCH', path: 'api/v1/b2b/reports/late-fee/returns/:alertId/nil', pathVars: [{ key: 'alertId', value: '<alertId>' }] },
+      { name: 'Multi-GSTIN Grid', method: 'GET', path: 'api/v1/b2b/reports/gstin-grid' },
+      { name: 'Sales Trend', method: 'GET', path: 'api/v1/b2b/reports/sales-trend', query: [{ key: 'fy', value: '2024-25' }, { key: 'gstin', value: '' }] },
+      { name: 'Compliance Calendar', method: 'GET', path: 'api/v1/b2b/reports/compliance-calendar' },
+      { name: 'Snapshot Coverage', method: 'GET', path: 'api/v1/b2b/reports/snapshot-coverage' }
+    ]
+  },
+
+  home: {
+    key: 'home',
+    name: 'Home (B2C)',
+    description: 'B2C individual home dashboard: net worth, cash flow, SIP tracker, consent health. Reads stored FiAccount/FiTransaction data only (fast, no provider calls). Set {{token}}.',
+    endpoints: [
+      { name: 'Home Summary', method: 'GET', path: 'api/v1/b2c/reports' },
+      { name: 'SIP Tracker', method: 'GET', path: 'api/v1/b2c/reports/sip' },
+      { name: 'Net Worth', method: 'GET', path: 'api/v1/b2c/reports/net-worth' },
+      { name: 'Cash Flow', method: 'GET', path: 'api/v1/b2c/reports/cash-flow', query: [{ key: 'months', value: '6' }] },
+      { name: 'Consent Health', method: 'GET', path: 'api/v1/b2c/reports/consents' }
+    ]
+  },
+
+  bank: {
+    key: 'bank',
+    name: 'Bank Info',
+    description: 'IFSC / bank metadata lookup.',
+    endpoints: [
+      { name: 'Get Bank Info', method: 'GET', path: 'api/v1/bank-info', query: [{ key: 'ifsc', value: 'HDFC0000001' }] }
+    ]
+  },
+
+  manualUploads: {
+    key: 'manualUploads',
+    name: 'Manual Uploads',
+    description: 'User-uploaded compliance docs (PTAX, trade license, PF/ESI, property papers) by category. Set {{token}}.',
+    endpoints: [
+      { name: 'Categories', method: 'GET', path: 'api/v1/manual-uploads/categories' },
+      { name: 'List Items', method: 'GET', path: 'api/v1/manual-uploads/:category/items', pathVars: [{ key: 'category', value: 'ptax' }] },
+      { name: 'Upload Item', method: 'POST', path: 'api/v1/manual-uploads/:category/upload', description: 'multipart, field "file".', pathVars: [{ key: 'category', value: 'ptax' }] },
+      { name: 'Download Item', method: 'GET', path: 'api/v1/manual-uploads/items/:id/download', pathVars: [{ key: 'id', value: '<itemId>' }] },
+      { name: 'Delete Item', method: 'DELETE', path: 'api/v1/manual-uploads/items/:id', pathVars: [{ key: 'id', value: '<itemId>' }] }
+    ]
+  },
+
+  notifications: {
+    key: 'notifications',
+    name: 'Notifications',
+    description: 'In-app notification feed for the logged-in user. Set {{token}}.',
+    endpoints: [
+      { name: 'List', method: 'GET', path: 'api/v1/notifications' },
+      { name: 'Unread Count', method: 'GET', path: 'api/v1/notifications/unread-count' },
+      { name: 'Mark Read', method: 'POST', path: 'api/v1/notifications/:id/read', pathVars: [{ key: 'id', value: '<notificationId>' }] },
+      { name: 'Mark All Read', method: 'POST', path: 'api/v1/notifications/read-all' },
+      { name: 'Delete', method: 'DELETE', path: 'api/v1/notifications/:id', pathVars: [{ key: 'id', value: '<notificationId>' }] }
     ]
   }
 };
