@@ -474,7 +474,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   support: {
     key: 'support',
     name: 'Support & Account',
-    description: 'Contact Support (raise + list own requests) and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. For the user calls set {{token}} to a user JWT; for the admin calls set {{token}} to an admin JWT.',
+    description: 'Contact Support (raise + list own requests), Feature Requests ("Suggest Feature"), and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. For the user calls set {{token}} to a user JWT; for the admin calls set {{token}} to an admin JWT.',
     endpoints: [
       {
         name: 'Raise Support Request',
@@ -502,6 +502,35 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'DELETE',
         path: 'api/v1/user/account',
         description: 'Soft-deletes the account: revokes sessions, cancels subscription, frees phone/email/PAN for re-registration. Retains the record.'
+      },
+      {
+        name: 'Feature Request Options',
+        method: 'GET',
+        path: 'api/v1/feature-requests/available',
+        description: 'The allowed titles for a feature request, with labels + blurbs. Drives the app\'s "Suggest Feature" picker — call this before submitting.'
+      },
+      {
+        name: 'Submit Feature Request',
+        method: 'POST',
+        path: 'api/v1/feature-requests',
+        description: 'App "Suggest Feature" submission. title MUST be a value from /available (gst | itr | roc | tds | bank_statements | mutual_funds | insurance | epf | other) — anything else is rejected with 400. Auto-linked to the logged-in user; starts in status "pending".',
+        body: { title: 'other', description: 'Please add a reminder for advance tax instalments.' }
+      },
+      {
+        name: 'Admin — List Feature Requests',
+        method: 'GET',
+        path: 'api/admin/v1/feature-requests',
+        description: 'Admin JWT. All submitted suggestions, newest first, paginated, with the requesting user populated.',
+        query: [
+          { key: 'page', value: '1' },
+          { key: 'limit', value: '20' }
+        ]
+      },
+      {
+        name: 'Admin — Feature Request Options',
+        method: 'GET',
+        path: 'api/admin/v1/feature-requests/available',
+        description: 'Admin JWT. Same catalog as the user-facing /available, used to label stored title values in the console.'
       },
       {
         name: 'Admin — List Support Queries',

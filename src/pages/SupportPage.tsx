@@ -5,7 +5,22 @@ import PageHeader from '@/components/PageHeader';
 import { supportApi } from '@/api/supportApi';
 import { authApi } from '@/api/authApi';
 import { adminApi } from '@/api/adminApi';
+import { featureRequestApi } from '@/api/featureRequestApi';
 import { LifeBuoy } from 'lucide-react';
+
+// Mirrors FEATURE_REQUEST_OPTIONS on the server. The live list comes from
+// "Feature Request Options" below — this just seeds the dropdown.
+const FEATURE_TITLE_OPTIONS = [
+  { label: 'GST Returns', value: 'gst' },
+  { label: 'Income Tax Returns', value: 'itr' },
+  { label: 'ROC Filings', value: 'roc' },
+  { label: 'TDS Filing', value: 'tds' },
+  { label: 'Bank Account Statements', value: 'bank_statements' },
+  { label: 'Mutual Funds Portfolio', value: 'mutual_funds' },
+  { label: 'Insurance Policies', value: 'insurance' },
+  { label: 'Employee Provident Fund (EPF)', value: 'epf' },
+  { label: 'Something else', value: 'other' },
+];
 
 const STATUS_OPTIONS = [
   { label: 'Open', value: 'open' },
@@ -27,6 +42,9 @@ export default function SupportPage() {
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
   const [description, setDescription] = useState('');
+  // user — feature request ("Suggest Feature")
+  const [featureTitle, setFeatureTitle] = useState('other');
+  const [featureDescription, setFeatureDescription] = useState('');
   // admin — list + update
   const [status, setStatus] = useState('');
   const [queryId, setQueryId] = useState('');
@@ -79,6 +97,43 @@ export default function SupportPage() {
           onSubmit={() => supportApi.listMyQueries()}
         />
 
+        {/* ── User: Feature Requests ────────────────────────── */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Feature Requests (user)</p>
+          <p className="text-xs text-slate-400 mb-3">Backs the app's "Suggest Feature" sheet. The title is a fixed enum — fetch the options first, then submit against one of those values.</p>
+        </div>
+
+        <ApiCard
+          step={3}
+          title="Feature Request Options"
+          method="GET"
+          endpoint="/api/v1/feature-requests/available"
+          description="Allowed titles with labels + blurbs. Drives the app's picker, so a new option here needs no app release."
+          onSubmit={() => featureRequestApi.listOptions()}
+        />
+
+        <ApiCard
+          step={4}
+          title="Submit Feature Request"
+          method="POST"
+          endpoint="/api/v1/feature-requests"
+          description="Auto-linked to the logged-in user; starts in status 'pending'. A title outside the enum is rejected with 400."
+          buttonLabel="Submit"
+          onSubmit={() => featureRequestApi.submit({ title: featureTitle, description: featureDescription })}
+        >
+          <SelectField label="Title" value={featureTitle} onChange={setFeatureTitle} options={FEATURE_TITLE_OPTIONS} />
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Description</label>
+            <textarea
+              value={featureDescription}
+              onChange={(e) => setFeatureDescription(e.target.value)}
+              rows={3}
+              placeholder="What would you like to see in the app?…"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+        </ApiCard>
+
         {/* ── Delete Account ───────────────────────────────── */}
         <div className="border-t border-slate-200 pt-2">
           <p className="text-xs font-semibold text-red-500 uppercase tracking-widest mb-1">Danger Zone</p>
@@ -101,7 +156,7 @@ export default function SupportPage() {
         </div>
 
         <ApiCard
-          step={3}
+          step={5}
           title="List All Support Queries"
           method="GET"
           endpoint="/api/admin/v1/support/queries"
@@ -112,7 +167,7 @@ export default function SupportPage() {
         </ApiCard>
 
         <ApiCard
-          step={4}
+          step={6}
           title="Update Query Status"
           method="PATCH"
           endpoint="/api/admin/v1/support/queries/:id/status"
@@ -133,6 +188,15 @@ export default function SupportPage() {
             />
           </div>
         </ApiCard>
+
+        <ApiCard
+          step={7}
+          title="List All Feature Requests"
+          method="GET"
+          endpoint="/api/admin/v1/feature-requests"
+          description="Every suggestion submitted from the app, newest first, with the requesting user populated. Read-only — there is no status-update endpoint yet, so all rows stay 'pending'."
+          onSubmit={() => featureRequestApi.adminList(1, 20)}
+        />
       </div>
     </div>
   );
