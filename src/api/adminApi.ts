@@ -193,15 +193,40 @@ export const adminApi = {
   updateCreditPack: (id: string, payload: Record<string, unknown>) =>
     adminClient.put(`/credits/packs/${id}`, payload),
 
-  // --- Custom reports (Super Admin) --- /reports
+  // --- Report engine (Super Admin) --- server: /admin/v1/reports
+  // A report is a saved DEFINITION run by the safe, registry-whitelisted engine
+  // (legacy module/reportView reports still supported).
+  // Catalog of reportable data sources + fields (drives the builder + whitelist).
+  listReportDataSources: () =>
+    adminClient.get('/reports/data-sources'),
+  // Live preview. Body: { definition, page?, userScopeId?, noCache? }
+  previewReport: (payload: Record<string, unknown>) =>
+    adminClient.post('/reports/preview', payload),
+  // Stream matching rows as CSV. Body: { definition, userScopeId? }
+  exportReportCsv: (payload: Record<string, unknown>) =>
+    adminClient.post('/reports/export', payload, { responseType: 'blob' }),
+  // Engine: { reportName, definition, published?, userScoped? }; legacy: { reportName, module, reportView }
   createReport: (payload: Record<string, unknown>) =>
     adminClient.post('/reports', payload),
-  listReports: () =>
-    adminClient.get('/reports'),
+  // Optional filters: { module?, reportView?, search?, page?, limit? }
+  listReports: (params?: Record<string, unknown>) =>
+    adminClient.get('/reports', { params }),
   getReportsDashboard: () =>
     adminClient.get('/reports/dashboard'),
-  getReportData: (reportId: string) =>
-    adminClient.get(`/reports/${reportId}/data`),
+  // Published reports + their cached data — the dashboard feed.
+  listPublishedReports: () =>
+    adminClient.get('/reports/published'),
+  // One report + its definition (no run) — powers builder edit mode.
+  getReport: (reportId: string) =>
+    adminClient.get(`/reports/${reportId}`),
+  // Run a saved report. params: { userScopeId?, page?, noCache? }
+  getReportData: (reportId: string, params?: Record<string, unknown>) =>
+    adminClient.get(`/reports/${reportId}/data`, { params }),
+  // Partial update: { reportName?, description?, definition?, published?, userScoped? }
+  updateReport: (reportId: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/reports/${reportId}`, payload),
+  deleteReport: (reportId: string) =>
+    adminClient.delete(`/reports/${reportId}`),
 
   // --- Saved searches (Super Admin) --- /saved-searches
   createSavedSearch: (payload: Record<string, unknown>) =>
