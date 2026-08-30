@@ -192,6 +192,14 @@ export const adminApi = {
     adminClient.post('/credits/packs', payload),
   updateCreditPack: (id: string, payload: Record<string, unknown>) =>
     adminClient.put(`/credits/packs/${id}`, payload),
+  // One user's two-bucket wallet: plan allowance (resets each cycle) + purchased
+  // top-up (never expires). PATCH sets absolute values or nudges one bucket.
+  getUserCredits: (userId: string) =>
+    adminClient.get(`/credits/users/${userId}`),
+  getUserCreditLedger: (userId: string, module?: string) =>
+    adminClient.get(`/credits/users/${userId}/ledger`, { params: module ? { module } : undefined }),
+  adjustUserCredits: (userId: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/credits/users/${userId}`, payload),
 
   // --- Report engine (Super Admin) --- server: /admin/v1/reports
   // A report is a saved DEFINITION run by the safe, registry-whitelisted engine

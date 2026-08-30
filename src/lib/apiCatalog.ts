@@ -64,8 +64,9 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/user/storage-status',
         description: 'Storage usage summary for the logged-in user.'
       },
-      { name: 'Credits Wallet', method: 'GET', path: 'api/v1/user/credits', description: 'Remaining credits per module for the logged-in user.' },
-      { name: 'Manual Refresh', method: 'POST', path: 'api/v1/user/manualRefresh/:type', description: 'Re-fetch a module\'s data, spending a credit. type = module key (gst | roc | tds | itr | itr_26as).', pathVars: [{ key: 'type', value: 'gst' }], body: {} },
+      { name: 'Credits Wallet', method: 'GET', path: 'api/v1/user/credits', description: 'Two-bucket wallet per module: plan allowance for this cycle (planAllowed/planUsed/planRemaining + resetAt, no carryover) plus the purchased topupBalance (never expires) and the spendable `available` total.' },
+      { name: 'Credit History', method: 'GET', path: 'api/v1/user/credits/history', description: 'Credit ledger for the logged-in user, newest first — allocate / reset / topup / consume / refund / admin_adjust.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment (optional)' }, { key: 'limit', value: '50' }] },
+      { name: 'Manual Refresh', method: 'POST', path: 'api/v1/user/manualRefresh/:type', description: 'Re-fetch a module\'s data, spending a credit. type = module key (gst | roc | tds | itr | investment).', pathVars: [{ key: 'type', value: 'gst' }], body: {} },
       { name: 'Reminders', method: 'GET', path: 'api/v1/user/reminders', description: 'Compliance reminders (due/overdue nudges) for the user.' },
       { name: 'Dismiss Reminder', method: 'POST', path: 'api/v1/user/reminders/:id/dismiss', pathVars: [{ key: 'id', value: '<reminderId>' }] }
     ]
@@ -675,7 +676,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/payments/plans',
         description: 'Active catalog plans. A tier can have many plans — pick a plan _id to subscribe by planId.'
       },
-      { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable credit packs; optional ?module= filter.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|itr_26as (optional)' }] },
+      { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable credit packs; optional ?module= filter.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment (optional)' }] },
       {
         name: 'Create Order',
         method: 'POST',
@@ -951,11 +952,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Delete Calendar Event', method: 'DELETE', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }] },
       { name: 'Bulk Create Calendar Events', method: 'POST', path: 'api/admin/v1/calendar/bulk', body: { events: [{ title: 'GSTR-3B due', date: '2026-07-20' }] } },
       { name: 'Import Previous Year', method: 'POST', path: 'api/admin/v1/calendar/import-previous-year', body: { targetMonth: '2026-07' } },
-      { name: 'Credit Costs', method: 'GET', path: 'api/admin/v1/credits/costs', description: 'Per-module credit costs (refresh / download).' },
-      { name: 'Update Credit Costs', method: 'PUT', path: 'api/admin/v1/credits/costs', body: { gst: { refresh: 1, download: 1 } } },
+      { name: 'Credit Costs', method: 'GET', path: 'api/admin/v1/credits/costs', description: 'Per-module credit costs (refresh / download) and their freshness windows.' },
+      { name: 'Update Credit Costs', method: 'PUT', path: 'api/admin/v1/credits/costs', description: 'Upserts ONE module+action rule. freshnessMinutes: a repeat refresh inside the window is served free (omit for the module default — GST 360, others 1440; 0 = always refetch).', body: { module: 'gst', action: 'refresh', creditCost: 1, freshnessMinutes: 360, description: '' } },
       { name: 'List Credit Packs (admin)', method: 'GET', path: 'api/admin/v1/credits/packs' },
       { name: 'Create Credit Pack', method: 'POST', path: 'api/admin/v1/credits/packs', body: { name: 'Starter', credits: 100, price: 499, module: 'gst' } },
       { name: 'Update Credit Pack', method: 'PUT', path: 'api/admin/v1/credits/packs/:id', pathVars: [{ key: 'id', value: '<packId>' }], body: { price: 599 } },
+      { name: 'User Credits', method: 'GET', path: 'api/admin/v1/credits/users/:userId', description: 'A single user two-bucket wallet, one row per module.', pathVars: [{ key: 'userId', value: '<userId>' }] },
+      { name: 'User Credit Ledger', method: 'GET', path: 'api/admin/v1/credits/users/:userId/ledger', description: 'Why that balance is what it is — newest first.', pathVars: [{ key: 'userId', value: '<userId>' }], query: [{ key: 'module', value: '' }, { key: 'limit', value: '50' }] },
+      { name: 'Adjust User Credits', method: 'PATCH', path: 'api/admin/v1/credits/users/:userId', description: 'Adjust ONE module. planAllowed/topupBalance set absolute values; delta nudges a bucket (top-up unless bucket says otherwise — top-up survives the next cycle reset). Ledgered as admin_adjust against the acting admin.', pathVars: [{ key: 'userId', value: '<userId>' }], body: { module: 'gst', delta: 50, bucket: 'topup', note: 'Comped after a failed refresh' } },
       // --- Report engine (universal builder). A report is a saved DEFINITION run by the safe, registry-whitelisted engine. Legacy module/reportView reports still supported. ---
       { name: 'Report Data Sources', method: 'GET', path: 'api/admin/v1/reports/data-sources', description: 'Catalog of reportable data sources + their fields/operators (drives the builder AND acts as the query whitelist).' },
       { name: 'Preview Report', method: 'POST', path: 'api/admin/v1/reports/preview', description: 'Run a report DEFINITION live — registry-whitelisted, row/time-capped, Redis-cached 120s. userScopeId scopes the whole report to one user.', body: { definition: { dataSource: 'payments', visualization: 'bar', groupBy: { field: 'module' }, metrics: [{ key: 'm1', label: 'Revenue', agg: 'sum', field: 'amount' }] }, page: 1, noCache: false } },
@@ -1165,9 +1169,9 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Unlink Portal Account', method: 'DELETE', path: 'api/v1/income-tax/itr-client', description: 'Removes the stored client id.' },
       { name: 'Download ITR List', method: 'POST', path: 'api/v1/income-tax/itr/download', description: 'Triggers a fetch; returns { panNo, items[] } of filed ITRs. Charges an ITR download credit.', body: {} },
       { name: 'ITR Details', method: 'GET', path: 'api/v1/income-tax/itr/:itrId', description: 'Curated ITR detail: personal + income + bank accounts (no raw dump).', pathVars: [{ key: 'itrId', value: '<itrId>' }] },
-      { name: 'Download 26AS List', method: 'POST', path: 'api/v1/income-tax/26as/download', description: 'Triggers a fetch; returns { panNo, items[] } of 26AS statements. Charges a 26AS download credit.', body: {} },
+      { name: 'Download 26AS List', method: 'POST', path: 'api/v1/income-tax/26as/download', description: 'Triggers a fetch; returns { panNo, items[] } of 26AS statements. Charges an income-tax (itr) download credit.', body: {} },
       { name: '26AS Details', method: 'GET', path: 'api/v1/income-tax/26as/:tdsId', description: 'Parsed Form 26AS TDS entries + total.', pathVars: [{ key: 'tdsId', value: '<tdsId>' }], query: [{ key: 'financialYear', value: '2024-25' }] },
-      { name: 'Render Statement PDF', method: 'POST', path: 'api/v1/income-tax/:itType', description: 'Renders the statement PDF server-side (itType: 26as or itr-x). Charges a download credit.', pathVars: [{ key: 'itType', value: '26as' }], body: { downloadLink: '<s3-json-url>', pan: 'ABCDE1234F', financialYear: '2024-25' } }
+      { name: 'Render Statement PDF', method: 'POST', path: 'api/v1/income-tax/:itType', description: 'Renders the statement PDF server-side (itType: 26as or itr-x). Charges an income-tax (itr) download credit.', pathVars: [{ key: 'itType', value: '26as' }], body: { downloadLink: '<s3-json-url>', pan: 'ABCDE1234F', financialYear: '2024-25' } }
     ]
   },
 

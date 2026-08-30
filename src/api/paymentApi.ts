@@ -5,7 +5,7 @@ export const paymentApi = {
   listPlans:    () =>
     client.get('/payments/plans'),
 
-  // Buy-credit packs. Optionally filter by module (gst | roc | tds | itr | itr_26as).
+  // Buy-credit packs. Optionally filter by module (gst | roc | tds | itr | investment).
   listCreditPacks: (module?: string) =>
     client.get('/payments/credit-packs', { params: module ? { module } : undefined }),
 
