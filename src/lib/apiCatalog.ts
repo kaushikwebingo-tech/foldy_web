@@ -558,7 +558,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   tds: {
     key: 'tds',
     name: 'TDS',
-    description: 'TRACES Form 16 / 16A jobs (B2B). Submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Set {{token}}.',
+    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Also covers "Connect TDS account" (link/read the deductor TAN) and TDS "Potential Notices" (async analytics, no TRACES creds). Set {{token}}.',
     endpoints: [
       {
         name: 'Submit TDS Job',
@@ -618,11 +618,38 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'jobId', value: '<jobId>' }]
       },
       {
-        name: 'My TDS Credits (Form 26AS) — B2C',
+        name: 'Link TDS TAN (Connect Account)',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/link-tan',
+        description: 'Validate + persist the deductor TAN on the user\'s finance profile (no provider verify). Reused as the default TAN across the certificate + potential-notice flows.',
+        body: { tan: 'MUMB01234F' }
+      },
+      {
+        name: 'Get Linked TDS TAN',
         method: 'GET',
-        path: 'api/v1/income-tax/26as',
-        description: 'B2C individual TDS view: TDS credits from Form 26AS via AuthBridge (keyed on the JWT user\'s PAN). Serves Individual + Business plans. Pending AuthBridge endpoint/creds — returns a clear "not configured" error until set.',
-        query: [{ key: 'financialYear', value: '2024-25' }]
+        path: 'api/v1/b2b/tds/tan',
+        description: 'Returns the deductor TAN linked on the finance profile (low input).'
+      },
+      {
+        name: 'Submit Potential Notice',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/potential-notices',
+        description: 'TDS analytics — "potential notices". Async, no TRACES creds: returns a jobId; the cron polls Sandbox to completion. Costs 1 TDS credit (refunded on failure).',
+        body: { tan: 'MUMB01234F', quarter: 'Q1', form: '24Q', financial_year: 'FY 2024-25' }
+      },
+      {
+        name: 'Potential Notice Status',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/potential-notices',
+        description: 'Analysis status + parsed notices for a job (low input — background-polled).',
+        query: [{ key: 'job_id', value: '<job_id>' }]
+      },
+      {
+        name: 'Search Potential Notices',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/potential-notices/search',
+        description: 'Sandbox-side search of past potential-notice analyses for this deductor.',
+        body: { tan: 'MUMB01234F', quarter: 'Q1', form: '24Q', financial_year: 'FY 2024-25', page_size: 10 }
       }
     ]
   },

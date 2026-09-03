@@ -44,6 +44,7 @@ export default function TdsPage() {
   const [pan, setPan]             = useState('');
   const [panAmount, setPanAmount] = useState('');
   const [jobId, setJobId]         = useState('');
+  const [pnJobId, setPnJobId]     = useState('');
 
   const jobPayload = {
     username, password, tan,

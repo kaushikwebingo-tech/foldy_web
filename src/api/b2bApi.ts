@@ -92,4 +92,22 @@ export const b2bApi = {
 
   getTdsJob:          (jobId: string) =>
     client.get(`/b2b/tds/jobs/${jobId}`),
+
+  // TDS "Potential Notices" — async analytics, no TRACES credentials. Submit
+  // returns a job id; the cron polls Sandbox; GET returns the parsed notices.
+  submitTdsPotentialNotice:    (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/potential-notices', data),
+
+  getTdsPotentialNoticeStatus: (jobId: string) =>
+    client.get('/b2b/tds/potential-notices', { params: { job_id: jobId } }),
+
+  searchTdsPotentialNotices:   (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/potential-notices/search', data),
+
+  // "Connect TDS account" — link / read the deductor TAN on the finance profile.
+  linkTdsTan:         (tan: string) =>
+    client.post('/b2b/tds/link-tan', { tan }),
+
+  getTdsTan:          () =>
+    client.get('/b2b/tds/tan'),
 };
