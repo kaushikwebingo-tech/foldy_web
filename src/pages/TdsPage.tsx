@@ -173,6 +173,81 @@ export default function TdsPage() {
           <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
           <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
         </ApiCard>
+
+        {/* Divider — Connect Account & Potential Notices */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Connect Account &amp; Potential Notices</p>
+          <p className="text-xs text-slate-400 mb-3">Link the deductor TAN once (reused as the default across flows), then run async "potential notices" analytics — no TRACES credentials needed.</p>
+        </div>
+
+        {/* Link TAN */}
+        <ApiCard
+          step={6}
+          title="Link TDS TAN (Connect Account)"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/link-tan"
+          description="Validates + persists the deductor TAN on your finance profile (no provider verify). Becomes the default TAN for the certificate + potential-notice flows."
+          onSubmit={() => b2bApi.linkTdsTan(tan)}
+        >
+          <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMB01234F" fullWidth />
+        </ApiCard>
+
+        {/* Get linked TAN */}
+        <ApiCard
+          step={7}
+          title="Get Linked TAN"
+          method="GET"
+          endpoint="/api/v1/b2b/tds/tan"
+          description="Reads the deductor TAN linked on your finance profile (low input)."
+          onSubmit={() => b2bApi.getTdsTan()}
+        />
+
+        {/* Submit potential notice */}
+        <ApiCard
+          step={8}
+          title="Submit Potential Notice"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/potential-notices"
+          description="Async TDS analytics — returns a job id immediately; the server background-polls Sandbox. Costs 1 TDS credit (refunded on failure)."
+          onSubmit={async () => {
+            const res = await b2bApi.submitTdsPotentialNotice({ tan, quarter, form, financial_year: fy });
+            const id = res.data?.data?.job_id ?? res.data?.data?.jobId;
+            if (id) setPnJobId(id);
+            return res;
+          }}
+        >
+          <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMB01234F" />
+          <SelectField label="Form (statement)" value={form} onChange={setForm} options={FORM_TYPES} />
+          <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+        </ApiCard>
+
+        {/* Potential notice status */}
+        <ApiCard
+          step={9}
+          title="Potential Notice Status"
+          method="GET"
+          endpoint="/api/v1/b2b/tds/potential-notices?job_id="
+          description="Reads the analysis status + parsed notices for a job id (background-polled, no creds)."
+          onSubmit={() => b2bApi.getTdsPotentialNoticeStatus(pnJobId)}
+        >
+          <Field label="Job ID" value={pnJobId} onChange={setPnJobId} placeholder="Auto-filled from Submit" fullWidth />
+        </ApiCard>
+
+        {/* Search potential notices */}
+        <ApiCard
+          step={10}
+          title="Search Potential Notices (Sandbox history)"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/potential-notices/search"
+          description="Searches past potential-notice analyses for this deductor directly on Sandbox."
+          onSubmit={() => b2bApi.searchTdsPotentialNotices({ tan, quarter, form, financial_year: fy, page_size: 10 })}
+        >
+          <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMB01234F" />
+          <SelectField label="Form (statement)" value={form} onChange={setForm} options={FORM_TYPES} />
+          <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+        </ApiCard>
       </div>
     </div>
   );
