@@ -558,7 +558,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   tds: {
     key: 'tds',
     name: 'TDS',
-    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Also covers "Connect TDS account" (link/read the deductor TAN) and TDS "Potential Notices" (async analytics, no TRACES creds). Set {{token}}.',
+    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Also covers "Connect TDS account" (link/read the deductor TAN), TDS "Potential Notices" (async analytics, no TRACES creds), and the TDS Calculator (non-salary + salary/sync synchronous; bulk salary job + poll — no creds, shared B2B + B2C). Set {{token}}.',
     endpoints: [
       {
         name: 'Submit TDS Job',
@@ -650,6 +650,102 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2b/tds/potential-notices/search',
         description: 'Sandbox-side search of past potential-notice analyses for this deductor.',
         body: { tan: 'MUMB01234F', quarter: 'Q1', form: '24Q', financial_year: 'FY 2024-25', page_size: 10 }
+      },
+      {
+        name: 'Calculator — Non-Salary TDS',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/calculator/non-salary',
+        description: 'Synchronous TDS on one non-salary payment (no TRACES creds). credit_date is EPOCH ms. Costs 1 TDS credit (refunded on failure). Shared B2B + B2C.',
+        body: {
+          deductee_type: 'individual',
+          is_pan_available: true,
+          residential_status: 'resident',
+          is_206ab_applicable: false,
+          is_pan_operative: true,
+          nature_of_payment: 'sales_and_marketing_services',
+          credit_amount: 250000,
+          credit_date: 1699315200000
+        }
+      },
+      {
+        name: 'Calculator — Salary TDS (sync)',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/calculator/salary/sync',
+        description: 'Synchronous TDS on one salary — returns both new- and old-regime figures. financial_year like "FY 2024-25"; salary is a flat {field: value} map. Costs 1 TDS credit (refunded on failure). Shared B2B + B2C.',
+        body: {
+          financial_year: 'FY 2024-25',
+          salary: {
+            pan_status: 'PANISVALID',
+            employee_category: 'general',
+            gross_salary_from_previous_employers: 0,
+            tds_by_previous_employers: 0,
+            salary_as_per_provisions_contained_in_section_17_1: 750000,
+            value_of_perquisites_us_17_2: 0,
+            profits_in_lieu_of_salary_us_17_3: 0,
+            travel_concession_or_assistance_us_10_5: 0,
+            death_cum_retirement_gratuity_us_10_10: 0,
+            commuted_value_of_pension_us_10_10_a: 0,
+            cash_equivalent_of_leave_salary_encashment_us_10_10_aa: 0,
+            house_rent_allowance_us_10_13_a: 0,
+            other_special_allowances_under_section_10_14: 0,
+            total_amount_of_any_other_exemption_us_10: 0,
+            standard_deduction_us_16_ia: 50000,
+            entertainment_allowance_us_16_ii: 0,
+            tax_on_employment_us_16_iii: 0,
+            income_from_house_property_reported_by_employee_offered_for_tds: 346500,
+            income_under_the_head_other_sources_offered_for_tds: 0,
+            gross_amount_us_80_c: 0,
+            deductible_amount_us_80_c: 0,
+            gross_amount_us_80_ccc: 0,
+            deductible_amount_us_80_ccc: 0,
+            gross_amount_us_80_ccd_1: 0,
+            deductible_amount_us_80_ccd_1: 0,
+            gross_amount_us_80_ccd_1_b: 0,
+            deductible_amount_us_80_ccd_1_b: 0,
+            gross_amount_us_80_ccd_2: 0,
+            deductible_amount_us_80_ccd_2: 0,
+            gross_amount_us_80_ccg: 0,
+            deductible_amount_us_80_ccg: 0,
+            gross_amount_us_80_cch: 0,
+            deductible_amount_us_80_cch: 0,
+            gross_amount_us_80_d: 0,
+            deductible_amount_us_80_d: 0,
+            gross_amount_us_80_e: 0,
+            deductible_amount_us_80_e: 0,
+            gross_amount_us_80_g: 0,
+            deductible_amount_us_80_g: 0,
+            qualifying_amount_us_80_g: 0,
+            gross_amount_us_80_tta: 0,
+            deductible_amount_us_80_tta: 0,
+            qualifying_amount_us_80_tta: 0,
+            gross_amount_for_other_deductions: 0,
+            deductible_amount_for_other_deductions: 0,
+            qualifying_amount_for_other_deductions: 0
+          }
+        }
+      },
+      {
+        name: 'Calculator — Salary TDS bulk (submit)',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/calculator/salary',
+        description: 'Submit a bulk salary TDS job — returns a job_id. Same salary body as the sync call; the server uploads the workbook, then poll the job below. Costs 1 TDS credit (refunded on failure).',
+        body: {
+          financial_year: 'FY 2024-25',
+          salary: {
+            pan_status: 'PANISVALID',
+            employee_category: 'general',
+            salary_as_per_provisions_contained_in_section_17_1: 750000,
+            standard_deduction_us_16_ia: 50000,
+            income_from_house_property_reported_by_employee_offered_for_tds: 346500
+          }
+        }
+      },
+      {
+        name: 'Calculator — Salary TDS bulk (status)',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/calculator/salary',
+        description: 'Poll a bulk salary TDS job. status: created|queued|succeeded|failed; when succeeded, data.tds_on_salary_workbook_url is the xlsx result. Low input, no charge.',
+        query: [{ key: 'job_id', value: '<job_id>' }]
       }
     ]
   },

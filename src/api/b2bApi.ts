@@ -110,4 +110,19 @@ export const b2bApi = {
 
   getTdsTan:          () =>
     client.get('/b2b/tds/tan'),
+
+  // TDS Calculator — compute TDS on a payment (no TRACES creds). Non-salary +
+  // salary/sync answer synchronously; the bulk salary flow submits a job then
+  // polls by id. Each provider-hitting call costs 1 TDS credit (refunded on failure).
+  calcTdsNonSalary:       (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/calculator/non-salary', data),
+
+  calcTdsSalarySync:      (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/calculator/salary/sync', data),
+
+  submitTdsSalaryBulk:    (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/calculator/salary', data),
+
+  getTdsSalaryBulkStatus: (jobId: string) =>
+    client.get('/b2b/tds/calculator/salary', { params: { job_id: jobId } }),
 };

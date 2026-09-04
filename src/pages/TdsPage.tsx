@@ -15,7 +15,6 @@ const CERT_TYPES = [
 const FORM_TYPES = [
   { label: '24Q (Salary)',        value: '24Q'  },
   { label: '26Q (Non-salary)',    value: '26Q'  },
-  { label: '27Q (Non-resident)',  value: '27Q'  },
 ];
 
 const QUARTERS = [
@@ -26,7 +25,76 @@ const QUARTERS = [
 ];
 
 // Value carries the "FY " prefix the API expects (submit + fetch).
-const FY_OPTIONS = ['2024-25', '2023-24', '2022-23'].map(v => ({ label: `FY ${v}`, value: `FY ${v}` }));
+const FY_OPTIONS = ['2025-26','2024-25', '2023-24', '2022-23','2021-22'].map(v => ({ label: `FY ${v}`, value: `FY ${v}` }));
+
+// ── TDS Calculator option lists (mirror Sandbox docs) ──
+const DEDUCTEE_TYPES = [
+  'individual', 'huf', 'company', 'firm', 'trust', 'local_authority',
+  'body_of_individuals', 'association_of_persons', 'artificial_judicial_person',
+].map(v => ({ label: v.replace(/_/g, ' '), value: v }));
+
+const RESIDENTIAL_STATUS = [
+  { label: 'Resident', value: 'resident' },
+  { label: 'Non-resident', value: 'non_resident' },
+];
+
+const BOOL_OPTIONS = [
+  { label: 'Yes', value: 'true' },
+  { label: 'No', value: 'false' },
+];
+
+// A common subset — nature_of_payment is a free string server-side (Sandbox owns the full enum).
+const NATURE_OF_PAYMENT = [
+  'sales_and_marketing_services', 'fees_for_technical_service', 'professional_fees',
+  'rent_of_plant_and_machinery', 'rent_of_land_or_building', 'commission_or_brokerage',
+  'winnings_from_online_games', 'tender_fees', 'cash_withdrawal',
+  'interest_payment_from_indian_company_or_business_trust',
+].map(v => ({ label: v.replace(/_/g, ' '), value: v }));
+
+// Builds the full ~46-field salary map Sandbox expects, zero-filled with the
+// key figures overridden from the form. Reused by the sync + bulk cards.
+function buildSalary(o: {
+  panStatus: string; employeeCategory: string; salary171: string;
+  stdDeduction: string; hraExemption: string; housePropertyIncome: string; deductible80c: string;
+}): Record<string, string | number> {
+  const n = (v: string) => Number(v || 0);
+  return {
+    pan_status: o.panStatus,
+    employee_category: o.employeeCategory,
+    gross_salary_from_previous_employers: 0,
+    tds_by_previous_employers: 0,
+    salary_as_per_provisions_contained_in_section_17_1: n(o.salary171),
+    value_of_perquisites_us_17_2: 0,
+    profits_in_lieu_of_salary_us_17_3: 0,
+    travel_concession_or_assistance_us_10_5: 0,
+    death_cum_retirement_gratuity_us_10_10: 0,
+    commuted_value_of_pension_us_10_10_a: 0,
+    cash_equivalent_of_leave_salary_encashment_us_10_10_aa: 0,
+    house_rent_allowance_us_10_13_a: n(o.hraExemption),
+    other_special_allowances_under_section_10_14: 0,
+    total_amount_of_any_other_exemption_us_10: 0,
+    standard_deduction_us_16_ia: n(o.stdDeduction),
+    entertainment_allowance_us_16_ii: 0,
+    tax_on_employment_us_16_iii: 0,
+    income_from_house_property_reported_by_employee_offered_for_tds: n(o.housePropertyIncome),
+    income_under_the_head_other_sources_offered_for_tds: 0,
+    gross_amount_us_80_c: n(o.deductible80c),
+    deductible_amount_us_80_c: n(o.deductible80c),
+    gross_amount_us_80_ccc: 0, deductible_amount_us_80_ccc: 0,
+    gross_amount_us_80_ccd_1: 0, deductible_amount_us_80_ccd_1: 0,
+    gross_amount_us_80_ccd_1_b: 0, deductible_amount_us_80_ccd_1_b: 0,
+    gross_amount_us_80_ccd_2: 0, deductible_amount_us_80_ccd_2: 0,
+    gross_amount_us_80_ccg: 0, deductible_amount_us_80_ccg: 0,
+    gross_amount_us_80_cch: 0, deductible_amount_us_80_cch: 0,
+    gross_amount_us_80_d: 0, deductible_amount_us_80_d: 0,
+    gross_amount_us_80_e: 0, deductible_amount_us_80_e: 0,
+    gross_amount_us_80_g: 0, deductible_amount_us_80_g: 0, qualifying_amount_us_80_g: 0,
+    gross_amount_us_80_tta: 0, deductible_amount_us_80_tta: 0, qualifying_amount_us_80_tta: 0,
+    gross_amount_for_other_deductions: 0,
+    deductible_amount_for_other_deductions: 0,
+    qualifying_amount_for_other_deductions: 0,
+  };
+}
 
 export default function TdsPage() {
   const [certType, setCertType]   = useState('form16');
@@ -35,7 +103,7 @@ export default function TdsPage() {
   const [tan, setTan]             = useState('');
   const [form, setForm]           = useState('24Q');
   const [quarter, setQuarter]     = useState('Q1');
-  const [fy, setFy]               = useState('FY 2024-25');
+  const [fy, setFy]               = useState('FY 2025-26');
   const [bsr, setBsr]             = useState('');
   const [challanSerial, setChallan] = useState('');
   const [challanDate, setChallanDate] = useState('');
@@ -45,6 +113,34 @@ export default function TdsPage() {
   const [panAmount, setPanAmount] = useState('');
   const [jobId, setJobId]         = useState('');
   const [pnJobId, setPnJobId]     = useState('');
+
+  // ── TDS Calculator state ──
+  const [deducteeType, setDeducteeType]       = useState('individual');
+  const [natureOfPayment, setNatureOfPayment] = useState('sales_and_marketing_services');
+  const [residential, setResidential]         = useState('resident');
+  const [isPanAvailable, setPanAvailable]     = useState('true');
+  const [isPanOperative, setPanOperative]     = useState('true');
+  const [is206ab, setIs206ab]                 = useState('false');
+  const [creditAmount, setCreditAmount]       = useState('250000');
+  const [creditDate, setCreditDate]           = useState('2024-11-07'); // yyyy-mm-dd → epoch ms
+  // salary
+  const [panStatus, setPanStatus]             = useState('PANISVALID');
+  const [employeeCategory, setEmployeeCategory] = useState('general');
+  const [salary171, setSalary171]             = useState('750000');
+  const [stdDeduction, setStdDeduction]       = useState('50000');
+  const [hraExemption, setHraExemption]       = useState('0');
+  const [housePropertyIncome, setHousePropertyIncome] = useState('346500');
+  const [deductible80c, setDeductible80c]     = useState('0');
+  const [bulkJobId, setBulkJobId]             = useState('');
+
+  const toEpochMs = (yyyyMmDd: string) => {
+    const t = new Date(yyyyMmDd).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+  const salaryPayload = () => ({
+    financial_year: fy,
+    salary: buildSalary({ panStatus, employeeCategory, salary171, stdDeduction, hraExemption, housePropertyIncome, deductible80c }),
+  });
 
   const jobPayload = {
     username, password, tan,
@@ -247,6 +343,86 @@ export default function TdsPage() {
           <SelectField label="Form (statement)" value={form} onChange={setForm} options={FORM_TYPES} />
           <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
           <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+        </ApiCard>
+
+        {/* Divider — TDS Calculator */}
+        <div className="border-t border-slate-200 pt-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">TDS Calculator</p>
+          <p className="text-xs text-slate-400 mb-3">Compute the TDS payable on a payment — no TRACES credentials. Non-salary &amp; salary (sync) answer immediately; the bulk salary flow submits a job then polls for an xlsx. Shared across B2B + B2C. Each compute costs 1 TDS credit (refunded on failure).</p>
+        </div>
+
+        {/* 11. Non-salary calculator */}
+        <ApiCard
+          step={11}
+          title="Calculator — Non-Salary TDS"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/calculator/non-salary"
+          description="Synchronous TDS on one non-salary payment. Returns section, rate, deduction & due date."
+          onSubmit={() => b2bApi.calcTdsNonSalary({
+            deductee_type: deducteeType,
+            is_pan_available: isPanAvailable === 'true',
+            residential_status: residential,
+            is_206ab_applicable: is206ab === 'true',
+            is_pan_operative: isPanOperative === 'true',
+            nature_of_payment: natureOfPayment,
+            credit_amount: Number(creditAmount),
+            credit_date: toEpochMs(creditDate),
+          })}
+        >
+          <SelectField label="Deductee Type" value={deducteeType} onChange={setDeducteeType} options={DEDUCTEE_TYPES} />
+          <SelectField label="Nature of Payment" value={natureOfPayment} onChange={setNatureOfPayment} options={NATURE_OF_PAYMENT} />
+          <SelectField label="Residential Status" value={residential} onChange={setResidential} options={RESIDENTIAL_STATUS} />
+          <SelectField label="PAN Available?" value={isPanAvailable} onChange={setPanAvailable} options={BOOL_OPTIONS} />
+          <SelectField label="PAN Operative?" value={isPanOperative} onChange={setPanOperative} options={BOOL_OPTIONS} />
+          <SelectField label="206AB Applicable?" value={is206ab} onChange={setIs206ab} options={BOOL_OPTIONS} />
+          <Field label="Credit Amount (₹)" value={creditAmount} onChange={setCreditAmount} placeholder="0" type="number" />
+          <Field label="Credit Date" value={creditDate} onChange={setCreditDate} placeholder="YYYY-MM-DD" type="date" />
+        </ApiCard>
+
+        {/* 12. Salary calculator (sync) */}
+        <ApiCard
+          step={12}
+          title="Calculator — Salary TDS (sync)"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/calculator/salary/sync"
+          description="Synchronous TDS on one salary — returns both new- and old-regime figures (income_tax_payable, tds_on_salary, cess, relief 87A)."
+          onSubmit={() => b2bApi.calcTdsSalarySync(salaryPayload())}
+        >
+          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+          <Field label="PAN Status" value={panStatus} onChange={setPanStatus} placeholder="PANISVALID" />
+          <Field label="Employee Category" value={employeeCategory} onChange={setEmployeeCategory} placeholder="general" />
+          <Field label="Salary u/s 17(1) (₹)" value={salary171} onChange={setSalary171} placeholder="0" type="number" />
+          <Field label="Standard Deduction 16(ia) (₹)" value={stdDeduction} onChange={setStdDeduction} placeholder="0" type="number" />
+          <Field label="HRA Exemption 10(13A) (₹)" value={hraExemption} onChange={setHraExemption} placeholder="0" type="number" />
+          <Field label="House Property Income (₹)" value={housePropertyIncome} onChange={setHousePropertyIncome} placeholder="0" type="number" />
+          <Field label="80C Deductible (₹)" value={deductible80c} onChange={setDeductible80c} placeholder="0" type="number" />
+        </ApiCard>
+
+        {/* 13. Salary calculator (bulk submit) */}
+        <ApiCard
+          step={13}
+          title="Calculator — Salary TDS bulk (submit)"
+          method="POST"
+          endpoint="/api/v1/b2b/tds/calculator/salary"
+          description="Submits a bulk salary TDS job (server uploads the workbook) and returns a job_id. Uses the same salary form above. Poll it below."
+          onSubmit={async () => {
+            const res = await b2bApi.submitTdsSalaryBulk(salaryPayload());
+            const id = res.data?.data?.data?.job_id ?? res.data?.data?.job_id;
+            if (id) setBulkJobId(id);
+            return res;
+          }}
+        />
+
+        {/* 14. Salary calculator (bulk status) */}
+        <ApiCard
+          step={14}
+          title="Calculator — Salary TDS bulk (status)"
+          method="GET"
+          endpoint="/api/v1/b2b/tds/calculator/salary?job_id="
+          description="Polls the bulk job. status: created|queued|succeeded|failed; when succeeded, data.tds_on_salary_workbook_url is the xlsx result. No charge."
+          onSubmit={() => b2bApi.getTdsSalaryBulkStatus(bulkJobId)}
+        >
+          <Field label="Job ID" value={bulkJobId} onChange={setBulkJobId} placeholder="Auto-filled from Submit" fullWidth />
         </ApiCard>
       </div>
     </div>
