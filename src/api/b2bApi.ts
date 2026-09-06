@@ -76,7 +76,10 @@ export const b2bApi = {
   trackGstReturns:    (gstin: string, financial_year: string, gstr?: string) =>
     client.post('/b2b/gst/get-finance-status', { gstin, financial_year, gstr }),
 
-  // TDS — TRACES jobs
+  // TDS — TRACES jobs.
+  // username/password/tan are OPTIONAL now: with a saved profile send only the
+  // challan block (plus an optional profileId) and the server supplies the
+  // login. Inline credentials still win when present.
   submitTdsJob:       (certificateType: string, data: Record<string, unknown>) =>
     client.post(`/b2b/tds/submit-job/${certificateType}`, data),
 
@@ -87,11 +90,19 @@ export const b2bApi = {
     client.post(`/b2b/tds/fetch-jobs/${certificateType}`, data),
 
   // Persisted TDS jobs — low-input progress tracking (background-polled server-side).
-  listTdsJobs:        (params?: { status?: string; certificate_type?: string }) =>
+  // `kind` separates certificate history from notice analyses, which share this
+  // collection; 'certificate' also matches legacy rows saved before the field.
+  listTdsJobs:        (params?: { status?: string; certificate_type?: string; kind?: 'certificate' | 'potential_notice' }) =>
     client.get('/b2b/tds/jobs', { params }),
 
   getTdsJob:          (jobId: string) =>
     client.get(`/b2b/tds/jobs/${jobId}`),
+
+  // Streams the completed certificate. The server proxies the provider's
+  // short-lived URL, so the caller never sees it; 404 while TRACES is still
+  // preparing the file.
+  downloadTdsCertificate: (jobId: string) =>
+    client.get(`/b2b/tds/jobs/${jobId}/certificate`, { responseType: 'blob' }),
 
   // TDS "Potential Notices" — async analytics, no TRACES credentials. Submit
   // returns a job id; the cron polls Sandbox; GET returns the parsed notices.
@@ -104,7 +115,35 @@ export const b2bApi = {
   searchTdsPotentialNotices:   (data: Record<string, unknown>) =>
     client.post('/b2b/tds/potential-notices/search', data),
 
-  // "Connect TDS account" — link / read the deductor TAN on the finance profile.
+  // TDS credential profiles — "connect my company once".
+  // A profile holds the deductor TAN plus an ENCRYPTED TRACES username/password.
+  // The credentials never come back in any response: each profile reports only
+  // `hasCredentials: boolean`. Once one exists, submit / poll / potential-notice
+  // can omit username+password entirely and the server resolves them.
+  listTdsProfiles:    () =>
+    client.get('/b2b/tds/profiles'),
+
+  // Body: { tan, tracesUsername, tracesPassword, label? }
+  createTdsProfile:   (data: Record<string, unknown>) =>
+    client.post('/b2b/tds/profiles', data),
+
+  getTdsProfile:      (id: string) =>
+    client.get(`/b2b/tds/profiles/${id}`),
+
+  // Partial: send only what changes. Omitting tracesPassword keeps the stored one.
+  updateTdsProfile:   (id: string, data: Record<string, unknown>) =>
+    client.patch(`/b2b/tds/profiles/${id}`, data),
+
+  deleteTdsProfile:   (id: string) =>
+    client.delete(`/b2b/tds/profiles/${id}`),
+
+  // Exactly one profile per user is the default; it is what an omitted
+  // profileId resolves to.
+  setDefaultTdsProfile: (id: string) =>
+    client.post(`/b2b/tds/profiles/${id}/default`),
+
+  // "Connect TDS account" — link / read the deductor TAN. Now backed by the
+  // same profile store, so a TAN-only link and a full login are one record.
   linkTdsTan:         (tan: string) =>
     client.post('/b2b/tds/link-tan', { tan }),
 

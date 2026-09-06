@@ -657,16 +657,18 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   tds: {
     key: 'tds',
     name: 'TDS',
-    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. Also covers "Connect TDS account" (link/read the deductor TAN), TDS "Potential Notices" (async analytics, no TRACES creds), and the TDS Calculator (non-salary + salary/sync synchronous; bulk salary job + poll — no creds, shared B2B + B2C). Set {{token}}.',
+    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. CONNECT ONCE: save a TdsProfile (see the profile endpoints) and submit/poll/potential-notices may omit username+password — the server decrypts them per call, and the background cron re-resolves them from the profile once the 6h credential cache expires. Also covers "Connect TDS account" (link/read the deductor TAN), TDS "Potential Notices" (async analytics, no TRACES creds), and the TDS Calculator (non-salary + salary/sync synchronous; bulk salary job + poll — no creds, shared B2B + B2C). Set {{token}}.',
     endpoints: [
       {
         name: 'Submit TDS Job',
         method: 'POST',
         path: 'api/v1/b2b/tds/submit-job/:certificate_type',
+        description: 'Costs 1 TDS credit. username / password / tan are OPTIONAL: with a saved profile send only security_captcha (plus an optional profileId) and the server resolves the login. Inline credentials still win when present. A job that later fails asynchronously refunds the credit.',
         pathVars: [{ key: 'certificate_type', value: 'form16' }],
         body: {
-          username: '<traces-username>',
-          password: '<traces-password>',
+          profileId: '<optional — omit to use your default profile>',
+          username: '<optional when a profile is connected>',
+          password: '<optional when a profile is connected>',
           tan: 'MUMU12345A',
           security_captcha: {
             quarter: 'Q1',
@@ -706,7 +708,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Persisted TDS jobs with status + summary (newest first). Low input — the progress tracker / history.',
         query: [
           { key: 'status', value: '', description: 'optional: processing|completed|failed' },
-          { key: 'certificate_type', value: '', description: 'optional: form16|form16a' }
+          { key: 'certificate_type', value: '', description: 'optional: form16|form16a' },
+          { key: 'kind', value: '', description: 'optional: certificate|potential_notice — certificates and notice analyses share this collection; "certificate" also matches legacy rows with no kind' }
         ]
       },
       {
@@ -717,10 +720,58 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'jobId', value: '<jobId>' }]
       },
       {
+        name: 'Download TDS Certificate',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/jobs/:jobId/certificate',
+        description: 'Streams the completed certificate. The server proxies the provider\'s short-lived URL, so the client never handles it. 404 while TRACES is still preparing the file; 502 if the fetch itself fails.',
+        pathVars: [{ key: 'jobId', value: '<jobId>' }]
+      },
+      {
+        name: 'List TDS Profiles',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/profiles',
+        description: 'Saved deductors, default first. Credentials are NEVER returned — each profile reports only hasCredentials: boolean.'
+      },
+      {
+        name: 'Connect TDS Profile',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/profiles',
+        description: '"Connect once": stores the deductor TAN plus an encrypted TRACES username/password. Once a profile exists, submit-job / poll-job / potential-notices may omit username+password entirely. A NEW TAN counts against the plan\'s per-TAN cap; re-connecting an existing one updates it in place.',
+        body: { tan: 'MUMB01234F', tracesUsername: '<traces-user>', tracesPassword: '<traces-password>', label: 'Head office' }
+      },
+      {
+        name: 'Get TDS Profile',
+        method: 'GET',
+        path: 'api/v1/b2b/tds/profiles/:id',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Update TDS Profile',
+        method: 'PATCH',
+        path: 'api/v1/b2b/tds/profiles/:id',
+        description: 'Partial update — send only what changes. Omitting tracesPassword KEEPS the stored one, so a rename cannot wipe a working login.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { label: 'Branch office' }
+      },
+      {
+        name: 'Delete TDS Profile',
+        method: 'DELETE',
+        path: 'api/v1/b2b/tds/profiles/:id',
+        description: 'Removes the profile. If it was the default, the next most recent one is promoted so credential resolution never breaks.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Set Default TDS Profile',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/profiles/:id/default',
+        description: 'Exactly one profile per user is the default — it is what an omitted profileId resolves to.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
         name: 'Link TDS TAN (Connect Account)',
         method: 'POST',
         path: 'api/v1/b2b/tds/link-tan',
-        description: 'Validate + persist the deductor TAN on the user\'s finance profile (no provider verify). Reused as the default TAN across the certificate + potential-notice flows.',
+        description: 'Validate + persist the deductor TAN (no provider verify). Backed by the SAME TdsProfile store as /profiles, so a TAN-only link and a full TRACES login are one record — adding credentials later does not create a second profile. Reused as the default TAN across the certificate + potential-notice flows.',
         body: { tan: 'MUMB01234F' }
       },
       {
