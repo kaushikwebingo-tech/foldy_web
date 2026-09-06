@@ -18,12 +18,15 @@ export default function IncomeTaxPage() {
   const [password, setPassword] = useState('');
   const [itType, setItType] = useState('26as');
   const [jsonUrl, setJsonUrl] = useState('');
+  // AIS is keyed by financial year; kept separate from the 26AS filter above so
+  // changing one does not silently retarget the other.
+  const [aisFy, setAisFy] = useState('2024-25');
 
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Income Tax — ITR & Form 26AS"
-        subtitle="Taxpayer-side income-tax data via AuthBridge. Link the portal account once, then download the ITR list / Form 26AS (async jobs) and fetch details by id. PAN is taken from the JWT user."
+        title="Income Tax — ITR, Form 26AS & AIS"
+        subtitle="Taxpayer-side income-tax data. Link the portal account once, then download the ITR list, Form 26AS and the AIS (async jobs). ITR / 26AS are fetched by id; AIS is fetched by financial year. PAN is taken from the JWT user."
         icon={<FileText size={18} />}
         badge="B2C + B2B"
         postmanSection="income-tax"
@@ -103,6 +106,26 @@ export default function IncomeTaxPage() {
         >
           <Field label="TDS ID" value={tdsId} onChange={setTdsId} placeholder="From the download response" />
           <Field label="Financial Year (optional)" value={fy} onChange={setFy} placeholder="2024-25" />
+        </ApiCard>
+
+        {/* AIS — addressed by financial year, not by an id. */}
+        <ApiCard
+          step={4}
+          title="Download AIS List"
+          method="POST"
+          endpoint="/api/v1/income-tax/ais/download"
+          description="Triggers an AIS (Annual Information Statement) download for the linked PAN. No body — it uses the linked portal session. Returns { panNo, items[] } listing the financial years the portal holds. Charges an income-tax (itr) download credit."
+          onSubmit={() => incomeTaxApi.downloadAis()}
+        />
+
+        <ApiCard
+          title="Get AIS Details"
+          method="GET"
+          endpoint="/api/v1/income-tax/ais/:financialYear"
+          description="Fetch one financial year's AIS. Unlike ITR / 26AS this is addressed by the YEAR itself, not by an id returned from the download — take a value from the download response's items[]."
+          onSubmit={() => incomeTaxApi.getAisDetails(aisFy)}
+        >
+          <Field label="Financial Year" value={aisFy} onChange={setAisFy} placeholder="2024-25" fullWidth />
         </ApiCard>
 
         <ApiCard

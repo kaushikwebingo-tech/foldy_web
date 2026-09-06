@@ -22,6 +22,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { email: 'user@example.com' }
       },
       {
+        name: 'Log Out Session By Token',
+        method: 'GET',
+        path: 'api/v1/auth/session/logout',
+        description: 'PUBLIC, tokenised "log me out" link emailed on a new-device sign-in. Takes NO JWT — it authenticates on the unguessable token in the query string.',
+        query: [{ key: 'token', value: '<emailed-token>' }]
+      },
+      {
         name: 'Update Push Token',
         method: 'POST',
         path: 'api/v1/auth/update-push-token',
@@ -112,6 +119,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { registrationToken: '<registrationToken>', channel: 'phone', otp: '123456' }
       },
       {
+        name: 'Verify via DigiLocker',
+        method: 'POST',
+        path: 'api/v1/onboarding/digilocker/verify',
+        description: 'Identity check via DigiLocker during onboarding. Rate-limited and pre-JWT.',
+        body: {}
+      },
+      {
         name: 'Create Profile (auto-login)',
         method: 'POST',
         path: 'api/v1/onboarding/create-profile',
@@ -166,6 +180,36 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/manual-uploads/items/:id',
         pathVars: [{ key: 'id', value: '<documentId>' }]
       }
+    ]
+  },
+
+  compliance: {
+    key: 'compliance',
+    name: 'Compliance Health',
+    description: 'A single 0-100 compliance score plus the Action Center items behind it (GST late fees, ROC / TDS / ITR status). Auth only — no segment or module gate. Built from data already held, so it makes no provider calls. Set {{token}}.',
+    endpoints: [
+      { name: 'Compliance Health', method: 'GET', path: 'api/v1/compliance/health', description: 'Score + the actions dragging it down.' }
+    ]
+  },
+
+  landing: {
+    key: 'landing',
+    name: 'Landing (Public)',
+    description: 'PUBLIC pre-sign-in catalog served from /api/landing/v1 (also mirrored at /landing-page). No bearer token required.',
+    endpoints: [
+      { name: 'Landing Info', method: 'GET', path: 'api/landing/v1', description: 'Overview metadata for landing-page callers.' },
+      { name: 'Landing Plans', method: 'GET', path: 'api/landing/v1/plans', description: 'Active subscription plans + credit packs. Optional workspace filter.', query: [{ key: 'workspace', value: 'business', description: 'business | individual (optional)' }] }
+    ]
+  },
+
+  webhooks: {
+    key: 'webhooks',
+    name: 'Webhooks (Provider → Server)',
+    description: 'Endpoints PROVIDERS call, mounted at /webhook (outside the /api tree). Each verifies a signature header rather than a JWT, so these are for inspection/replay — not something the app ever calls.',
+    endpoints: [
+      { name: 'Instafinancials Webhook', method: 'POST', path: 'webhook/instafinancials', description: 'ROC/LLP job callbacks. Verifies X-Webhook-Timestamp + X-Webhook-Signature against the webhook secret.', body: {} },
+      { name: 'MoneyOne Webhook', method: 'POST', path: 'webhook/moneyone', description: 'Account-Aggregator consent + FI-data-ready callbacks.', body: {} },
+      { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature.', body: {} }
     ]
   },
 
@@ -272,7 +316,36 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { gstin: GSTIN, formType: 'GSTR-1', period: '042026' }
       },
       {
-        name: 'Profile — List Notices (stored token)',
+        name: 'Notice List (taxpayer session)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/notices/list',
+        description: 'Notices via the ACTIVE TAXPAYER SESSION (GSTIN in the body) — distinct from the per-profile GET below, which reads a saved profile by id.',
+        body: { gstin: '29ABCDE1234F1Z5', fromDate: '01-04-2024', toDate: '31-03-2025' }
+      },
+      {
+        name: 'Notice Details (taxpayer session)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/notices/details',
+        description: 'One notice\'s detail via the active taxpayer session.',
+        body: { gstin: '29ABCDE1234F1Z5', refId: '<refId>' }
+      },
+      {
+        name: 'Search & Save Taxpayer',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profile',
+        description: 'Look a taxpayer up by GSTIN and persist it as a profile in one call.',
+        body: { gstin: '29ABCDE1234F1Z5' }
+      },
+      {
+        name: 'Set Profile Turnover Band',
+        method: 'PATCH',
+        path: 'api/v1/b2b/gst/profiles/:id/turnover-band',
+        description: 'Sets the turnover band used for late-fee exposure maths.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { turnoverBand: 'upto_1_5_cr' }
+      },
+      {
+        name: 'Profile Notices',
         method: 'GET',
         path: 'api/v1/b2b/gst/profiles/:id/notices',
         description: 'Notices issued in the ~last 60 days for the profile\'s GSTIN, using its stored token. Optional ?date=DD/MM/YYYY reference day (defaults to today). No taxpayer_token / email needed — injected server-side.',
@@ -545,6 +618,32 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         ]
       },
       {
+        name: 'Admin — Get One Query',
+        method: 'GET',
+        path: 'api/admin/v1/support/queries/:id',
+        description: 'Admin JWT. Full ticket: thread, internal notes, attachments, assignment and metadata.',
+        pathVars: [{ key: 'id', value: '<queryId>' }]
+      },
+      { name: 'Admin — Unread Count', method: 'GET', path: 'api/admin/v1/support/unread-count', description: 'Admin JWT. Tickets with unread user messages (badge count).' },
+      { name: 'Admin — Support Stats', method: 'GET', path: 'api/admin/v1/support/stats', description: 'Admin JWT. Queue counts by status / age for the support dashboard.' },
+      { name: 'Admin — List Assignees', method: 'GET', path: 'api/admin/v1/support/assignees', description: 'Admin JWT. Admins eligible to own a ticket. Requires the support-assign permission.' },
+      { name: 'Admin — Add Response', method: 'POST', path: 'api/admin/v1/support/queries/:id/responses', description: 'Admin JWT. Public reply on the ticket thread — visible to the user.', pathVars: [{ key: 'id', value: '<queryId>' }], body: { message: 'Thanks for reaching out — this is now fixed.' } },
+      { name: 'Admin — Add Internal Note', method: 'POST', path: 'api/admin/v1/support/queries/:id/internal-notes', description: 'Admin JWT. Staff-only note. NEVER shown to the user.', pathVars: [{ key: 'id', value: '<queryId>' }], body: { note: 'Reproduced on staging.' } },
+      { name: 'Admin — Set Assignee', method: 'PATCH', path: 'api/admin/v1/support/queries/:ticketId/assignee', description: 'Admin JWT. Sets the owning admin outright. Requires the support-assign permission.', pathVars: [{ key: 'ticketId', value: '<queryId>' }], body: { assigneeId: '<adminId>' } },
+      { name: 'Admin — Update Assignment', method: 'PATCH', path: 'api/admin/v1/support/queries/:id/assignment', description: 'Admin JWT. Richer assignment payload (owner + team/queue) than Set Assignee.', pathVars: [{ key: 'id', value: '<queryId>' }], body: { assigneeId: '<adminId>', team: 'support' } },
+      { name: 'Admin — Update Metadata', method: 'PATCH', path: 'api/admin/v1/support/queries/:id/metadata', description: 'Admin JWT. Tags / priority / category.', pathVars: [{ key: 'id', value: '<queryId>' }], body: { priority: 'high', tags: ['billing'] } },
+      { name: 'Admin — Mark Read', method: 'PATCH', path: 'api/admin/v1/support/queries/:id/read', description: 'Admin JWT. Clears the unread badge for this ticket.', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Admin — Archive Query', method: 'PATCH', path: 'api/admin/v1/support/queries/:id/archive', description: 'Admin JWT. Archives the ticket (hidden from the default queue).', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Admin — Upload Attachment', method: 'POST', path: 'api/admin/v1/support/queries/:id/attachments', description: 'Admin JWT. multipart/form-data, field name "file".', pathVars: [{ key: 'id', value: '<queryId>' }] },
+      { name: 'Admin — Download Attachment', method: 'GET', path: 'api/admin/v1/support/queries/:id/attachments/:attachmentId/download', description: 'Admin JWT. Streams the file back.', pathVars: [{ key: 'id', value: '<queryId>' }, { key: 'attachmentId', value: '<attachmentId>' }] },
+      { name: 'Admin — Delete Attachment', method: 'DELETE', path: 'api/admin/v1/support/queries/:id/attachments/:attachmentId', description: 'Admin JWT. Requires support.delete.', pathVars: [{ key: 'id', value: '<queryId>' }, { key: 'attachmentId', value: '<attachmentId>' }] },
+      { name: 'Admin — List Response Templates', method: 'GET', path: 'api/admin/v1/support/response-templates', description: 'Admin JWT. Canned replies.' },
+      { name: 'Admin — Create Response Template', method: 'POST', path: 'api/admin/v1/support/response-templates', description: 'Admin JWT.', body: { title: 'Refund issued', body: 'Your refund has been processed.' } },
+      { name: 'Admin — Get Response Template', method: 'GET', path: 'api/admin/v1/support/response-templates/:templateId', description: 'Admin JWT.', pathVars: [{ key: 'templateId', value: '<templateId>' }] },
+      { name: 'Admin — Update Response Template', method: 'PATCH', path: 'api/admin/v1/support/response-templates/:templateId', description: 'Admin JWT.', pathVars: [{ key: 'templateId', value: '<templateId>' }], body: { title: 'Updated title' } },
+      { name: 'Admin — Delete Response Template', method: 'DELETE', path: 'api/admin/v1/support/response-templates/:templateId', description: 'Admin JWT. Requires support.delete.', pathVars: [{ key: 'templateId', value: '<templateId>' }] },
+      { name: 'Admin — Purge Retention', method: 'POST', path: 'api/admin/v1/support/retention/purge', description: 'DESTRUCTIVE. Admin JWT + support.delete. Applies the data-retention policy and deletes expired tickets.', body: {} },
+      {
         name: 'Admin — Update Query Status',
         method: 'PATCH',
         path: 'api/admin/v1/support/queries/:id/status',
@@ -756,6 +855,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'DigiLocker KYC — verify, start a consent session, fetch documents. Set {{token}}.',
     endpoints: [
       {
+        name: 'OAuth Callback',
+        method: 'GET',
+        path: 'api/v1/digilocker/callback',
+        description: 'PUBLIC OAuth redirect target — DigiLocker/Sandbox sends the BROWSER here. Listed for inspection; the app never calls it directly.',
+        query: [{ key: 'code', value: '<oauth-code>' }, { key: 'state', value: '<state>' }]
+      },
+      {
         name: 'Verify Account',
         method: 'POST',
         path: 'api/v1/digilocker/verify-account',
@@ -823,6 +929,20 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Payment History',
         method: 'GET',
         path: 'api/v1/payments/history'
+      },
+      {
+        name: 'Transaction Details',
+        method: 'GET',
+        path: 'api/v1/payments/history/:id',
+        description: 'One transaction from the history list.',
+        pathVars: [{ key: 'id', value: '<transactionId>' }]
+      },
+      {
+        name: 'Download Invoice',
+        method: 'GET',
+        path: 'api/v1/payments/history/:id/invoice',
+        description: 'That transaction\'s PDF invoice (binary).',
+        pathVars: [{ key: 'id', value: '<transactionId>' }]
       }
     ]
   },
@@ -1110,6 +1230,19 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Get Admin User', method: 'GET', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }] },
       { name: 'Update Admin User', method: 'PATCH', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }], body: { fullName: 'Updated' } },
       { name: 'Set Admin Role', method: 'PATCH', path: 'api/admin/v1/admin-users/:id/role', pathVars: [{ key: 'id', value: '<adminId>' }], body: { role: 'superadmin' } },
+      { name: 'Admin Session (me)', method: 'GET', path: 'api/admin/v1/auth/me', description: 'The signed-in admin: identity, role and resolved permissions.' },
+      { name: 'Change Password', method: 'POST', path: 'api/admin/v1/auth/change-password', description: 'Signed-in password change — distinct from the OTP forgot-password flow.', body: { currentPassword: '<current>', newPassword: '<new>' } },
+      { name: 'List Roles', method: 'GET', path: 'api/admin/v1/roles', description: 'Requires roles.read.' },
+      { name: 'Role Options', method: 'GET', path: 'api/admin/v1/roles/options', description: 'Permission + module catalog for the role editor. Auth only — no roles.* permission needed, unlike the rest of this group.' },
+      { name: 'Create Role', method: 'POST', path: 'api/admin/v1/roles', description: 'Requires roles.create.', body: { name: 'Support Agent', permissions: ['support.read', 'support.update'] } },
+      { name: 'Get Role', method: 'GET', path: 'api/admin/v1/roles/:id', description: 'Requires roles.read.', pathVars: [{ key: 'id', value: '<roleId>' }] },
+      { name: 'Update Role', method: 'PATCH', path: 'api/admin/v1/roles/:id', description: 'Requires roles.update.', pathVars: [{ key: 'id', value: '<roleId>' }], body: { name: 'Senior Support Agent' } },
+      { name: 'Delete Role', method: 'DELETE', path: 'api/admin/v1/roles/:id', description: 'Requires roles.delete.', pathVars: [{ key: 'id', value: '<roleId>' }] },
+      { name: 'Get Role Module Access', method: 'GET', path: 'api/admin/v1/roles/:id/module-access', description: 'Per-module access for the role. Separate sub-resource so it can be edited without rewriting the role.', pathVars: [{ key: 'id', value: '<roleId>' }] },
+      { name: 'Update Role Module Access', method: 'PATCH', path: 'api/admin/v1/roles/:id/module-access', description: 'Requires roles.update.', pathVars: [{ key: 'id', value: '<roleId>' }], body: { gst: true, roc: false, tds: true, itr: true } },
+      { name: 'Import Calendar Sheet', method: 'POST', path: 'api/admin/v1/calendar/import', description: 'Whole-year event upload (.xlsx/.csv), all-or-nothing validation. multipart field "file"; ?dryRun=true validates without writing.', query: [{ key: 'dryRun', value: 'true' }] },
+      { name: 'Calendar Import Template', method: 'GET', path: 'api/admin/v1/calendar/import/template', description: 'Downloads the sample sheet for the importer.' },
+      { name: 'Upload Compliance Calendar', method: 'POST', path: 'api/admin/v1/calendar/upload-compliance', description: 'Compliance-specific sheet upload — distinct from Import Calendar Sheet. multipart field "file".' },
       { name: 'Delete Admin User', method: 'DELETE', path: 'api/admin/v1/admin-users/:id', pathVars: [{ key: 'id', value: '<adminId>' }] }
     ]
   },
@@ -1284,8 +1417,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 
   incomeTax: {
     key: 'incomeTax',
-    name: 'Income Tax (ITR + 26AS)',
-    description: 'Deepvue-backed e-filing portal: link once (username/password → opaque client id), then pull filed ITRs and Form 26AS. Common to B2B + B2C (itr module). Set {{token}}.',
+    name: 'Income Tax (ITR + 26AS + AIS)',
+    description: 'Deepvue-backed e-filing portal: link once (username/password → opaque client id), then pull filed ITRs, Form 26AS and the AIS. Common to B2B + B2C (itr module). Set {{token}}.',
     endpoints: [
       { name: 'Portal Link Status', method: 'GET', path: 'api/v1/income-tax/itr-client/status', description: 'Is the e-filing portal linked, and when data was last pulled.' },
       { name: 'Link Portal Account', method: 'POST', path: 'api/v1/income-tax/itr-client', description: 'Exchange e-filing portal credentials for a client id (once). Password is never stored.', body: { username: 'ABCDE1234F', password: '<portal-password>' } },
@@ -1294,6 +1427,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'ITR Details', method: 'GET', path: 'api/v1/income-tax/itr/:itrId', description: 'Curated ITR detail: personal + income + bank accounts (no raw dump).', pathVars: [{ key: 'itrId', value: '<itrId>' }] },
       { name: 'Download 26AS List', method: 'POST', path: 'api/v1/income-tax/26as/download', description: 'Triggers a fetch; returns { panNo, items[] } of 26AS statements. Charges an income-tax (itr) download credit.', body: {} },
       { name: '26AS Details', method: 'GET', path: 'api/v1/income-tax/26as/:tdsId', description: 'Parsed Form 26AS TDS entries + total.', pathVars: [{ key: 'tdsId', value: '<tdsId>' }], query: [{ key: 'financialYear', value: '2024-25' }] },
+      { name: 'Download AIS List', method: 'POST', path: 'api/v1/income-tax/ais/download', description: 'Triggers a fetch of the Annual Information Statement; returns { panNo, items[] } of the financial years the portal holds. Charges an income-tax (itr) download credit.', body: {} },
+      { name: 'AIS Details', method: 'GET', path: 'api/v1/income-tax/ais/:financialYear', description: 'A single financial year\'s Annual Information Statement. Addressed by FINANCIAL YEAR, not an id (unlike ITR / 26AS). financialYear is required.', pathVars: [{ key: 'financialYear', value: '2024-25' }] },
       { name: 'Render Statement PDF', method: 'POST', path: 'api/v1/income-tax/:itType', description: 'Renders the statement PDF server-side (itType: 26as or itr-x). Charges an income-tax (itr) download credit.', pathVars: [{ key: 'itType', value: '26as' }], body: { downloadLink: '<s3-json-url>', pan: 'ABCDE1234F', financialYear: '2024-25' } }
     ]
   },
@@ -1309,7 +1444,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Multi-GSTIN Grid', method: 'GET', path: 'api/v1/b2b/reports/gstin-grid' },
       { name: 'Sales Trend', method: 'GET', path: 'api/v1/b2b/reports/sales-trend', query: [{ key: 'fy', value: '2024-25' }, { key: 'gstin', value: '' }] },
       { name: 'Compliance Calendar', method: 'GET', path: 'api/v1/b2b/reports/compliance-calendar' },
-      { name: 'Snapshot Coverage', method: 'GET', path: 'api/v1/b2b/reports/snapshot-coverage' }
+      { name: 'Snapshot Coverage', method: 'GET', path: 'api/v1/b2b/reports/snapshot-coverage' },
+      { name: 'B2B Summary', method: 'GET', path: 'api/v1/b2b/reports/summary', description: 'Cross-module counts (GST + ROC + TDS + ITR) for the B2B home header. Not GST-gated, unlike the other reports here.' }
     ]
   },
 

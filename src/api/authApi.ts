@@ -34,6 +34,10 @@ export const authApi = {
   createProfile:   (registrationToken: string, name?: string) =>
     client.post('/onboarding/create-profile', { registrationToken, ...(name ? { name } : {}) }),
 
+  // Identity check via DigiLocker during onboarding (rate-limited, pre-JWT).
+  verifyDigilocker: (payload: Record<string, unknown>) =>
+    client.post('/onboarding/digilocker/verify', payload),
+
   // Profile section for the logged-in user (PAN masked).
   getProfile:      () =>
     client.get('/user/profile'),
@@ -62,4 +66,9 @@ export const authApi = {
   // Delete Account — soft-deletes the logged-in user (both segments).
   deleteAccount:   () =>
     client.delete('/user/account'),
+
+  // PUBLIC, tokenised "log me out" link emailed on a new-device sign-in. No JWT:
+  // it authenticates on the unguessable token in the query string.
+  logoutSessionByToken: (token: string) =>
+    client.get('/auth/session/logout', { params: { token } }),
 };

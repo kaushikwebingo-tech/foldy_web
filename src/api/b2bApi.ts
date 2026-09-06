@@ -125,4 +125,17 @@ export const b2bApi = {
 
   getTdsSalaryBulkStatus: (jobId: string) =>
     client.get('/b2b/tds/calculator/salary', { params: { job_id: jobId } }),
+
+  // --- GST notices via the TAXPAYER session (POST) ---
+  // Distinct from getProfileNotices above: those read a saved profile by id,
+  // these use the active taxpayer token and take the GSTIN in the body.
+  getNoticeList:    (data: Record<string, unknown>) =>
+    client.post('/b2b/gst/notices/list', data),
+
+  getNoticeDetails: (data: Record<string, unknown>) =>
+    client.post('/b2b/gst/notices/details', data),
+
+  // Look a taxpayer up by GSTIN and persist it as a profile in one call.
+  searchAndSaveTaxpayer: (data: Record<string, unknown>) =>
+    client.post('/b2b/gst/profile', data),
 };

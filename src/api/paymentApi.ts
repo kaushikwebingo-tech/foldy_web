@@ -18,4 +18,12 @@ export const paymentApi = {
 
   getHistory:   () =>
     client.get('/payments/history'),
+
+  // One transaction from the history list.
+  getTransaction: (id: string) =>
+    client.get(`/payments/history/${id}`),
+
+  // That transaction's PDF invoice (binary).
+  downloadInvoice: (id: string) =>
+    client.get(`/payments/history/${id}/invoice`, { responseType: 'blob' }),
 };

@@ -15,4 +15,9 @@ export const digilockerApi = {
 
   getDocument:        (session_id: string, doc_type: string) =>
     client.get(`/digilocker/sessions/${session_id}/documents/${doc_type}`),
+
+  // PUBLIC OAuth redirect target — DigiLocker/Sandbox sends the browser here.
+  // Exposed for inspection; in the real flow the browser calls it, not the app.
+  handleCallback:     (params: Record<string, string>) =>
+    client.get('/digilocker/callback', { params }),
 };

@@ -38,4 +38,9 @@ export const reportsApi = {
   // How much stored history the trend has to work with.
   getSnapshotCoverage: (params?: GstReportParams) =>
     client.get('/b2b/reports/snapshot-coverage', { params }),
+
+  // Cross-module counts (GST + ROC + TDS + ITR) for the B2B home header. Not
+  // GST-gated, unlike every other report above.
+  getSummary: () =>
+    client.get('/b2b/reports/summary'),
 };

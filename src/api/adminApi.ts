@@ -275,4 +275,92 @@ export const adminApi = {
     adminClient.patch(`/admin-users/${id}/role`, { role }),
   deleteAdminUser: (id: string) =>
     adminClient.delete(`/admin-users/${id}`),
+
+  // --- Admin session --- server: /admin/v1/auth
+  me: () =>
+    adminClient.get('/auth/me'),
+  // Signed-in password change (distinct from the OTP forgot-password flow).
+  changePassword: (currentPassword: string, newPassword: string) =>
+    adminClient.post('/auth/change-password', { currentPassword, newPassword }),
+
+  // --- Role management (Super Admin) --- server: /admin/v1/roles
+  // Roles carry BOTH a permission list and per-module access; module access has
+  // its own sub-resource so it can be edited without rewriting the role.
+  listRoles: () =>
+    adminClient.get('/roles'),
+  // Permission + module catalog used to build the role editor. Auth only — no
+  // roles.* permission required, unlike every other call here.
+  roleOptions: () =>
+    adminClient.get('/roles/options'),
+  createRole: (payload: Record<string, unknown>) =>
+    adminClient.post('/roles', payload),
+  getRole: (id: string) =>
+    adminClient.get(`/roles/${id}`),
+  updateRole: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/roles/${id}`, payload),
+  deleteRole: (id: string) =>
+    adminClient.delete(`/roles/${id}`),
+  getRoleModuleAccess: (id: string) =>
+    adminClient.get(`/roles/${id}/module-access`),
+  updateRoleModuleAccess: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/roles/${id}/module-access`, payload),
+
+  // --- Contact Support triage, full surface --- server: /admin/v1/support
+  getSupportQuery: (id: string) =>
+    adminClient.get(`/support/queries/${id}`),
+  supportUnreadCount: () =>
+    adminClient.get('/support/unread-count'),
+  supportStats: () =>
+    adminClient.get('/support/stats'),
+  // Admins eligible to own a ticket (needs the support-assign permission).
+  supportAssignees: () =>
+    adminClient.get('/support/assignees'),
+  // Public-facing reply on the ticket thread. Body: { message }.
+  addSupportResponse: (id: string, payload: Record<string, unknown>) =>
+    adminClient.post(`/support/queries/${id}/responses`, payload),
+  // Staff-only note — never shown to the user. Body: { note }.
+  addSupportInternalNote: (id: string, payload: Record<string, unknown>) =>
+    adminClient.post(`/support/queries/${id}/internal-notes`, payload),
+  // Two distinct server routes: :ticketId/assignee sets the owner outright,
+  // :id/assignment carries the richer payload (owner + team/queue).
+  setSupportAssignee: (ticketId: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/support/queries/${ticketId}/assignee`, payload),
+  updateSupportAssignment: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/support/queries/${id}/assignment`, payload),
+  // Tags / priority / category.
+  updateSupportMetadata: (id: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/support/queries/${id}/metadata`, payload),
+  markSupportRead: (id: string) =>
+    adminClient.patch(`/support/queries/${id}/read`),
+  archiveSupportQuery: (id: string) =>
+    adminClient.patch(`/support/queries/${id}/archive`),
+  // Attachments (multipart field 'file').
+  uploadSupportAttachment: (id: string, form: FormData) =>
+    adminClient.post(`/support/queries/${id}/attachments`, form),
+  downloadSupportAttachment: (id: string, attachmentId: string) =>
+    adminClient.get(`/support/queries/${id}/attachments/${attachmentId}/download`, {
+      responseType: 'blob',
+    }),
+  deleteSupportAttachment: (id: string, attachmentId: string) =>
+    adminClient.delete(`/support/queries/${id}/attachments/${attachmentId}`),
+  // Canned replies.
+  listSupportTemplates: () =>
+    adminClient.get('/support/response-templates'),
+  createSupportTemplate: (payload: Record<string, unknown>) =>
+    adminClient.post('/support/response-templates', payload),
+  getSupportTemplate: (templateId: string) =>
+    adminClient.get(`/support/response-templates/${templateId}`),
+  updateSupportTemplate: (templateId: string, payload: Record<string, unknown>) =>
+    adminClient.patch(`/support/response-templates/${templateId}`, payload),
+  deleteSupportTemplate: (templateId: string) =>
+    adminClient.delete(`/support/response-templates/${templateId}`),
+  // Destructive: applies the data-retention policy and deletes expired tickets.
+  purgeSupportRetention: (payload: Record<string, unknown> = {}) =>
+    adminClient.post('/support/retention/purge', payload),
+
+  // --- Compliance calendar sheet upload --- server: /admin/v1/calendar
+  // Distinct from importCalendarSheet (/calendar/import): this one takes the
+  // compliance-specific sheet. Multipart field 'file'.
+  uploadComplianceCalendar: (form: FormData) =>
+    adminClient.post('/calendar/upload-compliance', form),
 };

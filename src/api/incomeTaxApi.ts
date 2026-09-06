@@ -1,7 +1,8 @@
 import { client } from './client';
 
 /*
- * Income-tax (taxpayer-side) API — ITR list/details + Form 26AS via AuthBridge.
+ * Income-tax (taxpayer-side) API — ITR list/details, Form 26AS and AIS via the
+ * linked e-filing portal session.
  * Backend: server/src/routes/app/v1/incomeTaxRoutes.ts (mounted at /api/v1/income-tax).
  * PAN is taken from the JWT user; the portal link/OTP is handled server-side.
  */
@@ -36,6 +37,17 @@ export const incomeTaxApi = {
     client.get(`/income-tax/26as/${tdsId}`, {
       params: financialYear ? { financialYear } : {},
     }),
+
+  // Trigger an AIS (Annual Information Statement) download. No body — uses the
+  // linked portal session. Returns { panNo, items[] } of the years the portal
+  // holds. Shares the income-tax (itr) credit bucket, so it charges a download.
+  downloadAis: () =>
+    client.post('/income-tax/ais/download'),
+
+  // Fetch one financial year's AIS. Unlike ITR / 26AS this is addressed by the
+  // YEAR, not by an id — e.g. '2024-25'. Required by the server (Joi).
+  getAisDetails: (financialYear: string) =>
+    client.get(`/income-tax/ais/${financialYear}`),
 
   // Render a Form 26AS / ITR PDF from a stored JSON. itType = '26as' or 'itr-x'
   // (e.g. 'itr-1'). Body carries the S3 `jsonUrl` (validated server-side) plus
