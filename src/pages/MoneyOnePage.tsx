@@ -57,7 +57,7 @@ export default function MoneyOnePage() {
         title="Investment — Account Aggregator (MoneyOne / OneMoney)"
         subtitle="Store-and-sync: FinPro data is ingested into our DB by jobs; the app reads the DB. FinPro is only called by ingest / sync / manual refresh."
         icon={<Landmark size={18} />}
-        badge="B2C Only"
+        badge="B2B + B2C"
         postmanSection="moneyone"
       />
 

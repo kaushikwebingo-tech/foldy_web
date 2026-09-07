@@ -1326,7 +1326,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     key: 'moneyone',
     name: 'Investment (Account Aggregator)',
     description:
-      'MoneyOne / OneMoney Account Aggregator — B2C (individual). Flow: create a consent, send the user to webRedirectionUrl to approve at the AA, resolve the consentHandle into a consentId, then fetch data. Replace :template with mf-sip | equity | banking. Set {{token}} to a user JWT.',
+      'MoneyOne / OneMoney Account Aggregator — shared by B2C + B2B (gated by the `investment` module entitlement, not the path; the /b2c prefix is legacy). Flow: create a consent, send the user to webRedirectionUrl to approve at the AA, resolve the consentHandle into a consentId, then fetch data. Replace :template with mf-sip | equity | banking. Set {{token}} to a user JWT.',
     endpoints: [
       {
         name: 'List Product Templates',
