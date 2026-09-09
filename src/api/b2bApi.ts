@@ -53,6 +53,22 @@ export const b2bApi = {
     client.post(`/b2b/gst/profiles/${id}/summary/${type}/pdf`, { ret_period },
       { responseType: 'blob' }),
 
+  // GSTR-2A — inward supplies / auto-drafted statement, by section (default b2b).
+  // Body: { ret_period: MMYYYY, section?, ctin?, fromtime?, portcode?, benumber?, bedate? }.
+  getGstProfileGstr2a: (id: string, data: { ret_period: string; section?: string; [k: string]: unknown }) =>
+    client.post(`/b2b/gst/profiles/${id}/gstr2a`, data),
+
+  // GSTR-2B — auto-drafted ITC statement. Body: { ret_period: MMYYYY, filenum? }.
+  getGstProfileGstr2b: (id: string, data: { ret_period: string; filenum?: string }) =>
+    client.post(`/b2b/gst/profiles/${id}/gstr2b`, data),
+
+  // On-demand 2B generation → returns an internal transaction id; poll status by it.
+  generateGstProfileGstr2b: (id: string, ret_period: string) =>
+    client.post(`/b2b/gst/profiles/${id}/gstr2b/generate`, { ret_period }),
+
+  getGstProfileGstr2bStatus: (id: string, intTranId: string) =>
+    client.get(`/b2b/gst/profiles/${id}/gstr2b/status/${intTranId}`),
+
   // GSTR-1 sales summary for a profile, by financial year (e.g. "2025-26").
   getGstProfileSalesSummary: (id: string, fy: string) =>
     client.get(`/b2b/gst/profiles/${id}/sales-summary`, { params: { fy } }),
