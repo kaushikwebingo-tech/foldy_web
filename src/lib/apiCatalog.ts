@@ -1331,13 +1331,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'List Product Templates',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/templates',
+        path: 'api/v1/moneyone/templates',
         description: 'The AA product templates this server exposes.'
       },
       {
         name: 'Create Consent',
         method: 'POST',
-        path: 'api/v1/b2c/moneyone/banking/consent',
+        path: 'api/v1/moneyone/banking/consent',
         description:
           'Returns { webRedirectionUrl, consentHandle, token }. The server persists a PENDING consent and sets the redirect to its own public callback carrying an unguessable token. Send the user to webRedirectionUrl; after they approve/decline, OneMoney redirects to the callback, which verifies the real status and deep-links back into the app. pan / fipID are optional. Swap "banking" for mf-sip or equity.',
         body: {}
@@ -1345,14 +1345,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Consent Status (am I linked?)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/consent/status',
+        path: 'api/v1/moneyone/banking/consent/status',
         description:
           'Latest persisted consent for the logged-in user + template: { linked, status (pending|active|rejected|failed|expired|none), consentId, updatedAt }. Set by the callback after the user returns. This is the app\'s "am I linked?" check.'
       },
       {
         name: 'Revoke Consent',
         method: 'POST',
-        path: 'api/v1/b2c/moneyone/banking/consent/revoke',
+        path: 'api/v1/moneyone/banking/consent/revoke',
         description:
           'Withdraws a linked account. Body { consentId? } — optional; the server falls back to the user\'s latest consent for this template. Revokes at OneMoney (/revokeconsent), then marks the local record status=revoked so the app immediately shows "not linked". Returns { consentId, status: "revoked" }.',
         body: { consentId: '' }
@@ -1360,21 +1360,21 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Accounts List (bank-list screen)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/accounts',
+        path: 'api/v1/moneyone/banking/accounts',
         description:
           'STORE-AND-SYNC: reads the stored, normalized accounts from our DB (no FinPro call) → { accounts: [{ consentId, linkRefNumber, maskedAccountNumber, bank, holderName, fiType, category, headlineLabel, headlineValue, currency, lastSyncedAt, lastTxnDate, status }] }. holderName is decrypted for the list; the app card shows bank + holderName + masked account + category tag (balance intentionally hidden). Empty until the ingest job has run.'
       },
       {
         name: 'Account Detail (profile + summary)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef',
+        path: 'api/v1/moneyone/banking/accounts/:linkRef',
         description:
           'Detail header for one account from DB → account fields + { profile (name, maskedPan, email, mobile, address, kyc, nominee, …; decrypted, PAN masked), summaryFields:[{label,value}], holdings:[], dataRangeFrom, dataRangeTo }. Transactions are a separate paged call.'
       },
       {
         name: 'Transactions (paged + filtered)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions',
+        path: 'api/v1/moneyone/banking/accounts/:linkRef/transactions',
         description:
           'Lazy-loaded transactions from DB, newest first → { items:[…], page, limit, total, hasMore }. Unified bank (credit/debit) + investment (buy/sell) rows. Filters combine with AND.',
         query: [
@@ -1391,7 +1391,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Transactions Export (CSV)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions/export',
+        path: 'api/v1/moneyone/banking/accounts/:linkRef/transactions/export',
         description:
           'Streams a CSV download of ALL matching transactions (same filters as the list, no pagination). Content-Disposition: attachment.',
         query: [
@@ -1404,7 +1404,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Transactions Email',
         method: 'POST',
-        path: 'api/v1/b2c/moneyone/banking/accounts/:linkRef/transactions/email',
+        path: 'api/v1/moneyone/banking/accounts/:linkRef/transactions/email',
         description:
           'Emails the filtered CSV statement to the user\'s OWN registered email (never an arbitrary address). Same filter query params as the list. Returns { to, count }.',
         body: {}
@@ -1412,7 +1412,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Manual Sync (refresh now)',
         method: 'POST',
-        path: 'api/v1/b2c/moneyone/banking/sync',
+        path: 'api/v1/moneyone/banking/sync',
         description:
           'Forces a full re-ingest of the latest consent\'s data (getallfidata → normalize → upsert). Body { consentId? } optional. Returns the ingest summary { accounts, transactions, errors }.',
         body: { consentId: '' }
@@ -1420,7 +1420,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Consent Callback (PUBLIC — server-to-server)',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/callback',
+        path: 'api/v1/investment/callback',
         description:
           'PUBLIC — no auth. OneMoney redirects the user\'s browser here with ?token=<random>. The server verifies the real status against OneMoney (never trusts the URL), updates the consent, and 302-redirects to the app deep link (foldy://moneyone/callback?status=…). Not called by clients directly — documented for completeness.',
         query: [{ key: 'token', value: '', description: 'the token from Create Consent' }]
@@ -1436,7 +1436,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Resolve Consent',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/consent/resolve',
+        path: 'api/v1/moneyone/banking/consent/resolve',
         description:
           'Exchanges the consentHandle from Create Consent for { consentID, status, accounts }.',
         query: [{ key: 'handle', value: '', description: 'consentHandle from Create Consent' }]
@@ -1444,13 +1444,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Get All Data',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/data/:consentId/all',
+        path: 'api/v1/moneyone/banking/data/:consentId/all',
         description: 'All financial data available under a granted consent.'
       },
       {
         name: 'Get Account Data',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef',
+        path: 'api/v1/moneyone/banking/data/:consentId/account/:linkRef',
         description: 'One linked account\'s transactions (FinPro /getfidata). Optional ?limit&offset page the transactions so the app pulls a bank\'s data in windows instead of every transaction at once; omit both to fetch all.',
         query: [
           { key: 'limit', value: '', description: 'optional: max transactions per page' },
@@ -1460,9 +1460,25 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       {
         name: 'Get Account Balance',
         method: 'GET',
-        path: 'api/v1/b2c/moneyone/banking/data/:consentId/account/:linkRef/balance',
+        path: 'api/v1/moneyone/banking/data/:consentId/account/:linkRef/balance',
         description: 'Balance for a single linked account.'
       }
+    ]
+  },
+
+  investment: {
+    key: 'investment',
+    name: 'Investment (B2B portfolio)',
+    description:
+      'B2B-gated Investment module at /api/v1/investment (requireB2B + investment entitlement). Adds portfolio/net-worth analytics computed from the stored AA accounts & transactions — the business-side equivalent of /b2c/reports. NOTE: this mount ALSO re-serves every MoneyOne template route, so /api/v1/investment/:template/... (banking | equity | mf-sip | insurance_policies) works exactly like the shared /api/v1/moneyone/:template/... in the MoneyOne section. Set {{token}} to a business JWT.',
+    endpoints: [
+      { name: 'Portfolio Overview', method: 'GET', path: 'api/v1/investment/overview', description: 'Composite portfolio home: net worth + cash flow + consent health + SIP, from stored data (no FinPro call).' },
+      { name: 'Home (alias of Overview)', method: 'GET', path: 'api/v1/investment/home', description: 'Same handler as /overview — kept so the app can use either name.' },
+      { name: 'Net Worth', method: 'GET', path: 'api/v1/investment/net-worth', description: 'Net-worth breakdown across linked bank / equity / MF accounts.' },
+      { name: 'Cash Flow', method: 'GET', path: 'api/v1/investment/cash-flow', description: 'Inflow / outflow over recent months.', query: [{ key: 'months', value: '6' }] },
+      { name: 'Consent Health', method: 'GET', path: 'api/v1/investment/consents', description: 'Per-template AA consent status + expiry, for the "reconnect" prompts.' },
+      { name: 'SIP Tracker', method: 'GET', path: 'api/v1/investment/sip', description: 'Detected recurring SIP contributions from the stored MF transactions.' },
+      { name: 'AA Consent Callback (PUBLIC)', method: 'GET', path: 'api/v1/investment/callback', description: 'PUBLIC, no JWT — OneMoney redirects the user\'s browser here after they approve/decline. Authenticates on an unguessable token, finalises the consent, then deep-links back into the app (foldy://). Moved here from the old /b2c/moneyone/callback.', query: [{ key: 'token', value: '<callback-token>' }] }
     ]
   },
 

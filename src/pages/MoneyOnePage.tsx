@@ -80,7 +80,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="List Product Templates"
           method="GET"
-          endpoint="/api/v1/b2c/moneyone/templates"
+          endpoint="/api/v1/moneyone/templates"
           description="The AA product templates this server exposes (banking / equity / mf-sip)."
           onSubmit={() => moneyoneApi.listTemplates()}
         />
@@ -92,7 +92,7 @@ export default function MoneyOnePage() {
           step={1}
           title="Create Consent"
           method="POST"
-          endpoint={`/api/v1/b2c/moneyone/${template}/consent`}
+          endpoint={`/api/v1/moneyone/${template}/consent`}
           description="Persists a PENDING consent and returns { webRedirectionUrl, consentHandle, token }. PAN optional. Send the user to webRedirectionUrl to approve."
           onSubmit={async () => {
             const res = await moneyoneApi.createConsent(template, pan ? { pan } : {});
@@ -108,7 +108,7 @@ export default function MoneyOnePage() {
           step={2}
           title="Consent Status (am I linked?)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/consent/status`}
+          endpoint={`/api/v1/moneyone/${template}/consent/status`}
           description="Latest persisted consent: { linked, status, consentId }. Set by the callback."
           onSubmit={async () => {
             const res = await moneyoneApi.consentStatus(template);
@@ -121,7 +121,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Revoke Consent"
           method="POST"
-          endpoint={`/api/v1/b2c/moneyone/${template}/consent/revoke`}
+          endpoint={`/api/v1/moneyone/${template}/consent/revoke`}
           description="Withdraws at OneMoney, marks the record revoked, and PURGES the stored accounts + transactions (data-life). consentId optional."
           onSubmit={() => moneyoneApi.revokeConsent(template, consentId || undefined)}
         >
@@ -134,7 +134,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Sync Now (manual refresh)"
           method="POST"
-          endpoint={`/api/v1/b2c/moneyone/${template}/sync`}
+          endpoint={`/api/v1/moneyone/${template}/sync`}
           description="Forces a full re-ingest of the latest consent's data (getallfidata → normalize → upsert). Returns { accounts, transactions, errors }. Use this if the data-ready webhook hasn't fired."
           onSubmit={() => moneyoneApi.sync(template, consentId || undefined)}
         >
@@ -144,7 +144,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Accounts (bank-list screen)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/accounts`}
+          endpoint={`/api/v1/moneyone/${template}/accounts`}
           description="Stored, normalized accounts from our DB → { accounts: [{ linkRefNumber, maskedAccountNumber, bank, fiType, category, headlineLabel, headlineValue, … }] }. Empty until ingest has run."
           onSubmit={async () => {
             const res = await moneyoneApi.accounts(template);
@@ -157,7 +157,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Account Detail (profile + summary)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef`}
+          endpoint={`/api/v1/moneyone/${template}/accounts/:linkRef`}
           description="Detail header from DB → account + { profile (decrypted, PAN masked), summaryFields, holdings }."
           onSubmit={() => moneyoneApi.accountDetail(template, linkRef)}
         >
@@ -167,7 +167,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Transactions (paged + filtered)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef/transactions`}
+          endpoint={`/api/v1/moneyone/${template}/accounts/:linkRef/transactions`}
           description="Lazy-loaded, newest first → { items, page, limit, total, hasMore }. Filters combine with AND."
           onSubmit={() => moneyoneApi.transactions(template, linkRef, txnQuery())}
         >
@@ -185,7 +185,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Transactions Export (PDF / CSV statement)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef/transactions/export`}
+          endpoint={`/api/v1/moneyone/${template}/accounts/:linkRef/transactions/export`}
           description="Downloads the formatted statement — PDF by default (product-aware: bank ledger vs investment ledger), or format=csv for the raw CSV grid. Same filters as the transactions list; no pagination. Returns a binary file (blob)."
           onSubmit={() => moneyoneApi.exportTransactions(template, linkRef, {
             format: exportFormat,
@@ -209,7 +209,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Transactions Email"
           method="POST"
-          endpoint={`/api/v1/b2c/moneyone/${template}/accounts/:linkRef/transactions/email`}
+          endpoint={`/api/v1/moneyone/${template}/accounts/:linkRef/transactions/email`}
           description="Emails the formatted PDF statement to the user's OWN registered email. Same filter query params. Returns { to, count }."
           onSubmit={() => moneyoneApi.emailTransactions(template, linkRef, txnQuery())}
         >
@@ -233,7 +233,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Resolve Consent (handle → consentId)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/consent/resolve`}
+          endpoint={`/api/v1/moneyone/${template}/consent/resolve`}
           description="Exchanges the consentHandle for { consentID, status, accounts } (verified against OneMoney)."
           onSubmit={async () => {
             const res = await moneyoneApi.resolveConsent(template, handle);
@@ -248,7 +248,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Get All FI Data (live)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/data/:consentId/all`}
+          endpoint={`/api/v1/moneyone/${template}/data/:consentId/all`}
           description="All financial data live from FinPro under a granted consent (heavy)."
           onSubmit={() => moneyoneApi.getAllData(template, consentId)}
         >
@@ -258,7 +258,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Get Account Data (live)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/data/:consentId/account/:linkRef`}
+          endpoint={`/api/v1/moneyone/${template}/data/:consentId/account/:linkRef`}
           description="Live FI data for a single linked account."
           onSubmit={() => moneyoneApi.getAccountData(template, consentId, linkRef)}
         >
@@ -269,7 +269,7 @@ export default function MoneyOnePage() {
         <ApiCard
           title="Get Account Balance (live)"
           method="GET"
-          endpoint={`/api/v1/b2c/moneyone/${template}/data/:consentId/account/:linkRef/balance`}
+          endpoint={`/api/v1/moneyone/${template}/data/:consentId/account/:linkRef/balance`}
           description="Live balance for a single linked account."
           onSubmit={() => moneyoneApi.getAccountBalance(template, consentId, linkRef)}
         >
