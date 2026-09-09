@@ -24,4 +24,19 @@ export const userApi = {
 
   dismissReminder: (id: string) =>
     client.post(`/user/reminders/${id}/dismiss`),
+
+  // Account switching — server-tracked linked accounts (Chrome-style multi-login).
+  // Link by supplying a LIVE session token for the other account (ownership proof);
+  // switch mints a fresh full session for the target; list/unlink manage the group.
+  listAccountLinks: () =>
+    client.get('/user/account-links'),
+
+  addAccountLink: (token: string) =>
+    client.post('/user/account-links', { token }),
+
+  switchAccount: (userId: string) =>
+    client.post(`/user/account-links/${userId}/switch`),
+
+  unlinkAccount: (userId: string) =>
+    client.delete(`/user/account-links/${userId}`),
 };
