@@ -153,6 +153,12 @@ export const b2bApi = {
   deleteTdsProfile:   (id: string) =>
     client.delete(`/b2b/tds/profiles/${id}`),
 
+  // Disconnect AND erase: unlike deleteTdsProfile (which only forgets the
+  // login), this also deletes every certificate and notice analysis fetched
+  // with it. Irreversible.
+  revokeTdsProfile:   (id: string) =>
+    client.post(`/b2b/tds/profiles/${id}/revoke`),
+
   // Exactly one profile per user is the default; it is what an omitted
   // profileId resolves to.
   setDefaultTdsProfile: (id: string) =>

@@ -758,7 +758,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Delete TDS Profile',
         method: 'DELETE',
         path: 'api/v1/b2b/tds/profiles/:id',
-        description: 'Removes the profile. If it was the default, the next most recent one is promoted so credential resolution never breaks.',
+        description: 'Forgets the stored login only — certificates and analyses already fetched with it are KEPT (use /revoke to delete those too). If it was the default, the next most recent profile is promoted so credential resolution never breaks; with none left, the TAN is cleared from the finance profile.',
+        pathVars: [{ key: 'id', value: '<profileId>' }]
+      },
+      {
+        name: 'Revoke TDS Profile (delete data)',
+        method: 'POST',
+        path: 'api/v1/b2b/tds/profiles/:id/revoke',
+        description: 'DISCONNECT AND ERASE. Deletes the profile AND every TdsJob raised with it — both TRACES certificates and potential-notice analyses, including the raw provider payloads. Matched by profileId or tanHash; revoking the LAST profile also sweeps any job left unattributed and clears the TAN from the finance profile. Irreversible: re-fetching afterwards costs credits. Use DELETE instead to forget only the login. Returns { jobsDeleted, profilesRemaining }.',
         pathVars: [{ key: 'id', value: '<profileId>' }]
       },
       {
