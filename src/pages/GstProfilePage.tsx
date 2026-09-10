@@ -5,12 +5,19 @@ import PageHeader from '@/components/PageHeader';
 import { b2bApi } from '@/api/b2bApi';
 import { Building2 } from 'lucide-react';
 
+/*
+ * The first five are RETURNS the taxpayer files. GSTR-2A / 2B are auto-drafted
+ * ITC statements — same endpoint, but nobody files them, so they have no ARN and
+ * no due date. 2B only exists from the 14th of the month after the period.
+ */
 const SUMMARY_TYPES = [
   { label: 'GSTR-1',  value: 'gstr1'  },
   { label: 'GSTR-1A', value: 'gstr1a' },
   { label: 'GSTR-3B', value: 'gstr3b' },
   { label: 'GSTR-9',  value: 'gstr9'  },
   { label: 'GSTR-9C', value: 'gstr9c' },
+  { label: 'GSTR-2A (ITC statement)', value: 'gstr2a' },
+  { label: 'GSTR-2B (ITC statement)', value: 'gstr2b' },
 ];
 
 const FY_OPTIONS = [
@@ -26,6 +33,8 @@ const GSTR_OPTIONS = [
   { label: 'GSTR-3B', value: 'GSTR3B' },
   { label: 'GSTR-9',  value: 'GSTR9' },
   { label: 'GSTR-9C', value: 'GSTR9C' },
+  { label: 'GSTR-2A (ITC statement)', value: 'GSTR2A' },
+  { label: 'GSTR-2B (ITC statement)', value: 'GSTR2B' },
 ];
 
 /*
@@ -156,7 +165,7 @@ export default function GstProfilePage() {
           title="Track GST Returns (filing status)"
           method="POST"
           endpoint="/api/v1/b2b/gst/get-finance-status"
-          description="Returns the 12-month filing status (Filed / Overdue / Due) for GSTR-1, GSTR-3B, GSTR-9, etc. for a GSTIN and financial year. Tracks whether returns are filed — not their contents."
+          description="Returns the 12-month status for a GSTIN and financial year. Fileable returns (GSTR-1 / 1A / 3B / 9 / 9C) report Filed / Overdue / Due; GSTR-2A and 2B are ITC statements and report Available / NotAvailable with no due date, counted separately as summary.totalStatementsAvailable. Picking a return narrows both the rows and the counts to that form."
           onSubmit={() => b2bApi.trackGstReturns(gstin, fy, gstr || undefined)}
         >
           <Field label="GSTIN" value={gstin} onChange={setGstin} placeholder="29ABCDE1234F1Z5" />
@@ -170,7 +179,7 @@ export default function GstProfilePage() {
           title="Get Return Summary"
           method="POST"
           endpoint="/api/v1/b2b/gst/profiles/:id/summary/:type"
-          description="Fetches a return summary for the profile using its stored token (auto-refreshed). ret_period is MMYYYY."
+          description="Fetches a return summary for the profile using its stored token (auto-refreshed). ret_period is MMYYYY. GSTR-2A / 2B return the auto-drafted ITC statement for that month rather than a filed return."
           onSubmit={() => b2bApi.getGstProfileSummary(profileId, summaryType, retPeriod)}
         >
           <Field label="Profile ID" value={profileId} onChange={setProfileId} placeholder="Auto-filled from Create" fullWidth />

@@ -288,8 +288,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Profile — Return Summary (stored token)',
         method: 'POST',
         path: 'api/v1/b2b/gst/profiles/:id/summary/:type',
-        description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c; ret_period is MMYYYY.',
-        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr1' }],
+        description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c|gstr2a|gstr2b; ret_period is MMYYYY. gstr2a/gstr2b return the auto-drafted ITC statements through this same endpoint — and nothing is recorded as "filed" for them, because the taxpayer never files them.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr2b' }],
         body: { ret_period: '042024' }
       },
       {
@@ -369,6 +369,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Get Finance / Returns Status',
         method: 'POST',
         path: 'api/v1/b2b/gst/get-finance-status',
+        description: 'Whole-year filing status for one GSTIN. returns.monthly now also carries GSTR2A and GSTR2B — auto-drafted ITC statements, so they use status Available|NotAvailable (never Filed/Due/Overdue) and have no dueDate. 2A exists from the start of the period; 2B appears once GSTN generates it on the 14th of the following month. They are EXCLUDED from summary.totalFiled/Overdue/Due and counted separately as summary.totalStatementsAvailable. gstr narrows BOTH the rows and the counts to a single form (GSTR1|GSTR1A|GSTR3B|GSTR9|GSTR9C|GSTR2A|GSTR2B, dash- and case-insensitive); leave it empty for the whole year. Anything else is a 400 rather than an empty schedule.',
         body: { gstin: GSTIN, financial_year: 'FY 2024-25', gstr: '' }
       },
       {
