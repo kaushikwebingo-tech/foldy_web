@@ -50,7 +50,7 @@ export default function StoragePage() {
           title="Create Folder"
           method="POST"
           endpoint="/api/v1/storage/create-folder"
-          description="Creates a new folder. The folder limit comes from your subscription plan (maxFolders)."
+          description="RETIRED — use POST /api/v1/vault/folders. Folder-count limits no longer exist; storage bytes are the only cap."
           onSubmit={() => storageApi.createFolder(folderName)}
         >
           <Field label="Folder Name" value={folderName} onChange={setFolderName} placeholder="e.g. ITR Documents" />

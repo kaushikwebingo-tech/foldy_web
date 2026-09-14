@@ -3,7 +3,7 @@ import { authApi } from '@/api/authApi';
 import { getToken } from '@/lib/utils';
 import {
   CheckCircle2, XCircle, Clock, AlertTriangle,
-  HardDrive, FolderOpen, FileText, ArrowUpRight,
+  HardDrive, ArrowUpRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,8 +16,6 @@ interface PlanData {
   endDate: string;
   limits: {
     storageLimit: number;
-    maxFolders: number;
-    maxFilesPerFolder: number;
   };
 }
 
@@ -172,16 +170,7 @@ export default function PlanStatusCard() {
           <p className="text-xs font-bold text-slate-700">{formatBytes(plan.limits.storageLimit)}</p>
           <p className="text-[10px] text-slate-400">Storage</p>
         </div>
-        <div className="bg-white/70 rounded-xl p-3 text-center border border-white">
-          <FolderOpen size={14} className="mx-auto mb-1 text-slate-400" />
-          <p className="text-xs font-bold text-slate-700">{plan.limits.maxFolders}</p>
-          <p className="text-[10px] text-slate-400">Max Folders</p>
-        </div>
-        <div className="bg-white/70 rounded-xl p-3 text-center border border-white">
-          <FileText size={14} className="mx-auto mb-1 text-slate-400" />
-          <p className="text-xs font-bold text-slate-700">{plan.limits.maxFilesPerFolder}</p>
-          <p className="text-[10px] text-slate-400">Files/Folder</p>
-        </div>
+
       </div>
 
       {/* CTA */}

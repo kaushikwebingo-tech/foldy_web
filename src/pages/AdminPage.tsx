@@ -19,8 +19,6 @@ export default function AdminPage() {
   const [planPrice, setPlanPrice] = useState("1");
   const [planInterval, setPlanInterval] = useState("monthly");
   const [planStorageGb, setPlanStorageGb] = useState("10");
-  const [planMaxFolders, setPlanMaxFolders] = useState("10");
-  const [planMaxFiles, setPlanMaxFiles] = useState("20");
   const [planDesc, setPlanDesc] = useState("");
   const [planId, setPlanId] = useState("");
   const [planActive, setPlanActive] = useState("true");
@@ -119,8 +117,6 @@ export default function AdminPage() {
     if (planPrice) p.price = Number(planPrice);
     if (planInterval) p.interval = planInterval;
     if (planStorageGb) p.storageLimit = Number(planStorageGb) * GB;
-    if (planMaxFolders) p.maxFolders = Number(planMaxFolders);
-    if (planMaxFiles) p.maxFilesPerFolder = Number(planMaxFiles);
     if (planDesc) p.description = planDesc;
     return p;
   };
@@ -268,8 +264,6 @@ export default function AdminPage() {
               currency: "INR",
               interval: planInterval,
               storageLimit: Number(planStorageGb) * GB,
-              maxFolders: Number(planMaxFolders),
-              maxFilesPerFolder: Number(planMaxFiles),
               isActive: true,
             })
           }
@@ -314,20 +308,6 @@ export default function AdminPage() {
             value={planStorageGb}
             onChange={setPlanStorageGb}
             placeholder="10"
-            type="number"
-          />
-          <Field
-            label="Max Folders"
-            value={planMaxFolders}
-            onChange={setPlanMaxFolders}
-            placeholder="10"
-            type="number"
-          />
-          <Field
-            label="Max Files / Folder"
-            value={planMaxFiles}
-            onChange={setPlanMaxFiles}
-            placeholder="20"
             type="number"
           />
           <Field

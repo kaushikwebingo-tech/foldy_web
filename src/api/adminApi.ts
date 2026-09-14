@@ -16,8 +16,6 @@ export type PlanPayload = {
   currency?: string;
   interval: string;
   storageLimit: number; // bytes
-  maxFolders: number;
-  maxFilesPerFolder: number;
   isActive?: boolean;
 };
 

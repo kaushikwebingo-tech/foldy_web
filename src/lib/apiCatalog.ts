@@ -153,7 +153,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'multipart/form-data. period/frequency required for filing categories.',
         pathVars: [{ key: 'category', value: 'pf_esi' }],
         formdata: [
-          { key: 'file', type: 'file', description: 'PDF/JPG/PNG/DOCX/XLSX, ≤ 5 MB' },
+          { key: 'file', type: 'file', description: 'PDF/JPG/PNG/DOCX/XLSX, ≤ 1 MB' },
           { key: 'period', type: 'text', value: '04-2026', description: 'MM-YYYY or YYYY-YY' },
           { key: 'frequency', type: 'text', value: 'monthly', description: 'monthly|annual (only for PTAX)' }
         ]
@@ -1006,10 +1006,148 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
+  vault: {
+    key: 'vault',
+    name: 'Cabinet (documents)',
+    description:
+      'The real document store: nested folders, files at the root, rename, move, Trash, and storage bytes as the ONLY plan limit. ' +
+      'Uploads are multipart and answer 202 with status "scanning" — the file is NOT readable until the malware scan and ' +
+      'compression finish, so poll GET /files/:id until status is "available". A cross-user id always answers 404, never 403. ' +
+      'Over quota is 413 VAULT_STORAGE_LIMIT_EXCEEDED; an expired plan makes the vault read-only with 423 VAULT_READ_ONLY ' +
+      '(not 402/403 — the Flutter client owns those globally). Set {{token}}.',
+    endpoints: [
+      {
+        name: 'List Children',
+        method: 'GET',
+        path: 'api/v1/vault/children',
+        description:
+          'One listing call: folders and files merged (folders first), breadcrumb included, keyset cursor. ' +
+          'Omit folderId for the vault root. Pass the returned nextCursor back as `cursor` for the next page — `skip` does not exist.',
+        query: [
+          { key: 'folderId', value: '', description: 'omit for the root' },
+          { key: 'cursor', value: '', description: 'opaque; from a previous nextCursor' },
+          { key: 'limit', value: '50' },
+          { key: 'sort', value: 'name', description: 'name | createdAt' },
+          { key: 'order', value: 'asc', description: 'asc | desc' }
+        ]
+      },
+      {
+        name: 'Storage Usage',
+        method: 'GET',
+        path: 'api/v1/vault/usage',
+        description:
+          'Bytes used vs the plan limit, plus overageBytes (usedPercentage saturates at 100, so it cannot tell "exactly full" ' +
+          'from "3 GB over") and trashedBytes (trashed files keep costing storage until the purge cron runs).'
+      },
+      {
+        name: 'Search',
+        method: 'GET',
+        path: 'api/v1/vault/search',
+        description:
+          'Name-fragment search over folders and files, case-insensitive, Trash excluded. Minimum 2 characters. ' +
+          'Regex metacharacters are escaped, so "(1)" matches literally.',
+        query: [
+          { key: 'q', value: 'gstr' },
+          { key: 'limit', value: '50' }
+        ]
+      },
+      {
+        name: 'Create Folder',
+        method: 'POST',
+        path: 'api/v1/vault/folders',
+        description: 'parentId null/omitted = the root. A duplicate name here is a 409 — a name the user typed is never silently rewritten.',
+        body: { name: 'GST Returns', parentId: null }
+      },
+      {
+        name: 'Rename / Move Folder',
+        method: 'PATCH',
+        path: 'api/v1/vault/folders/:id',
+        description:
+          'Rename and move are the same call. Send `name` to rename (409 on collision), send `parentId` to move ' +
+          '(auto-suffixes "name (1)" instead of failing — a drag must not fail). Sending parentId:null moves it to the root; ' +
+          'OMITTING parentId leaves it where it is. Moving a folder into its own descendant is a 409.',
+        pathVars: [{ key: 'id', value: '<folderId>' }],
+        body: { name: 'GST Returns 2026-27' }
+      },
+      {
+        name: 'Trash Folder',
+        method: 'DELETE',
+        path: 'api/v1/vault/folders/:id',
+        description: 'Moves the folder AND everything under it to Trash. Reversible until the Trash is emptied or purged.',
+        pathVars: [{ key: 'id', value: '<folderId>' }]
+      },
+      {
+        name: 'Upload File (multipart)',
+        method: 'POST',
+        path: 'api/v1/vault/files',
+        description:
+          'multipart/form-data: field "file" plus optional "folderId". Answers 202 with status "scanning". ' +
+          'PDF, JPG, PNG and XLSX only, validated on MAGIC BYTES (a renamed payload is refused). Max 25MB by default.',
+        body: { folderId: '' }
+      },
+      {
+        name: 'Get File (poll)',
+        method: 'GET',
+        path: 'api/v1/vault/files/:id',
+        description: 'Poll after an upload until status leaves scanning/processing. "rejected" carries failureReason.',
+        pathVars: [{ key: 'id', value: '<fileId>' }]
+      },
+      {
+        name: 'Rename / Move File',
+        method: 'PATCH',
+        path: 'api/v1/vault/files/:id',
+        description: 'Same semantics as the folder version: `name` renames (409 on collision), `folderId` moves (auto-suffixes).',
+        pathVars: [{ key: 'id', value: '<fileId>' }],
+        body: { name: 'Form 16 FY2026-27.pdf' }
+      },
+      {
+        name: 'Trash File',
+        method: 'DELETE',
+        path: 'api/v1/vault/files/:id',
+        pathVars: [{ key: 'id', value: '<fileId>' }]
+      },
+      {
+        name: 'Download File',
+        method: 'GET',
+        path: 'api/v1/vault/files/:id/download',
+        description:
+          'Mints a 60-second presigned URL forcing Content-Disposition: attachment. The URL IS the credential — do not paste it anywhere. ' +
+          'A file that is not yet "available" answers 409 VAULT_FILE_NOT_READY.',
+        pathVars: [{ key: 'id', value: '<fileId>' }]
+      },
+      {
+        name: 'Bulk Move / Trash',
+        method: 'POST',
+        path: 'api/v1/vault/bulk',
+        description:
+          'Up to 200 ids per call. action "trash" or "move" (move needs destinationId; null = root). ' +
+          'Ids that are not yours are SKIPPED, not rejected — the response counts what actually changed.',
+        body: { action: 'trash', fileIds: [], folderIds: [] }
+      },
+      { name: 'List Trash', method: 'GET', path: 'api/v1/vault/trash', description: 'Trash roots only, with each item\'s purge date.' },
+      {
+        name: 'Restore from Trash',
+        method: 'POST',
+        path: 'api/v1/vault/trash/:type/:id/restore',
+        description: 'Restores exactly that deletion. A folder brings back what went down WITH it, not things trashed separately.',
+        pathVars: [{ key: 'type', value: 'file' }, { key: 'id', value: '<id>' }]
+      },
+      {
+        name: 'Empty Trash',
+        method: 'DELETE',
+        path: 'api/v1/vault/trash',
+        description: 'Marks everything for immediate purge. The cron does the S3 deletes and releases the quota shortly after.'
+      }
+    ]
+  },
+
   storage: {
     key: 'storage',
-    name: 'Documents (Storage)',
-    description: 'In-app document vault: folders, files (metadata) & quota. Storage limits come from the subscription plan (no separate storage purchase). Set {{token}}.',
+    name: 'Documents (Storage) \u2014 RETIRED',
+    description:
+      'RETIRED \u2014 use the Vault group above. This API never stored a byte: the server wrote the literal string '
+      + '"Mock content for <name>" to local disk and the app stripped the file bytes before sending. '
+      + 'Reads still answer so the shipped v1.0.3+4 build does not crash; POST /upload-file now returns 410 Gone.',
     endpoints: [
       { name: 'Get Storage Info', method: 'GET', path: 'api/v1/storage/info' },
       { name: 'Get Storage Usage', method: 'GET', path: 'api/v1/storage/usage' },
@@ -1094,8 +1232,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           currency: 'INR',
           interval: 'monthly',
           storageLimit: 10737418240,
-          maxFolders: 10,
-          maxFilesPerFolder: 20,
           isActive: true
         }
       },
