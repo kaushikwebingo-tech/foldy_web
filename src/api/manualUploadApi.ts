@@ -22,6 +22,23 @@ export const manualUploadApi = {
   download: (id: string) =>
     client.get(`/manual-uploads/items/${id}/download`),
 
+  // Moves to Trash (was a hard delete). Returns { id, holdUntil, purgeAt };
+  // holdUntil is null for an owner, now + 7 days for a delegated session.
   remove: (id: string) =>
     client.delete(`/manual-uploads/items/${id}`),
+
+  // Trash, newest deletion first, max 200. Each item carries trashedByName,
+  // trashedByOwner and holdUntil (held while holdUntil > now).
+  listTrash: () =>
+    client.get('/manual-uploads/trash'),
+
+  // Two 409s without an errorCode: a live filing already holds the period, or
+  // the purge is racing it. Tell them apart by message.
+  restore: (id: string) =>
+    client.post(`/manual-uploads/items/${id}/restore`),
+
+  // Owner session only (403 MEMBER_OWNER_ONLY when delegated). Held items are
+  // skipped: { deleted, remaining, held, heldUntil }. No listedAt, unlike the vault.
+  emptyTrash: () =>
+    client.delete('/manual-uploads/trash'),
 };

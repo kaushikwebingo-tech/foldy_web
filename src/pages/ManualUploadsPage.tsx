@@ -106,18 +106,50 @@ export default function ManualUploadsPage() {
           <Field label="Document ID" value={itemId} onChange={setItemId} placeholder="ManualUpload _id" fullWidth />
         </ApiCard>
 
-        {/* Delete */}
+        {/* Move to Trash (soft delete) */}
         <ApiCard
           step={5}
-          title="Delete Document"
+          title="Move Document to Trash"
           method="DELETE"
           endpoint="/api/v1/manual-uploads/items/:id"
-          description="Deletes the document from S3 and the database. Irreversible."
+          description="Soft delete for everyone (was a hard delete). Returns { id, holdUntil, purgeAt }: an owner gets no hold, a delegated session holds it for 7 days. It keeps counting toward storage until purged (30 days)."
           onSubmit={() => manualUploadApi.remove(itemId)}
-          buttonLabel="Delete"
+          buttonLabel="Move to Trash"
         >
           <Field label="Document ID" value={itemId} onChange={setItemId} placeholder="ManualUpload _id" fullWidth />
         </ApiCard>
+
+        {/* Trash */}
+        <ApiCard
+          step={6}
+          title="List Trash"
+          method="GET"
+          endpoint="/api/v1/manual-uploads/trash"
+          description="Newest deletion first, max 200. Each item shows trashedByName, trashedByOwner and holdUntil — held while holdUntil is in the future."
+          onSubmit={() => manualUploadApi.listTrash()}
+        />
+
+        <ApiCard
+          step={7}
+          title="Restore Document"
+          method="POST"
+          endpoint="/api/v1/manual-uploads/items/:id/restore"
+          description="Needs vault.delete when delegated. 409 (no errorCode) when a live filing already holds the period, or when the purge is already running."
+          onSubmit={() => manualUploadApi.restore(itemId)}
+          buttonLabel="Restore"
+        >
+          <Field label="Document ID" value={itemId} onChange={setItemId} placeholder="trashed ManualUpload _id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          step={8}
+          title="Empty Trash"
+          method="DELETE"
+          endpoint="/api/v1/manual-uploads/trash"
+          description="Owner session only (403 MEMBER_OWNER_ONLY when delegated). Permanently deletes unheld items; items a director trashed stay protected until holdUntil. Returns { deleted, remaining, held, heldUntil }."
+          onSubmit={() => manualUploadApi.emptyTrash()}
+          buttonLabel="Empty Trash"
+        />
       </div>
     </div>
   );

@@ -8,14 +8,22 @@ export interface AudienceFilters {
   workspace?: 'business' | 'individual';
 }
 
+type PlanModule = 'gst' | 'roc' | 'tds' | 'itr' | 'investment';
+
 export type PlanPayload = {
   planType: string;
+  workspace: 'business' | 'individual'; // required by the server on create
   name: string;
   description?: string;
   price: number;
   currency?: string;
   interval: string;
   storageLimit: number; // bytes
+  // People who may hold the account, OWNER INCLUDED. -1 = unlimited, 0 is
+  // refused. Defaults to 1 on create. Snapshotted onto a subscription at purchase.
+  memberLimit?: number;
+  modules?: Partial<Record<PlanModule, { enabled?: boolean; limit?: number }>>;
+  allowedCredits?: Partial<Record<PlanModule, number>>;
   isActive?: boolean;
 };
 
@@ -83,6 +91,25 @@ export const adminApi = {
 
   cancelSubscription: (userId: string, reason: string) =>
     adminClient.post(`/users/${userId}/cancel-subscription`, { reason }),
+
+  // --- A customer's co-users (director access, Team tab) --- /users/:userId/team
+  // Pure read (users.team.read): memberships, invites (expired ones flagged),
+  // memberOf, and a lapse-aware memberLimit + seatsUsed. Never seeds rows.
+  getUserTeam: (userId: string) =>
+    adminClient.get(`/users/${userId}/team`),
+
+  // Force-revoke (users.team.revoke). Runs the owner's own removal path. reason
+  // (≤ 500) goes to the admin audit trail only. The owner row → 409 MEMBER_OWNER_ONLY.
+  revokeTeamMember: (userId: string, membershipId: string, reason?: string) =>
+    adminClient.delete(`/users/${userId}/team/members/${membershipId}`, {
+      data: reason ? { reason } : {},
+    }),
+
+  // Cancel an invitation (users.team.revoke), expired ones included.
+  cancelTeamInvite: (userId: string, inviteId: string, reason?: string) =>
+    adminClient.delete(`/users/${userId}/team/invites/${inviteId}`, {
+      data: reason ? { reason } : {},
+    }),
 
   refundPayment:  (paymentId: string, amount?: number, reason?: string) =>
     adminClient.post(`/payments/${paymentId}/refund`, { amount, reason }),

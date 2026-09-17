@@ -18,6 +18,7 @@ import AdminPage         from '@/pages/AdminPage';
 import LoadTestPage      from '@/pages/LoadTestPage';
 import ReportsPage       from '@/pages/ReportsPage';
 import CalendarPage      from '@/pages/CalendarPage';
+import TeamPage          from '@/pages/TeamPage';
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/admin"          element={<AdminPage />} />
           <Route path="/reports"        element={<ReportsPage />} />
           <Route path="/calendar"       element={<CalendarPage />} />
+          <Route path="/team"           element={<TeamPage />} />
           <Route path="/load-testing"   element={<LoadTestPage />} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>

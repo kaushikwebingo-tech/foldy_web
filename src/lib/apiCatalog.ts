@@ -51,19 +51,26 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Active Sessions',
         method: 'GET',
         path: 'api/v1/user/sessions',
-        description: 'Lists the user\'s active device sessions (current flagged). Single-active-session policy keeps this to one.'
+        description: 'The CALLER\'s own sessions on the token\'s account: { sessions: [{ sid, current, createdAt, lastSeenAt, device: { name, platform, appVersion }, place, actor }] }. Owner session: the owner\'s rows (actor null). Delegated session: only this director\'s delegated sessions on the company. The owner cannot see directors\' devices (v1).'
+      },
+      {
+        name: 'End One Session',
+        method: 'DELETE',
+        path: 'api/v1/user/sessions/:sid',
+        description: 'Signs out one of the caller\'s OWN other sessions (same scope as Active Sessions). 200 "Signed that device out." { sid }. 422 when :sid is the current session (use Logout), 404 "That session was not found." for a sid outside your own list. No errorCode on these errors.',
+        pathVars: [{ key: 'sid', value: '<sid from Active Sessions>' }]
       },
       {
         name: 'Log Out Other Devices',
         method: 'POST',
         path: 'api/v1/user/sessions/logout-others',
-        description: 'Signs out every device except the current one.'
+        description: 'No body. Scope is fixed server-side to the caller\'s actor — a client cannot ask for account scope. Owner: the owner\'s other devices, never a director\'s. Delegated: that director\'s other delegated sessions on this company only. Returns { removed }. 400 for a legacy token without sid.'
       },
       {
         name: 'Plan / Subscription Status',
         method: 'GET',
         path: 'api/v1/user/plan-status',
-        description: 'Current subscription/trial status + plan limits for the logged-in user.'
+        description: 'Current subscription/trial status + plan limits. A director sees the COMPANY\'s plan. Seats: memberLimit = people who may hold the account, OWNER INCLUDED (-1 unlimited; business trial 3, individual trial 1; a row without the field reads as 1; NOT lapse-aware — enforcement uses 1 once the plan has expired). seatsUsed = 1 (owner) + active and pending_approval members + live invitations (suspended members hold no seat).'
       },
       {
         name: 'Storage Status',
@@ -76,6 +83,148 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Manual Refresh', method: 'POST', path: 'api/v1/user/manualRefresh/:type', description: 'Re-fetch a module\'s data, spending a credit. type = module key (gst | roc | tds | itr | investment).', pathVars: [{ key: 'type', value: 'gst' }], body: {} },
       { name: 'Reminders', method: 'GET', path: 'api/v1/user/reminders', description: 'Compliance reminders (due/overdue nudges) for the user.' },
       { name: 'Dismiss Reminder', method: 'POST', path: 'api/v1/user/reminders/:id/dismiss', pathVars: [{ key: 'id', value: '<reminderId>' }] }
+    ]
+  },
+
+  account: {
+    key: 'account',
+    name: 'Team & Director Access',
+    description:
+      'B2B multi-director access: a company account invites individual accounts, who then open a DELEGATED session on the company. ' +
+      'Delegated JWT = { id: <company>, sid, act: <director>, mem: <membership> } (no phoneno); a token without act is an owner/personal session and may do everything. ' +
+      'Every delegated request passes the member gate first: 403 MEMBER_PERMISSION_DENIED (role lacks it / unmapped route) or 403 MEMBER_OWNER_ONLY; 401 { reason: "access_revoked" } MEMBER_ACCESS_REVOKED when the membership is gone, suspended or pending, or the feature is off. ' +
+      'MEMBERS_ENABLED (server env, default OFF): invite, role change, cancel invite, role create/update/delete, claim, decline and enter answer 404 NOT_FOUND; the GETs and member status/remove still answer. ' +
+      'Member validation errors are 422 VALIDATION_FAILED. OTP login is still the fixed 123456 in dev; invitation codes are random and sent by SMS. Set {{token}} to the owner JWT for the owner calls, the director\'s PERSONAL JWT for invitations/memberships.',
+    endpoints: [
+      // ── Owner side (non-delegated; business workspace to invite) ──
+      {
+        name: 'List Members + Pending Invites',
+        method: 'GET',
+        path: 'api/v1/account/members',
+        description: 'Owner session only (the controller refuses every delegated session with 403 MEMBER_OWNER_ONLY). Returns { members: [{ id (membership id), userId, name, maskedMobile, avatarUrl, role: { id, name } | null, status: pending_approval|active|suspended, title, isOwner, lastAccessAt }], pendingInvites: [{ id, maskedMobile, role, title, expiresAt }] }. Not sorted. Not flag-gated; seeds the four system roles and the owner row as a side effect.'
+      },
+      {
+        name: 'Invite Member',
+        method: 'POST',
+        path: 'api/v1/account/members/invite',
+        description: 'Owner session, business workspace. Limiter 10 / 15 min per account. Unknown keys → 422. phoneno is normalised to 10 digits (+91, 0, spaces, dashes). roleId must be a role on THIS account (see List Roles; the Owner role cannot be granted). title ≤ 80, pan optional (exactly 10, pins the invite to that PAN). Re-inviting a live number REPLACES the invite (new code, attempts 0, 7-day expiry; a title/pan left out is cleared). The company\'s own mobile is allowed — only the claimant\'s PAN is checked at claim. The code is NEVER returned (SMS). 200 { sent, maskedMobile, expiresInDays: 7 }. Errors: 404 NOT_FOUND (flag off), 403 MEMBER_WORKSPACE_NOT_ALLOWED, 404 MEMBER_NOT_FOUND (role), 422 MEMBER_PERMISSION_DENIED (Owner role), 422 MEMBER_SAME_PAN, 422 MEMBER_ALREADY_MEMBER, 403 MEMBER_PLAN_LIMIT_REACHED data { limit, used }, 429.',
+        body: { phoneno: '9876543210', roleId: '<roleId from List Roles>', title: 'Director — Finance' }
+      },
+      {
+        name: 'Approve / Suspend / Re-activate Member',
+        method: 'PATCH',
+        path: 'api/v1/account/members/:id',
+        description: 'Owner session. :id = MEMBERSHIP id (members[].id). status active approves a pending member or re-activates a suspended one — both need a free seat (403 MEMBER_PLAN_LIMIT_REACHED data { limit, used }). suspended frees the seat and ends every session under this membership, its AccountLinks and handset rows (repeatable; the Cabinet PIN is kept). 200 "Access approved." / "Access suspended." { status }. 422 MEMBER_OWNER_ONLY for the owner row, 404 MEMBER_NOT_FOUND. Not flag-gated.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }],
+        body: { status: 'active' }
+      },
+      {
+        name: 'Change Member Role',
+        method: 'PATCH',
+        path: 'api/v1/account/members/:id/role',
+        description: 'Owner session. Applies on the member\'s NEXT request (the gate re-reads the role every time; sessions are not ended). Same role = no-op 200. 200 "Role updated." { roleId }. Errors: 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 422 MEMBER_OWNER_ONLY (owner row), 422 MEMBER_PERMISSION_DENIED (Owner role).',
+        pathVars: [{ key: 'id', value: '<membershipId>' }],
+        body: { roleId: '<roleId>' }
+      },
+      {
+        name: 'Remove Member',
+        method: 'DELETE',
+        path: 'api/v1/account/members/:id',
+        description: 'Owner session. Ends every session the director holds on the company, removes their AccountLinks (and the switch sessions they minted), handset rows and Cabinet PIN row, then deletes the membership (no tombstone — history is in the audit log). Their uploads stay. 200 "That person no longer has access." { removed: true }. 422 MEMBER_OWNER_ONLY for the owner row. Not flag-gated.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }]
+      },
+      {
+        name: 'Cancel Invitation',
+        method: 'DELETE',
+        path: 'api/v1/account/invites/:id',
+        description: 'Owner session. Hard delete — the seat is freed at once. Works on an expired invite the nightly sweep has not removed yet. 200 "Invitation cancelled." { cancelled: true }. 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND.',
+        pathVars: [{ key: 'id', value: '<inviteId from pendingInvites>' }]
+      },
+      // ── Roles ──
+      {
+        name: 'List Roles',
+        method: 'GET',
+        path: 'api/v1/account/roles',
+        description: 'Owner session (a delegated custom role holding members.read also passes). { roles: [{ id, name, description, systemKey (owner|manager|accountant|viewer|null), isSystem, permissions[], moduleAccess }] }. System-role permissions resolve from code. moduleAccess is stored but NOT enforced. Not sorted. Not flag-gated; seeds the four system roles.'
+      },
+      {
+        name: 'Create Custom Role',
+        method: 'POST',
+        path: 'api/v1/account/roles',
+        description: 'Owner session. Unknown keys STRIPPED (isSystem/systemKey/moduleAccess ignored). name 1-60, not "owner" nor a system role name nor another role here (case-insensitive). description ≤ 200. permissions ≤ 100 from the 41-name vocabulary (members.read/invite/approve/update/remove, roles.read/create/update/delete, account.read/update, auditLogs.read, sessions.read/revoke, billing.read/purchase, gst|roc|tds|itr|investment .read/.refresh/.manage, vault.read/upload/delete/share, support.read/create, notifications.read, calendar.read, reports.read/export); legacy vault.unlock is accepted and dropped. members.invite/approve/update/remove and roles.create/update/delete are owner-only → 422 MEMBER_PERMISSION_DENIED data { permissions }. 201 "Role created." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED ("Unknown permission: x." data { permissions }), 409 MEMBER_ROLE_NAME_TAKEN.',
+        body: { name: 'CA Firm', description: 'Our auditors', permissions: ['gst.read', 'itr.read', 'vault.read'] }
+      },
+      {
+        name: 'Update Custom Role',
+        method: 'PATCH',
+        path: 'api/v1/account/roles/:id',
+        description: 'Owner session. At least one of name / description ("" clears it) / permissions (REPLACES the list); same rules as create. 200 "Role updated." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE (Owner/Manager/Accountant/Viewer), 422 MEMBER_PERMISSION_DENIED, 409 MEMBER_ROLE_NAME_TAKEN.',
+        pathVars: [{ key: 'id', value: '<roleId>' }],
+        body: { permissions: ['gst.read', 'itr.read', 'vault.read', 'reports.read'] }
+      },
+      {
+        name: 'Delete Custom Role',
+        method: 'DELETE',
+        path: 'api/v1/account/roles/:id',
+        description: 'Owner session. Refused while any membership (any status) or a LIVE invite holds the role — 409 MEMBER_ROLE_IN_USE; expired invites naming it are deleted with it. 200 "Role deleted." { deleted: true }. Also 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE.',
+        pathVars: [{ key: 'id', value: '<roleId>' }]
+      },
+      // ── Invitee side (the director's PERSONAL session) ──
+      {
+        name: 'My Invitations',
+        method: 'GET',
+        path: 'api/v1/account/invitations',
+        description: 'Personal (non-delegated) session; a delegated one gets 403 MEMBER_OWNER_ONLY. Live invitations addressed to the caller\'s own mobile, excluding any the caller sent: { invitations: [{ id, account: { id, name }, role (name string | null), title, expiresAt }] }. Not flag-gated.'
+      },
+      {
+        name: 'Claim Invitation',
+        method: 'POST',
+        path: 'api/v1/account/invitations/claim',
+        description: 'Personal session of an INDIVIDUAL-workspace account with a PAN on file. Limiter 10 / 15 min per user. Unknown keys refused; every validation error uses MEMBER_INVALID_INVITE. code = the 6-digit SMS code. Send invitationId (24 hex) — required when the caller has more than one live invite (422 data { invitationIdRequired: true }). 5 attempts per invite. Creates the membership as pending_approval (an existing row is returned unchanged). 200 { membershipId, status }. Errors: 404 NOT_FOUND (flag), 422 MEMBER_WORKSPACE_NOT_ALLOWED, 422 MEMBER_PAN_REQUIRED, 422 MEMBER_INVALID_INVITE (wrong code data { attemptsRemaining }, different PAN, not found), 422 MEMBER_INVITE_EXPIRED, 429 MEMBER_INVITE_ATTEMPTS, 422 MEMBER_SAME_PAN (claimant PAN = company PAN), 429.',
+        body: { invitationId: '<id from My Invitations>', code: '123456' }
+      },
+      {
+        name: 'Decline Invitation',
+        method: 'POST',
+        path: 'api/v1/account/invitations/:id/decline',
+        description: 'Personal session; the invite must be addressed to the caller\'s mobile. No body. Hard delete so the owner can re-invite later. 200 "Invitation declined." { declined: true }. 404 NOT_FOUND (flag), 404 MEMBER_NO_ACCOUNT, 404 MEMBER_NOT_FOUND.',
+        pathVars: [{ key: 'id', value: '<invitationId>' }]
+      },
+      {
+        name: 'My Memberships (switcher)',
+        method: 'GET',
+        path: 'api/v1/account/memberships',
+        description: 'Personal session. All of the caller\'s non-owner memberships, EVERY status: { accounts: [{ membershipId, accountId, name, workspace, avatarUrl, role (name | null), status: pending_approval|active|suspended }] }. Only active rows can be entered. Not flag-gated.'
+      },
+      {
+        name: 'Enter Company (delegated session)',
+        method: 'POST',
+        path: 'api/v1/account/memberships/enter',
+        description: 'Personal session (not from inside another company). Send the device headers (X-Device-Id, X-Device-Name, X-Device-Platform, X-App-Version) — they are stored on the session row; the same X-Device-Id keeps only the newest session, and a director holds at most MAX_DEVICE_SESSIONS (default 3) on one company (oldest evicted → 401 another_device). No refresh token; the delegated JWT lasts 1 day. Keep the personal token — to leave, POST /auth/logout with the delegated token and switch back. 200 { token, account: { id, name }, role, permissions[] } (permissions go stale on a role change — re-read Me Permissions). Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 403 MEMBER_NOT_FOUND, 403 MEMBER_PENDING_APPROVAL, 403 MEMBER_ACCESS_REVOKED (suspended — 403, not 401), 404 MEMBER_NO_ACCOUNT (company deleted or blocked).',
+        body: { accountId: '<accountId from My Memberships>' }
+      },
+      // ── Any session ──
+      {
+        name: 'Me — Permissions',
+        method: 'GET',
+        path: 'api/v1/account/me/permissions',
+        description: 'Any session; the authoritative read the app gates on. Non-delegated (any workspace): { isOwner: true, accountName, roleName: "Owner", permissions: [all 41], membersEnabled }. Delegated: { isOwner: false, accountName, roleName, permissions (current role), membersEnabled }. Not flag-gated — this is how the app reads MEMBERS_ENABLED.'
+      },
+      {
+        name: 'Activity Log (audit)',
+        method: 'GET',
+        path: 'api/v1/account/audit',
+        description: 'Owner session, or a delegated role with auditLogs.read (no default non-owner role has it). Always scoped to the token\'s account. Unknown query keys → 422. Newest first, keyset paged: pass nextCursor back as cursor. from/to accept ISO or bare YYYY-MM-DD (IST whole day; to must be ≥ from). Items: { id, createdAt, actor: { id, name, phoneMasked }, roleName, area, operation, action, targetType, targetId, description, outcome: pending|success|failure, statusCode }. area/operation examples: members/invite_member|approve_member|remove_member|enter_account…, vault/upload|trash|restore|purge|download|lock_set…, <segment>/access_denied (gate refusals). Retention: deletions 6 years, downloads 12 months, everything else 1 year. Not flag-gated.',
+        query: [
+          { key: 'area', value: '', description: 'optional, exact match, e.g. members | vault | gst' },
+          { key: 'actor', value: '', description: 'optional, person user id (24 hex)' },
+          { key: 'operation', value: '', description: 'optional, exact match, e.g. trash | access_denied' },
+          { key: 'from', value: '', description: 'optional, ISO or YYYY-MM-DD (IST 00:00)' },
+          { key: 'to', value: '', description: 'optional, ISO or YYYY-MM-DD (IST 23:59:59.999)' },
+          { key: 'cursor', value: '', description: 'optional, nextCursor from the previous page' },
+          { key: 'limit', value: '50', description: '1-100, default 50' }
+        ]
+      }
     ]
   },
 
@@ -175,10 +324,30 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'id', value: '<documentId>' }]
       },
       {
-        name: 'Delete Document',
+        name: 'Move Document to Trash',
         method: 'DELETE',
         path: 'api/v1/manual-uploads/items/:id',
+        description: 'SOFT delete for every user (was a hard delete), flag on or off. Gate vault.delete. Stamps trashedBy/trashedByName/trashedByOwner; an owner gets no hold, a delegated session gets holdUntil = now + 7 days; purgeAt = now + 30 days. The file keeps counting toward storage, and a trashed filing no longer blocks uploading a replacement for the same period. 200 "Document moved to Trash." { id, holdUntil, purgeAt }. 404 NOT_FOUND (bad id, not yours, or already in Trash).',
         pathVars: [{ key: 'id', value: '<documentId>' }]
+      },
+      {
+        name: 'List Trash',
+        method: 'GET',
+        path: 'api/v1/manual-uploads/trash',
+        description: 'Gate vault.read. Newest deletion first, max 200, no paging: { items: [{ id, categoryKey, kind: filing|document, period, frequency, status, originalName, mimeType, originalSize, compressedSize, uploadedAt, uploadedByName, trashedAt, purgeAt, trashedByName, trashedByOwner, holdUntil }] }. Held = holdUntil != null && holdUntil > now (nobody, the owner included, can permanently delete it until then).'
+      },
+      {
+        name: 'Restore from Trash',
+        method: 'POST',
+        path: 'api/v1/manual-uploads/items/:id/restore',
+        description: 'Gate vault.delete. No body, no rate limit, no read-only check. 200 "Document restored." { id }. 404 NOT_FOUND. Two 409s WITHOUT an errorCode — tell them apart by message: "Another document is already filed for this period…" (a live filing holds the period) and "This document is being deleted permanently…" (purge race).',
+        pathVars: [{ key: 'id', value: '<documentId>' }]
+      },
+      {
+        name: 'Empty Trash',
+        method: 'DELETE',
+        path: 'api/v1/manual-uploads/trash',
+        description: 'OWNER SESSION ONLY (gate OWNER_ONLY + requireOwnerSession → 403 MEMBER_OWNER_ONLY when delegated). No query — unlike the vault there is no listedAt. Marks and purges unheld rows (≤ 200 inline, the cron takes the rest); held rows are skipped. 200 { deleted, remaining, held, heldUntil } with message "Trash emptied." / "Deleted N document(s). M more will be removed shortly." plus " H document(s) deleted by others are protected until <date>." when some are held.'
       }
     ]
   },
@@ -209,7 +378,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     endpoints: [
       { name: 'Instafinancials Webhook', method: 'POST', path: 'webhook/instafinancials', description: 'ROC/LLP job callbacks. Verifies X-Webhook-Timestamp + X-Webhook-Signature against the webhook secret.', body: {} },
       { name: 'MoneyOne Webhook', method: 'POST', path: 'webhook/moneyone', description: 'Account-Aggregator consent + FI-data-ready callbacks.', body: {} },
-      { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature.', body: {} }
+      { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature. payment.captured, order.paid and subscription.charged resolve the STORED PaymentOrder (or rebuild a legacy one from Razorpay) and call the same apply-once path as verify-payment. 200 for applied / already applied / not applied (flagged for support) / unattributable, 409 while in progress, 503 when the Razorpay lookup is unavailable (retryable). Unsigned deliveries (no RAZORPAY_WEBHOOK_SECRET) apply nothing unless mock mode AND the order id starts with order_mock_.', body: {} }
     ]
   },
 
@@ -956,32 +1125,38 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   payments: {
     key: 'payments',
     name: 'Payments',
-    description: 'Razorpay order creation + signature verification, payment history. Set {{token}}.',
+    description: 'Razorpay order creation + signature verification, payment history. createOrder STORES what was bought (a PaymentOrder priced from the catalog); verify-payment and the webhook apply that stored order exactly once — the request body never decides what is bought. Delegated sessions: plans / packs / history need billing.read, create-order and verify-payment need billing.purchase (no default non-owner role has it). Set {{token}}.',
     endpoints: [
       {
         name: 'List Active Plans',
         method: 'GET',
         path: 'api/v1/payments/plans',
-        description: 'Active catalog plans. A tier can have many plans — pick a plan _id to subscribe by planId.'
+        description: 'Active catalog plans for the caller\'s workspace. A tier can have many plans — pick a plan _id to subscribe by planId. Each plan carries memberLimit (people incl. the owner; default 1, -1 = unlimited) — a plan below the account\'s seatsUsed cannot be bought.'
       },
       { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable credit packs; optional ?module= filter.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment (optional)' }] },
       {
-        name: 'Create Order',
+        name: 'Create Order (plan)',
         method: 'POST',
         path: 'api/v1/payments/create-order',
-        description: 'Prefer planId (a tier has many plans). planType is a fallback that resolves the cheapest active plan of that tier; amount is a last-resort fallback. Price is server-authoritative from the catalog.',
-        body: { planId: '<planId>', amount: 999 }
+        description: 'Unknown keys refused (400). purpose defaults to "plan". Prefer planId; planType (individual|business|enterprise) falls back to the cheapest ACTIVE plan of that tier. amount is accepted from the shipped app and IGNORED — the price comes from the catalog. module is only copied into the Razorpay notes. Seat check: a plan whose memberLimit (not -1) is below seatsUsed is refused BEFORE any money moves. 200 { order (Razorpay; amount in paise), planId, planType, amount (₹) }; mock mode returns order.id "order_mock_…" — use THAT id in verify. Errors: 400 (Joi / "planId or planType is required…" / Razorpay failure), 422 PAYMENT_PLAN_UNAVAILABLE, 409 MEMBER_DOWNGRADE_BLOCKED data { memberLimit, seatsUsed }.',
+        body: { purpose: 'plan', planId: '<planId>' }
       },
       {
-        name: 'Verify Payment & Upgrade',
+        name: 'Create Order (credits)',
+        method: 'POST',
+        path: 'api/v1/payments/create-order',
+        description: 'Credit top-up: purpose "credits" + packId (required). 200 "Credit order created successfully." { order, purpose, packId, module, credits, amount }. 400 "packId is required to buy credits." / "Credit pack not found or inactive.".',
+        body: { purpose: 'credits', packId: '<packId from List Credit Packs>' }
+      },
+      {
+        name: 'Verify Payment & Apply',
         method: 'POST',
         path: 'api/v1/payments/verify-payment',
-        description: 'Send planId (preferred) or planType to choose which plan to upgrade to.',
+        description: 'Only razorpay_order_id / razorpay_payment_id / razorpay_signature are needed (Joi unknown(true)). purpose, planId, planType, packId are OPTIONAL and only COMPARED with the stored order — any that differs → 422 PAYMENT_ORDER_MISMATCH data { orderId, fields }; amount is ignored. Flow: HMAC check (mock mode accepts only order_mock_* / pay_mock_* / mock_signature) → load the stored order (the token\'s account must own it; a pre-fix order is rebuilt from Razorpay) → apply once (claim created → processing, waits up to 5 s). 200 "Subscription upgraded successfully." (data = SubscriptionPlan incl. memberLimit) or "This payment has already been applied." on a replay / double tap / webhook-first (nothing extended again); credits: "N GST credits added successfully." { duplicate, module, topupBalance, planAllowed, planUsed, creditsAdded } or "This payment has already been credited.". Errors: 422 (Joi), 400 "Payment verification failed." (signature), 404 PAYMENT_ORDER_NOT_FOUND { orderId }, 409 PAYMENT_ORDER_UNVERIFIABLE { orderId, retryable }, 409 PAYMENT_IN_PROGRESS { orderId } (re-check plan status, do not pay again), 409 PAYMENT_NOT_APPLIED { orderId, paymentId, reasonCode e.g. MEMBER_DOWNGRADE_BLOCKED, details? } (terminal — support refunds or applies), 400 transient apply failure (claim released, retry is safe).',
         body: {
-          razorpay_order_id: 'order_mock_123',
+          razorpay_order_id: '<order.id from Create Order, e.g. order_mock_…>',
           razorpay_payment_id: 'pay_mock_123',
-          razorpay_signature: 'mock_signature',
-          planId: '<planId>'
+          razorpay_signature: 'mock_signature'
         }
       },
       {
@@ -1073,7 +1248,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Trash Folder',
         method: 'DELETE',
         path: 'api/v1/vault/folders/:id',
-        description: 'Moves the folder AND everything under it to Trash. Reversible until the Trash is emptied or purged.',
+        description: 'Moves the folder AND everything under it to Trash. Reversible until the Trash is emptied or purged. Gate vault.delete. 200 "Folder moved to Trash." { id, folders, files }. Stamps trashedBy/trashedByName/trashedByOwner; a DELEGATED session also sets holdUntil = now + 7 days (not in the response — re-read List Trash), and purgeAt = now + VAULT_TRASH_PURGE_DAYS (default 30).',
         pathVars: [{ key: 'id', value: '<folderId>' }]
       },
       {
@@ -1104,6 +1279,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Trash File',
         method: 'DELETE',
         path: 'api/v1/vault/files/:id',
+        description: 'Gate vault.delete. 200 "File moved to Trash." { id }. Same stamps as Trash Folder: owner → no hold; delegated session → holdUntil = now + 7 days.',
         pathVars: [{ key: 'id', value: '<fileId>' }]
       },
       {
@@ -1121,22 +1297,81 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/vault/bulk',
         description:
           'Up to 200 ids per call. action "trash" or "move" (move needs destinationId; null = root). ' +
-          'Ids that are not yours are SKIPPED, not rejected — the response counts what actually changed.',
+          'Ids that are not yours are SKIPPED, not rejected — the response counts what actually changed. ' +
+          'Delegated sessions: vault.upload at the gate, PLUS vault.delete in the controller when action is "trash" (403 MEMBER_PERMISSION_DENIED).',
         body: { action: 'trash', fileIds: [], folderIds: [] }
       },
-      { name: 'List Trash', method: 'GET', path: 'api/v1/vault/trash', description: 'Trash roots only, with each item\'s purge date.' },
+      {
+        name: 'List Trash',
+        method: 'GET',
+        path: 'api/v1/vault/trash',
+        description:
+          'Gate vault.read. Trash roots only, newest first, at most 200 folders + 200 files, no paging: { folders[], files[], trashedBytes }. ' +
+          'Every item carries trashedAt, purgeAt, trashedByName, trashedByOwner (both null on rows trashed before co-users) and holdUntil. ' +
+          'HELD = holdUntil != null && holdUntil > now: nobody, the owner included, can permanently delete it until then (a director\'s trash is held 7 days; owner trashes are never held). ' +
+          'Files also carry uploadedByName, folders createdByName. The body has no server time — read the HTTP Date header and pass it as listedAt to Empty Trash.'
+      },
       {
         name: 'Restore from Trash',
         method: 'POST',
         path: 'api/v1/vault/trash/:type/:id/restore',
-        description: 'Restores exactly that deletion. A folder brings back what went down WITH it, not things trashed separately.',
+        description:
+          'Gate vault.delete. Restores exactly that deletion. A folder brings back what went down WITH it, not things trashed separately. ' +
+          'Returns to its parent (or the root if the parent is itself trashed); a name clash auto-suffixes "name (1)". Clears the hold. ' +
+          'Errors: 404 VAULT_FILE_NOT_FOUND / VAULT_FOLDER_NOT_FOUND (not a trash root), 409 VAULT_PURGE_IN_PROGRESS (within 5 minutes of purgeAt or being purged), 409 VAULT_NAME_TAKEN, 423 VAULT_READ_ONLY, 429.',
         pathVars: [{ key: 'type', value: 'file' }, { key: 'id', value: '<id>' }]
       },
       {
         name: 'Empty Trash',
         method: 'DELETE',
         path: 'api/v1/vault/trash',
-        description: 'Marks everything for immediate purge. The cron does the S3 deletes and releases the quota shortly after.'
+        description:
+          'OWNER SESSION ONLY (gate OWNER_ONLY + requireOwnerSession → 403 MEMBER_OWNER_ONLY when delegated). Unknown query keys refused (400). ' +
+          'Marks every UNHELD trashed row for purge and purges up to 200 inline (the 03:15 cron takes the rest); held rows are untouched. ' +
+          'listedAt (optional ISO): only items with trashedAt <= listedAt are taken, so something trashed after the owner loaded the list is never deleted. ' +
+          '200 { markedForPurge, deleted, remaining, releasedBytes, held (trash roots still held), heldUntil (earliest hold end | null) }; the message adds "H item(s) deleted by others are protected until <date>." when held > 0.',
+        query: [{ key: 'listedAt', value: '', description: 'optional ISO date — the Date header of the List Trash call' }]
+      },
+      // ── Cabinet lock: per PERSON (each director has their own PIN / lock on the company Cabinet) ──
+      {
+        name: 'Lock Status',
+        method: 'GET',
+        path: 'api/v1/vault/lock',
+        description: 'Any member. The caller\'s own lock on this Cabinet. 200 "Lock status fetched.".'
+      },
+      {
+        name: 'Set / Change Lock',
+        method: 'POST',
+        path: 'api/v1/vault/lock',
+        description: 'Any member. mode device|pin; pin (4 or 6 digits) is required for "pin" and forbidden for "device"; currentPin to change an existing PIN; autoLockMinutes 0-60. Write limiter. 200 "Cabinet lock updated.".',
+        body: { mode: 'pin', pin: '482913', autoLockMinutes: 2 }
+      },
+      {
+        name: 'Verify PIN (unlock)',
+        method: 'POST',
+        path: 'api/v1/vault/lock/verify',
+        description: 'Any member. Write limiter. 200 "Unlocked.".',
+        body: { pin: '482913' }
+      },
+      {
+        name: 'Remove Lock',
+        method: 'DELETE',
+        path: 'api/v1/vault/lock',
+        description: 'Any member. Optional body { pin }. Write limiter. 200 "Cabinet lock removed.".',
+        body: { pin: '482913' }
+      },
+      {
+        name: 'Request Lock Reset (OTP)',
+        method: 'POST',
+        path: 'api/v1/vault/lock/reset/request',
+        description: 'Any member. Texts a code to the CALLER\'s registered mobile — for a delegated session that is the director\'s mobile, not the company\'s. Reset limiter. 200 "We sent a code to your registered mobile.".'
+      },
+      {
+        name: 'Reset Lock',
+        method: 'POST',
+        path: 'api/v1/vault/lock/reset',
+        description: 'Any member. otp = 4-6 digits from Request Lock Reset. Reset limiter. 200 "Cabinet lock reset. Set a new one to protect it.".',
+        body: { otp: '123456' }
       }
     ]
   },
@@ -1217,21 +1452,24 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'List Plans',
         method: 'GET',
         path: 'api/admin/v1/plans',
-        description: 'Subscription plan catalog (active + inactive).'
+        description: 'Subscription plan catalog (active + inactive). Requires plans.read. Each plan includes memberLimit.'
       },
       {
         name: 'Create Plan',
         method: 'POST',
         path: 'api/admin/v1/plans',
-        description: 'Multiple plans allowed per tier (planType). price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none.',
+        description: 'Requires plans.create. Multiple plans allowed per tier (planType). workspace (business|individual) is REQUIRED. price is in ₹; storageLimit in bytes; interval = monthly|quarterly|annual|none. memberLimit = people who may hold the account, OWNER INCLUDED: integer, -1 = unlimited, 0 refused, defaults to 1 ("memberLimit must be -1 (unlimited) or at least 1."). Unknown keys stripped; validation errors are 400 with no errorCode.',
         body: {
-          planType: 'individual',
-          name: 'Individual',
-          description: 'For solo professionals.',
-          price: 1,
+          planType: 'business',
+          workspace: 'business',
+          name: 'Business Monthly',
+          description: 'For growing companies.',
+          price: 4999,
           currency: 'INR',
           interval: 'monthly',
-          storageLimit: 10737418240,
+          storageLimit: 21474836480,
+          memberLimit: 5,
+          allowedCredits: { gst: 100, roc: 10, tds: 20, itr: 10, investment: 10 },
           isActive: true
         }
       },
@@ -1239,9 +1477,9 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Update Plan',
         method: 'PUT',
         path: 'api/admin/v1/plans/:id',
-        description: 'Edit price/quotas/details. Bumps version; does NOT affect active subscribers.',
+        description: 'Requires plans.update. Edit price/quotas/details — at least one field ("Provide at least one field to update."); unknown plan id → 400 "Plan not found.". Bumps version; does NOT affect active subscribers: a memberLimit change reaches a customer only when they next buy or renew (the subscription snapshots it at purchase; backfill:member-limits only fills subscriptions with no memberLimit).',
         pathVars: [{ key: 'id', value: '<planId>' }],
-        body: { price: 499, name: 'Individual' }
+        body: { price: 499, name: 'Individual', memberLimit: 1 }
       },
       {
         name: 'Activate / Deactivate Plan',
@@ -1307,6 +1545,29 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Toggle per-user module access. Send any subset — omitted flags are left unchanged. A missing flag means ENABLED for that user. Audit-logged; busts the user cache.',
         pathVars: [{ key: 'userId', value: '<userId>' }],
         body: { gst: false, roc: false, tds: true, itr: true, investment: true }
+      },
+      {
+        name: 'User Team (director access)',
+        method: 'GET',
+        path: 'api/admin/v1/users/:userId/team',
+        description: 'Requires users.team.read. Pure read (never seeds roles or rows). { membersEnabled, workspace, memberLimit (LAPSE-AWARE: 1 once the plan expired), seatsUsed, memberships: [{ id, member: { id, fullName, maskedMobile }, role: { id, name, isSystem }, status, title, isOwner, invitedAt, approvedAt, lastAccessAt }] (owner first, then oldest), invites: [{ id, maskedMobile, roleName, title, expiresAt, expired }] (expired ones not yet swept included), memberOf: [{ account: { id, name }, roleName, status, lastAccessAt }] }. No full mobile, code or PAN is ever included. 422 VALIDATION_FAILED "That id is not valid.", 404 NOT_FOUND "User not found.".',
+        pathVars: [{ key: 'userId', value: '<userId>' }]
+      },
+      {
+        name: 'Force-Revoke Team Member',
+        method: 'DELETE',
+        path: 'api/admin/v1/users/:userId/team/members/:membershipId',
+        description: 'Requires users.team.revoke. Runs the owner\'s own removal path (sessions, links, handset rows, Cabinet PIN, then the row). Optional body { reason ≤ 500 } recorded only in the admin audit trail; the customer\'s Activity log shows remove_member by "Foldy support". 200 "Access revoked. Their sessions have been ended." { removed: true }. Errors: 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 409 MEMBER_OWNER_ONLY (owner row), 403 FORBIDDEN (admin identity has no email). Support can never add, approve or re-role a member.',
+        pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'membershipId', value: '<membershipId>' }],
+        body: { reason: 'Customer asked support to remove a former director.' }
+      },
+      {
+        name: 'Cancel Team Invitation',
+        method: 'DELETE',
+        path: 'api/admin/v1/users/:userId/team/invites/:inviteId',
+        description: 'Requires users.team.revoke. Also works on expired invites. Optional body { reason ≤ 500 }. 200 "Invitation cancelled." { cancelled: true }. Errors: 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 403.',
+        pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'inviteId', value: '<inviteId>' }],
+        body: { reason: '' }
       },
       {
         name: 'Cancel Subscription',
@@ -1691,7 +1952,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'List Items', method: 'GET', path: 'api/v1/manual-uploads/:category/items', pathVars: [{ key: 'category', value: 'ptax' }] },
       { name: 'Upload Item', method: 'POST', path: 'api/v1/manual-uploads/:category/upload', description: 'multipart, field "file".', pathVars: [{ key: 'category', value: 'ptax' }] },
       { name: 'Download Item', method: 'GET', path: 'api/v1/manual-uploads/items/:id/download', pathVars: [{ key: 'id', value: '<itemId>' }] },
-      { name: 'Delete Item', method: 'DELETE', path: 'api/v1/manual-uploads/items/:id', pathVars: [{ key: 'id', value: '<itemId>' }] }
+      { name: 'Move Item to Trash', method: 'DELETE', path: 'api/v1/manual-uploads/items/:id', description: 'Soft delete (was a hard delete). { id, holdUntil (null for an owner, now + 7d for a delegated session), purgeAt }.', pathVars: [{ key: 'id', value: '<itemId>' }] },
+      { name: 'List Trash', method: 'GET', path: 'api/v1/manual-uploads/trash', description: 'Max 200, newest deletion first; items carry trashedByName, trashedByOwner, holdUntil.' },
+      { name: 'Restore Item', method: 'POST', path: 'api/v1/manual-uploads/items/:id/restore', description: 'vault.delete. Two 409s without an errorCode (period clash / purge race).', pathVars: [{ key: 'id', value: '<itemId>' }] },
+      { name: 'Empty Trash', method: 'DELETE', path: 'api/v1/manual-uploads/trash', description: 'Owner session only; held items skipped. { deleted, remaining, held, heldUntil }.' }
     ]
   },
 

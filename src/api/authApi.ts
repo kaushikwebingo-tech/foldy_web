@@ -42,14 +42,23 @@ export const authApi = {
   getProfile:      () =>
     client.get('/user/profile'),
 
-  // Active device sessions (single-active-session policy).
+  // The CALLER's own sessions on the token's account. Owner: rows with no actor.
+  // Delegated: only this director's delegated sessions on the company.
   listSessions:    () =>
     client.get('/user/sessions'),
 
+  // Ends one of MY other sessions (same scope as listSessions). 422 for the
+  // current sid, 404 for a sid outside my own list. No errorCode on these.
+  endSession:      (sid: string) =>
+    client.delete(`/user/sessions/${encodeURIComponent(sid)}`),
+
+  // No body: scope is fixed server-side to the caller's actor — an owner never
+  // signs out a director, a director only their own other company sessions.
   logoutOtherSessions: () =>
     client.post('/user/sessions/logout-others'),
 
-  // Subscription / trial status (from the user endpoint).
+  // Subscription / trial status (from the user endpoint). Carries memberLimit
+  // (owner included, -1 = unlimited) and seatsUsed.
   getTrialStatus:  () =>
     client.get('/user/plan-status'),
 

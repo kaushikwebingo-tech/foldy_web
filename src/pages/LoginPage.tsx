@@ -12,6 +12,7 @@ function PanLoginCards() {
   const [pan, setPan] = useState("");
   const [referenceId, setReferenceId] = useState("");
   const [otp, setOtp] = useState("");
+  const [sid, setSid] = useState("");
   const [workspace, setWorkspace] = useState<"business" | "individual">(
     "business",
   );
@@ -109,16 +110,34 @@ function PanLoginCards() {
         title="Active Sessions"
         method="GET"
         endpoint="/api/v1/user/sessions"
-        description="Lists this account's active device sessions (current one flagged). Single-active-session policy keeps this to one."
+        description="Your OWN sessions on this token's account (current one flagged). A delegated session sees only that director's sessions on the company; the owner never sees directors' devices."
         onSubmit={() => authApi.listSessions()}
       />
 
       <ApiCard
         step={6}
+        title="End One Session"
+        method="DELETE"
+        endpoint="/api/v1/user/sessions/:sid"
+        description="Signs out one of your other sessions. 422 for the session you are using (use Logout), 404 for a sid that is not in your own list."
+        buttonLabel="Sign Out Device"
+        onSubmit={() => authApi.endSession(sid.trim())}
+      >
+        <Field
+          label="Session ID (sid)"
+          value={sid}
+          onChange={setSid}
+          placeholder="sessions[].sid"
+          fullWidth
+        />
+      </ApiCard>
+
+      <ApiCard
+        step={7}
         title="Log Out Other Devices"
         method="POST"
         endpoint="/api/v1/user/sessions/logout-others"
-        description="Signs out every device except this one."
+        description="No body. Scope is fixed server-side to you: an owner signs out their own other devices (never a director's); a director signs out their other sessions on this company only."
         onSubmit={() => authApi.logoutOtherSessions()}
       />
     </div>

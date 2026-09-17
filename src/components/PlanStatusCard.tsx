@@ -3,7 +3,7 @@ import { authApi } from '@/api/authApi';
 import { getToken } from '@/lib/utils';
 import {
   CheckCircle2, XCircle, Clock, AlertTriangle,
-  HardDrive, ArrowUpRight,
+  HardDrive, ArrowUpRight, Users,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,6 +17,9 @@ interface PlanData {
   limits: {
     storageLimit: number;
   };
+  // Seats: people who may hold the account, owner included (-1 = unlimited).
+  memberLimit?: number;
+  seatsUsed?: number;
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -170,6 +173,15 @@ export default function PlanStatusCard() {
           <p className="text-xs font-bold text-slate-700">{formatBytes(plan.limits.storageLimit)}</p>
           <p className="text-[10px] text-slate-400">Storage</p>
         </div>
+        {typeof plan.memberLimit === 'number' && (
+          <div className="bg-white/70 rounded-xl p-3 text-center border border-white">
+            <Users size={14} className="mx-auto mb-1 text-slate-400" />
+            <p className="text-xs font-bold text-slate-700">
+              {plan.seatsUsed ?? 1} / {plan.memberLimit === -1 ? '∞' : plan.memberLimit}
+            </p>
+            <p className="text-[10px] text-slate-400">Seats used</p>
+          </div>
+        )}
 
       </div>
 

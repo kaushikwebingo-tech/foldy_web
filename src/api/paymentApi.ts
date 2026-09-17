@@ -9,11 +9,34 @@ export const paymentApi = {
   listCreditPacks: (module?: string) =>
     client.get('/payments/credit-packs', { params: module ? { module } : undefined }),
 
-  // planId is preferred (a tier can have many plans); planType is a fallback.
-  createOrder:  (payload: { planId?: string; planType?: string; amount?: number }) =>
+  // Stores what was bought (a PaymentOrder) and prices it from the catalog.
+  // Plan: planId preferred, planType falls back to the cheapest active plan of
+  // that tier. Credits: purpose 'credits' + packId. `amount` is accepted and
+  // IGNORED. Unknown keys are refused (400). A plan whose memberLimit is below
+  // seatsUsed is refused before any money moves (409 MEMBER_DOWNGRADE_BLOCKED).
+  createOrder:  (payload: {
+    purpose?: 'plan' | 'credits';
+    planId?: string;
+    planType?: string;
+    packId?: string;
+    module?: string;
+    amount?: number;
+  }) =>
     client.post('/payments/create-order', payload),
 
-  verifyPayment:(data: Record<string, unknown>) =>
+  // Applies the STORED order, exactly once (same path as the webhook). Only the
+  // razorpay_* fields are needed; purpose / planId / planType / packId are only
+  // COMPARED with the order (a different one → 422 PAYMENT_ORDER_MISMATCH).
+  // A replay answers 200 "already applied" and extends nothing.
+  verifyPayment:(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    purpose?: string;
+    planId?: string;
+    planType?: string;
+    packId?: string;
+  }) =>
     client.post('/payments/verify-payment', data),
 
   getHistory:   () =>

@@ -22,6 +22,7 @@ import {
   Landmark,
   LifeBuoy,
   UserCircle,
+  Users,
 } from "lucide-react";
 import { getToken, removeToken, getApiHost, setApiHost } from "@/lib/utils";
 import { authApi } from "@/api/authApi";
@@ -49,6 +50,11 @@ const GROUPS = [
         label: "Profile",
         path: "/profile",
         icon: <UserCircle size={16} />,
+      },
+      {
+        label: "Team & Access",
+        path: "/team",
+        icon: <Users size={16} />,
       },
       {
         label: "Support & Account",

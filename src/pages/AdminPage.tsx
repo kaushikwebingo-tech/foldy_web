@@ -22,6 +22,15 @@ export default function AdminPage() {
   const [planDesc, setPlanDesc] = useState("");
   const [planId, setPlanId] = useState("");
   const [planActive, setPlanActive] = useState("true");
+  const [planWorkspace, setPlanWorkspace] = useState<"business" | "individual">("individual");
+  // People who may hold the account, owner included; -1 = unlimited, 0 refused.
+  // Blank = not sent (create defaults to 1 server-side; update leaves it alone).
+  const [planMemberLimit, setPlanMemberLimit] = useState("");
+
+  // A customer's co-users (director access)
+  const [teamUserId, setTeamUserId] = useState("");
+  const [teamMembershipId, setTeamMembershipId] = useState("");
+  const [teamInviteId, setTeamInviteId] = useState("");
 
   // Statistics (Super Admin)
   const [statsActiveDays, setStatsActiveDays] = useState("30");
@@ -118,6 +127,7 @@ export default function AdminPage() {
     if (planInterval) p.interval = planInterval;
     if (planStorageGb) p.storageLimit = Number(planStorageGb) * GB;
     if (planDesc) p.description = planDesc;
+    if (planMemberLimit) p.memberLimit = Number(planMemberLimit);
     return p;
   };
 
@@ -253,21 +263,39 @@ export default function AdminPage() {
           title="Create Plan"
           method="POST"
           endpoint="/api/admin/v1/plans"
-          description="Creates a plan for a tier (one per tier). Price is in ₹; storage is entered in GB and stored as bytes."
+          description="Creates a plan for a tier (many per tier). Workspace is required. Price is in ₹; storage is entered in GB and stored as bytes. Member limit counts the owner (-1 = unlimited, 0 is refused); a change reaches customers only when they next buy or renew."
           buttonLabel="Create"
           onSubmit={() =>
             adminApi.createPlan({
               planType,
+              workspace: planWorkspace,
               name: planName.trim(),
               description: planDesc,
               price: Number(planPrice),
               currency: "INR",
               interval: planInterval,
               storageLimit: Number(planStorageGb) * GB,
+              ...(planMemberLimit ? { memberLimit: Number(planMemberLimit) } : {}),
               isActive: true,
             })
           }
         >
+          <SelectField
+            label="Workspace"
+            value={planWorkspace}
+            onChange={(v) => setPlanWorkspace(v as "business" | "individual")}
+            options={[
+              { label: "Individual", value: "individual" },
+              { label: "Business", value: "business" },
+            ]}
+          />
+          <Field
+            label="Member limit (owner included, -1 = unlimited)"
+            value={planMemberLimit}
+            onChange={setPlanMemberLimit}
+            placeholder="blank = default 1"
+            type="number"
+          />
           <SelectField
             label="Plan Type"
             value={planType}
@@ -325,7 +353,7 @@ export default function AdminPage() {
           title="Update Plan (price / quotas)"
           method="PUT"
           endpoint="/api/admin/v1/plans/:id"
-          description="Edits a plan and bumps its version. Reuses the Create Plan fields above — only non-empty ones are sent. Active subscribers are unaffected (grandfathered)."
+          description="Edits a plan and bumps its version. Reuses the Create Plan fields above — only non-empty ones are sent (Member limit included when filled). Active subscribers are unaffected (grandfathered): a memberLimit change reaches a customer only when they next buy or renew."
           buttonLabel="Update"
           onSubmit={() => adminApi.updatePlan(planId.trim(), buildPlanUpdate())}
         >
@@ -633,6 +661,87 @@ export default function AdminPage() {
             onChange={setPage}
             placeholder="1"
             type="number"
+          />
+        </ApiCard>
+
+        {/* ---------- A customer's team (director access) ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
+          Team · director access (users.team.*)
+        </p>
+
+        <ApiCard
+          title="Get User Team"
+          method="GET"
+          endpoint="/api/admin/v1/users/:userId/team"
+          description="Needs users.team.read. Pure read: memberships (owner first), invites (expired ones flagged), memberOf, membersEnabled, and a lapse-aware memberLimit + seatsUsed. Never shows a full mobile, code or PAN."
+          buttonLabel="Fetch Team"
+          onSubmit={() => adminApi.getUserTeam(teamUserId.trim())}
+        >
+          <Field
+            label="User ID"
+            value={teamUserId}
+            onChange={setTeamUserId}
+            placeholder="company account _id"
+            fullWidth
+          />
+        </ApiCard>
+
+        <ApiCard
+          title="Force-Revoke Team Member"
+          method="DELETE"
+          endpoint="/api/admin/v1/users/:userId/team/members/:membershipId"
+          description="Needs users.team.revoke. Runs the owner's removal path: sessions, links, handset rows and Cabinet PIN go, then the membership. The popup asks for a reason (the server accepts it optionally, ≤ 500) that goes to the admin audit trail only. The owner row answers 409 MEMBER_OWNER_ONLY."
+          buttonLabel="Revoke"
+          onSubmit={async () => {
+            const r = await confirmAction({
+              title: "Revoke team member",
+              message: `Remove membership ${teamMembershipId || "(no id)"} from user ${teamUserId || "(no id)"}? Their sessions end immediately.`,
+              requireReason: true,
+            });
+            if (!r.confirmed) return { cancelled: true };
+            return adminApi.revokeTeamMember(teamUserId.trim(), teamMembershipId.trim(), r.reason || undefined);
+          }}
+        >
+          <Field
+            label="User ID"
+            value={teamUserId}
+            onChange={setTeamUserId}
+            placeholder="company account _id"
+          />
+          <Field
+            label="Membership ID"
+            value={teamMembershipId}
+            onChange={setTeamMembershipId}
+            placeholder="memberships[].id"
+          />
+        </ApiCard>
+
+        <ApiCard
+          title="Cancel Team Invitation"
+          method="DELETE"
+          endpoint="/api/admin/v1/users/:userId/team/invites/:inviteId"
+          description="Needs users.team.revoke. Works on expired invites too. Support can never add, approve or re-role a member."
+          buttonLabel="Cancel Invite"
+          onSubmit={async () => {
+            const r = await confirmAction({
+              title: "Cancel invitation",
+              message: `Cancel invitation ${teamInviteId || "(no id)"} for user ${teamUserId || "(no id)"}?`,
+            });
+            if (!r.confirmed) return { cancelled: true };
+            return adminApi.cancelTeamInvite(teamUserId.trim(), teamInviteId.trim());
+          }}
+        >
+          <Field
+            label="User ID"
+            value={teamUserId}
+            onChange={setTeamUserId}
+            placeholder="company account _id"
+          />
+          <Field
+            label="Invite ID"
+            value={teamInviteId}
+            onChange={setTeamInviteId}
+            placeholder="invites[].id"
           />
         </ApiCard>
 
