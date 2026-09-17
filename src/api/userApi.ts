@@ -28,6 +28,9 @@ export const userApi = {
   // Account switching — server-tracked linked accounts (Chrome-style multi-login).
   // Link by supplying a LIVE session token for the other account (ownership proof);
   // switch mints a fresh full session for the target; list/unlink manage the group.
+  // All four are OWNER_ONLY: a delegated (director) session gets 403 MEMBER_OWNER_ONLY,
+  // a delegated token cannot be linked (422), and switching to a company you are a
+  // member of is refused (403) — use accountApi.enterMembership instead.
   listAccountLinks: () =>
     client.get('/user/account-links'),
 

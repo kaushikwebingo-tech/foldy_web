@@ -32,20 +32,20 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Update Push Token',
         method: 'POST',
         path: 'api/v1/auth/update-push-token',
-        description: 'Registers the device push token. Requires auth. device_type = android|ios|web.',
+        description: 'Registers the device push token. Requires auth. device_type = android|ios|web. Needs the X-Device-Id header: the server upserts a device row { user: <token id>, deviceId } with actor = the person. On a DELEGATED token the legacy User.notificationToken mirror is not written (a director\'s handset never replaces the owner\'s); company pushes reach it only while the membership is active. Validation errors are 400 VALIDATION_FAILED.',
         body: { notification_token: '<fcm-or-onesignal-token>', device_type: 'android' }
       },
       {
         name: 'Logout',
         method: 'POST',
         path: 'api/v1/auth/logout',
-        description: 'Revokes the current JWT (token blacklist). Requires auth.'
+        description: 'Revokes the presented JWT (token denylist) and removes its sid from the token\'s account. Also how a director LEAVES a company: call it with the delegated token (ends that company session row), then switch back to the personal token — there is no exit endpoint. data null.'
       },
       {
         name: 'My Profile',
         method: 'GET',
         path: 'api/v1/user/profile',
-        description: 'Profile section for the logged-in user: name, dob/incorporation date, email, mobile, PAN (masked to last 4).'
+        description: 'Profile section for the logged-in user: name, dob/incorporation date, email, mobile, PAN (masked for everybody). A DELEGATED session gets the company with email, mobile and dob (incorporation date) MASKED too, e.g. "a••••••@ashatraders.in", "••••••3210", "••/••/••••".'
       },
       {
         name: 'Active Sessions',
@@ -65,6 +65,33 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'POST',
         path: 'api/v1/user/sessions/logout-others',
         description: 'No body. Scope is fixed server-side to the caller\'s actor — a client cannot ask for account scope. Owner: the owner\'s other devices, never a director\'s. Delegated: that director\'s other delegated sessions on this company only. Returns { removed }. 400 for a legacy token without sid.'
+      },
+      {
+        name: 'Linked Accounts',
+        method: 'GET',
+        path: 'api/v1/user/account-links',
+        description: 'Account switching (Chrome-style multi-login). { accounts: [{ id, fullName, maskedMobile, workspace, avatarUrl }] }. Every account-link route is OWNER_ONLY: a delegated session gets 403 MEMBER_OWNER_ONLY. None of these errors carry an errorCode.'
+      },
+      {
+        name: 'Link Account',
+        method: 'POST',
+        path: 'api/v1/user/account-links',
+        description: 'Limiter 10/min per account. token = a LIVE token for the other account (ownership proof). 201 { id, fullName, maskedMobile, workspace, avatarUrl }. A delegated token (act/mem, or a session row with an actor) is refused: 422 "A sign-in to a shared account cannot be used to add it. Only the account holder can link it.". Also 400 (missing / unverifiable / invalid token, same account), 404 not available, 422 (no sid, expired, logged out), 429.',
+        body: { token: '<live JWT of the other account>' }
+      },
+      {
+        name: 'Switch to Linked Account',
+        method: 'POST',
+        path: 'api/v1/user/account-links/:userId/switch',
+        description: 'Limiter 20/min per account. Mints a fresh full session { token (claims id, phoneno, sid), user }. 403 "This account is not linked to yours.", 400 already using it, 403 "You use this account as a team member. Open it from your memberships instead." (caller is a non-owner member of the target — use POST /account/memberships/enter), 404, 429.',
+        pathVars: [{ key: 'userId', value: '<linked account id>' }]
+      },
+      {
+        name: 'Unlink Account',
+        method: 'DELETE',
+        path: 'api/v1/user/account-links/:userId',
+        description: '200 "Account unlinked." { unlinked: true }. A malformed id also returns 200.',
+        pathVars: [{ key: 'userId', value: '<linked account id>' }]
       },
       {
         name: 'Plan / Subscription Status',
