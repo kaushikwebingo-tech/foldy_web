@@ -50,7 +50,9 @@ export default function TeamPage() {
   const [roleId, setRoleId] = useState('');
   const [roleName, setRoleName] = useState('');
   const [roleDesc, setRoleDesc] = useState('');
-  const [rolePerms, setRolePerms] = useState('gst.read, itr.read, vault.read');
+  // Starts blank: Update sends permissions whenever this is non-empty and they REPLACE
+  // the role's list, so a pre-filled default would silently overwrite it on a rename.
+  const [rolePerms, setRolePerms] = useState('');
 
   // Director (personal session)
   const [invitationId, setInvitationId] = useState('');
@@ -269,7 +271,7 @@ export default function TeamPage() {
           title="Update Custom Role"
           method="PATCH"
           endpoint="/api/v1/account/roles/:id"
-          description="Reuses the Create fields — only non-empty ones are sent. permissions REPLACES the list. System roles → 403 MEMBER_ROLE_IMMUTABLE."
+          description="Reuses the Create fields — only non-empty ones are sent (so a description cannot be cleared from here). A filled Permissions field REPLACES the whole list. System roles → 403 MEMBER_ROLE_IMMUTABLE."
           buttonLabel="Update"
           onSubmit={() =>
             accountApi.updateRole(roleId.trim(), {

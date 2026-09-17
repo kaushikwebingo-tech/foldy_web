@@ -159,6 +159,9 @@ export default function Sidebar() {
       /* ignore — proceed with local logout */
     }
     removeToken();
+    // Also forget a personal token stashed by Team & Access → Enter Company, so a
+    // later Leave cannot log out the next login and restore a stale token.
+    removeToken("foldy_personal_token");
     navigate("/login");
     // force re-render by reloading
     window.location.href = "/login";

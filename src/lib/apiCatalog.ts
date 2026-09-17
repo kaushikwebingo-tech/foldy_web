@@ -242,14 +242,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'GET',
         path: 'api/v1/account/audit',
         description: 'Owner session, or a delegated role with auditLogs.read (no default non-owner role has it). Always scoped to the token\'s account. Unknown query keys → 422. Newest first, keyset paged: pass nextCursor back as cursor. from/to accept ISO or bare YYYY-MM-DD (IST whole day; to must be ≥ from). Items: { id, createdAt, actor: { id, name, phoneMasked }, roleName, area, operation, action, targetType, targetId, description, outcome: pending|success|failure, statusCode }. area/operation examples: members/invite_member|approve_member|remove_member|enter_account…, vault/upload|trash|restore|purge|download|lock_set…, <segment>/access_denied (gate refusals). Retention: deletions 6 years, downloads 12 months, everything else 1 year. Not flag-gated.',
+        // Only limit is pre-filled: the generator always sends every listed param, and an
+        // EMPTY area/actor/operation/from/to/cursor is refused with 422. Add the optional
+        // filters by hand: area (exact, e.g. members | vault | gst), actor (24-hex user id),
+        // operation (exact, e.g. trash | access_denied), from / to (ISO or YYYY-MM-DD, IST),
+        // cursor (nextCursor from the previous page).
         query: [
-          { key: 'area', value: '', description: 'optional, exact match, e.g. members | vault | gst' },
-          { key: 'actor', value: '', description: 'optional, person user id (24 hex)' },
-          { key: 'operation', value: '', description: 'optional, exact match, e.g. trash | access_denied' },
-          { key: 'from', value: '', description: 'optional, ISO or YYYY-MM-DD (IST 00:00)' },
-          { key: 'to', value: '', description: 'optional, ISO or YYYY-MM-DD (IST 23:59:59.999)' },
-          { key: 'cursor', value: '', description: 'optional, nextCursor from the previous page' },
-          { key: 'limit', value: '50', description: '1-100, default 50' }
+          { key: 'limit', value: '50', description: '1-100, default 50. Optional (add only with a value — empty is 422): area, actor, operation, from, to, cursor' }
         ]
       }
     ]
@@ -1355,9 +1354,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description:
           'OWNER SESSION ONLY (gate OWNER_ONLY + requireOwnerSession → 403 MEMBER_OWNER_ONLY when delegated). Unknown query keys refused (400). ' +
           'Marks every UNHELD trashed row for purge and purges up to 200 inline (the 03:15 cron takes the rest); held rows are untouched. ' +
-          'listedAt (optional ISO): only items with trashedAt <= listedAt are taken, so something trashed after the owner loaded the list is never deleted. ' +
-          '200 { markedForPurge, deleted, remaining, releasedBytes, held (trash roots still held), heldUntil (earliest hold end | null) }; the message adds "H item(s) deleted by others are protected until <date>." when held > 0.',
-        query: [{ key: 'listedAt', value: '', description: 'optional ISO date — the Date header of the List Trash call' }]
+          'listedAt (optional ISO, add ?listedAt=<the Date header of the List Trash call>): only items with trashedAt <= listedAt are taken, so something trashed after the owner loaded the list is never deleted. An EMPTY listedAt is refused with 400, so send it only with a value. ' +
+          '200 { markedForPurge, deleted, remaining, releasedBytes, held (trash roots still held), heldUntil (earliest hold end | null) }; the message adds "H item(s) deleted by others are protected until <date>." when held > 0.'
       },
       // ── Cabinet lock: per PERSON (each director has their own PIN / lock on the company Cabinet) ──
       {
