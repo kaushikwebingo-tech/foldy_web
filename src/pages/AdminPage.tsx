@@ -30,7 +30,8 @@ export default function AdminPage() {
   // A customer's co-users (director access)
   const [teamUserId, setTeamUserId] = useState("");
   const [teamMembershipId, setTeamMembershipId] = useState("");
-  const [teamInviteId, setTeamInviteId] = useState("");
+  // `teamInviteId` is gone with the route that took it — there is no invitation for
+  // support to cancel any more (RBAC_MASTER_PLAN.md §11.2).
 
   // Statistics (Super Admin)
   const [statsActiveDays, setStatsActiveDays] = useState("30");
@@ -666,14 +667,22 @@ export default function AdminPage() {
 
         {/* ---------- A customer's team (director access) ---------- */}
         <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
-          Team · director access (users.team.*)
+          Team · a customer's staff (users.team.*)
         </p>
+
+        <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+          <strong>Two routes, not three.</strong> <code>adminTeamRoutes</code> now mounts only the read and the member
+          revoke; <code>DELETE /users/:userId/team/invites/:inviteId</code> is deleted with the whole invitation path
+          (RBAC_MASTER_PLAN.md §11.2), so the Cancel Invitation card has gone rather than being left to 404. A
+          created-but-unclaimed person is an <code>invited</code> MEMBERSHIP (§4.3), and Force-Revoke already removes one.
+          Support can still never add, approve or re-role anybody.
+        </div>
 
         <ApiCard
           title="Get User Team"
           method="GET"
           endpoint="/api/admin/v1/users/:userId/team"
-          description="Needs users.team.read. Pure read: memberships (owner first), invites (expired ones flagged), memberOf, membersEnabled, and a lapse-aware memberLimit + seatsUsed. Never shows a full mobile, code or PAN."
+          description="Needs users.team.read. Pure read: membersEnabled, workspace, memberLimit, seatsUsed, memberships (owner first) and memberOf. Never shows a full mobile, code or PAN. NOTE: `invites` is no longer in the response — read the `invited` memberships. And memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10): Administrator and Clerk take a seat, Accountant and Viewer take none, a suspended member takes none, -1 is unlimited."
           buttonLabel="Fetch Team"
           onSubmit={() => adminApi.getUserTeam(teamUserId.trim())}
         >
@@ -713,35 +722,6 @@ export default function AdminPage() {
             value={teamMembershipId}
             onChange={setTeamMembershipId}
             placeholder="memberships[].id"
-          />
-        </ApiCard>
-
-        <ApiCard
-          title="Cancel Team Invitation"
-          method="DELETE"
-          endpoint="/api/admin/v1/users/:userId/team/invites/:inviteId"
-          description="Needs users.team.revoke. Works on expired invites too. Support can never add, approve or re-role a member."
-          buttonLabel="Cancel Invite"
-          onSubmit={async () => {
-            const r = await confirmAction({
-              title: "Cancel invitation",
-              message: `Cancel invitation ${teamInviteId || "(no id)"} for user ${teamUserId || "(no id)"}?`,
-            });
-            if (!r.confirmed) return { cancelled: true };
-            return adminApi.cancelTeamInvite(teamUserId.trim(), teamInviteId.trim());
-          }}
-        >
-          <Field
-            label="User ID"
-            value={teamUserId}
-            onChange={setTeamUserId}
-            placeholder="company account _id"
-          />
-          <Field
-            label="Invite ID"
-            value={teamInviteId}
-            onChange={setTeamInviteId}
-            placeholder="invites[].id"
           />
         </ApiCard>
 

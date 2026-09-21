@@ -92,9 +92,26 @@ export const adminApi = {
   cancelSubscription: (userId: string, reason: string) =>
     adminClient.post(`/users/${userId}/cancel-subscription`, { reason }),
 
-  // --- A customer's co-users (director access, Team tab) --- /users/:userId/team
-  // Pure read (users.team.read): memberships, invites (expired ones flagged),
-  // memberOf, and a lapse-aware memberLimit + seatsUsed. Never seeds rows.
+  /*
+   * --- A customer's team (admin Team tab) --- /users/:userId/team
+   *
+   * Pure read (users.team.read): { membersEnabled, workspace, memberLimit,
+   * seatsUsed, memberships, memberOf }. Never seeds rows.
+   *
+   * `invites` IS NO LONGER IN THE RESPONSE. `adminTeamService.getTeam()` stopped
+   * returning it when `AccountInvite` was deleted, so a consumer doing
+   * `team.invites ?? []` now shows "No pending invitations" on a workspace that has
+   * people waiting — a lie rather than a crash, which is the worse failure. Read the
+   * `invited` memberships instead (RBAC_MASTER_PLAN.md §4.3, §7.3).
+   *
+   * Statuses are `invited | active | suspended` (§7.3): `pending_approval` is gone
+   * and removal hard-deletes, so there is no `removed` either.
+   *
+   * `memberLimit` is a count of SEAT-CONSUMING roles, not of people (§6.1 decision
+   * L3, §7.10): Administrator and Clerk consume a seat, Accountant and Viewer
+   * consume none, a custom role consumes one unless it is read-only, and a
+   * suspended member consumes none (R18). -1 is unlimited.
+   */
   getUserTeam: (userId: string) =>
     adminClient.get(`/users/${userId}/team`),
 
@@ -105,11 +122,17 @@ export const adminApi = {
       data: reason ? { reason } : {},
     }),
 
-  // Cancel an invitation (users.team.revoke), expired ones included.
-  cancelTeamInvite: (userId: string, inviteId: string, reason?: string) =>
-    adminClient.delete(`/users/${userId}/team/invites/${inviteId}`, {
-      data: reason ? { reason } : {},
-    }),
+  /*
+   * GONE, NOT MISSING — `DELETE /users/:userId/team/invites/:inviteId`.
+   *
+   * `adminTeamRoutes` now mounts only `GET /:userId/team` and
+   * `DELETE /:userId/team/members/:membershipId`, and `adminTeamController` has only
+   * `getTeam` and `revokeMember`. `cancelTeamInvite` 404'd on every call, so it is
+   * removed rather than fixed: §11.2 deletes the whole invitation path and §4.1-§4.2
+   * replace it, so there is no invitation left for support to cancel. A created-but-
+   * unclaimed person is an `invited` MEMBERSHIP, and `revokeTeamMember` above already
+   * removes one.
+   */
 
   refundPayment:  (paymentId: string, amount?: number, reason?: string) =>
     adminClient.post(`/payments/${paymentId}/refund`, { amount, reason }),

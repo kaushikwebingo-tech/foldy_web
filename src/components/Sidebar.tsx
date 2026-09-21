@@ -23,14 +23,28 @@ import {
   LifeBuoy,
   UserCircle,
   Users,
+  KeyRound,
 } from "lucide-react";
 import { getToken, removeToken, getApiHost, setApiHost } from "@/lib/utils";
 import { authApi } from "@/api/authApi";
 
 /* ── nav definition ──────────────────────────────────────────────── */
 const AUTH_NAV = [
+  /*
+   * Two doors, deliberately both shown. `/identity` drives the NEW model (a password
+   * and one box, RBAC_MASTER_PLAN.md §5.1) and `/login` the legacy PAN-first one; the
+   * server mounts both and §12 retires the second. Neither is hidden while that is
+   * true, because a console that quietly picks one is how you stop noticing that the
+   * other still answers. `/identity` is not guest-only: its switcher, email gate and
+   * tenant-PAN cards need a live session.
+   */
   {
-    label: "Login / OTP",
+    label: "Identity (new)",
+    path: "/identity",
+    icon: <KeyRound size={16} />,
+  },
+  {
+    label: "Login / OTP (legacy PAN)",
     path: "/login",
     icon: <LogIn size={16} />,
     guestOnly: true,

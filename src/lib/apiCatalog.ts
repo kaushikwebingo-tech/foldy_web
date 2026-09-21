@@ -66,38 +66,20 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/user/sessions/logout-others',
         description: 'No body. Scope is fixed server-side to the caller\'s actor — a client cannot ask for account scope. Owner: the owner\'s other devices, never a director\'s. Delegated: that director\'s other delegated sessions on this company only. Returns { removed }. 400 for a legacy token without sid.'
       },
-      {
-        name: 'Linked Accounts',
-        method: 'GET',
-        path: 'api/v1/user/account-links',
-        description: 'Account switching (Chrome-style multi-login). { accounts: [{ id, fullName, maskedMobile, workspace, avatarUrl }] }. Every account-link route is OWNER_ONLY: a delegated session gets 403 MEMBER_OWNER_ONLY. None of these errors carry an errorCode.'
-      },
-      {
-        name: 'Link Account',
-        method: 'POST',
-        path: 'api/v1/user/account-links',
-        description: 'Limiter 10/min per account. token = a LIVE token for the other account (ownership proof). 201 { id, fullName, maskedMobile, workspace, avatarUrl }. A delegated token (act/mem, or a session row with an actor) is refused: 422 "A sign-in to a shared account cannot be used to add it. Only the account holder can link it.". Also 400 (missing / unverifiable / invalid token, same account), 404 not available, 422 (no sid, expired, logged out), 429.',
-        body: { token: '<live JWT of the other account>' }
-      },
-      {
-        name: 'Switch to Linked Account',
-        method: 'POST',
-        path: 'api/v1/user/account-links/:userId/switch',
-        description: 'Limiter 20/min per account. Mints a fresh full session { token (claims id, phoneno, sid), user }. 403 "This account is not linked to yours.", 400 already using it, 403 "You use this account as a team member. Open it from your memberships instead." (caller is a non-owner member of the target — use POST /account/memberships/enter), 404, 429.',
-        pathVars: [{ key: 'userId', value: '<linked account id>' }]
-      },
-      {
-        name: 'Unlink Account',
-        method: 'DELETE',
-        path: 'api/v1/user/account-links/:userId',
-        description: '200 "Account unlinked." { unlinked: true }. A malformed id also returns 200.',
-        pathVars: [{ key: 'userId', value: '<linked account id>' }]
-      },
+      /*
+       * GONE, NOT MISSING — the four `/user/account-links` routes and the stale
+       * `GET /user/account-links/:userId` entry that never had a route at all.
+       * RBAC_MASTER_PLAN.md §11.2 retires `AccountLink` deliberately: it was the last
+       * remaining way to bind two separate identities into one session group, which is
+       * the problem the identity redesign exists to remove. §5.4's workspace switcher
+       * replaces it — see the Identity section — and the good part of the old switch
+       * bookkeeping already lives inside `sessionService`.
+       */
       {
         name: 'Plan / Subscription Status',
         method: 'GET',
         path: 'api/v1/user/plan-status',
-        description: 'Current subscription/trial status + plan limits. A director sees the COMPANY\'s plan. Seats: memberLimit = people who may hold the account, OWNER INCLUDED (-1 unlimited; business trial 3, individual trial 1; a row without the field reads as 1; NOT lapse-aware — enforcement uses 1 once the plan has expired). seatsUsed = 1 (owner) + active and pending_approval members + live invitations (suspended members hold no seat).'
+        description: 'Current subscription/trial status + plan limits. A director sees the COMPANY\'s plan. SEATS ARE NOT HEADS (RBAC_MASTER_PLAN.md §6.1 decision L3, §7.10): memberLimit counts SEAT-CONSUMING ROLES with the owner always taking one — Administrator and Clerk consume a seat, Accountant and Viewer consume none (the outside adviser is free on purpose), and a custom role consumes one unless it holds no *.refresh, no vault.upload, no *.manage, no vault.delete and no reports.export. -1 is unlimited. The plan ladder is trial 2 / individual 1 / starter 3 / growth 7 / pro 15 / enterprise -1, plus a +5 seat pack; a row without the field reads as 1, and enforcement uses 1 once the plan has expired. seatsUsed = 1 (owner) + memberships that are active or invited AND seat-consuming; a SUSPENDED member consumes none (decision R18), so suspending frees a seat at once and reactivating can be refused 409 TENANT_SEAT_UNAVAILABLE. `pending_approval` no longer exists (§7.3).'
       },
       {
         name: 'Storage Status',
@@ -113,29 +95,193 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
-  account: {
-    key: 'account',
-    name: 'Team & Director Access',
+  /*
+   * The NEW identity model. RBAC_MASTER_PLAN.md §3 (signup), §5.1-§5.2 (sign-in),
+   * §5.4 (the switcher), §5.7 (the email gate) and §3.1 (the workspace PAN).
+   *
+   * These routes are LIVE on the server today — `signupRoutes` and
+   * `identityAuthRoutes` (plus its `tenantRouter`), all mounted in
+   * `routes/app/v1/index.ts` AHEAD of the legacy PAN-first `authRoutes`, which still
+   * answers until §12 retires it. Nothing is declared in both files. The two routes
+   * the plan specifies and the server has NOT built — GET /v1/meta/permissions (§6.4)
+   * and GET /v1/workspace/access (§7.12) — are deliberately absent rather than
+   * shipped as entries that would 404 in a shared collection.
+   */
+  identity: {
+    key: 'identity',
+    name: 'Identity — Signup & Sign-in (new)',
     description:
-      'B2B multi-director access: a company account invites individual accounts, who then open a DELEGATED session on the company. ' +
-      'Delegated JWT = { id: <company>, sid, act: <director>, mem: <membership> } (no phoneno); a token without act is an owner/personal session and may do everything. ' +
-      'Every delegated request passes the member gate first: 403 MEMBER_PERMISSION_DENIED (role lacks it / unmapped route) or 403 MEMBER_OWNER_ONLY; 401 { reason: "access_revoked" } MEMBER_ACCESS_REVOKED when the membership is gone, suspended or pending, or the feature is off. ' +
-      'MEMBERS_ENABLED (server env, default OFF): invite, role change, cancel invite, role create/update/delete, claim, decline and enter answer 404 NOT_FOUND; the GETs and member status/remove still answer. ' +
-      'Member validation errors are 422 VALIDATION_FAILED. OTP login is still the fixed 123456 in dev; invitation codes are random and sent by SMS. Set {{token}} to the owner JWT for the owner calls, the director\'s PERSONAL JWT for invitations/memberships.',
+      'Signup is five screens and nothing is typed twice (§3.1 business, §3.2 individual). Sign-in is ONE BOX — a mobile, a verified email or the §4.5 username — and a password; the client disambiguates silently (10 digits → mobile, contains @ → email, otherwise → username, lowercased) and the box never hints whether an identifier exists (§8.2). ' +
+      'NO SESSION EXISTS during signup or during the public half of sign-in, so what stands in for one is the draft token plus a code answered on THIS attempt; re-opening a draft clears the proof, which is why a resume link skips the typing and never the proof. ' +
+      'ONE LIMITER over the whole public family: 300 per 15 minutes per IP on its own Redis prefix, because one sign-in is two to four calls behind carrier-grade NAT. It fails OPEN; the per-identifier caps that decide whether an SMS is paid for are counted in Mongo and fail CLOSED. ' +
+      'A 401 MEANS EXACTLY ONE THING (§8.9): the session named by this sid is no longer live. Every other refusal arrives as 403 / 409 / 422 / 429 and is drawn from its own code — one refusal tagged wrong is a user silently signed out. ' +
+      'Set {{token}} only for the session half (workspaces, switch, the email gate, tenant/pan).',
     endpoints: [
-      // ── Owner side (non-delegated; business workspace to invite) ──
+      // ── §3 signup, public ──
       {
-        name: 'List Members + Pending Invites',
-        method: 'GET',
-        path: 'api/v1/account/members',
-        description: 'Owner session only (the controller refuses every delegated session with 403 MEMBER_OWNER_ONLY). Returns { members: [{ id (membership id), userId, name, maskedMobile, avatarUrl, role: { id, name } | null, status: pending_approval|active|suspended, title, isOwner, lastAccessAt }], pendingInvites: [{ id, maskedMobile, role, title, expiresAt }] }. Not sorted. Not flag-gated; seeds the four system roles and the owner row as a side effect.'
+        name: 'Signup — Screen 1, Mobile',
+        method: 'POST',
+        path: 'api/v1/signup/mobile',
+        description: 'Ten digits behind a fixed +91, under the itemised consent notice (§10.1). Opens a `pending_signups` draft — never an account — and sends the first code. The reply names no existing account: identical copy, status and latency whether the number is known or not.',
+        body: { mobile: '9876543210' }
       },
       {
-        name: 'Invite Member',
+        name: 'Signup — Resend Code',
         method: 'POST',
-        path: 'api/v1/account/members/invite',
-        description: 'Owner session, business workspace. Limiter 10 / 15 min per account. Unknown keys → 422. phoneno is normalised to 10 digits (+91, 0, spaces, dashes). roleId must be a role on THIS account (see List Roles; the Owner role cannot be granted). title ≤ 80, pan optional (exactly 10, pins the invite to that PAN). Re-inviting a live number REPLACES the invite (new code, attempts 0, 7-day expiry; a title/pan left out is cleared). The company\'s own mobile is allowed — only the claimant\'s PAN is checked at claim. The code is NEVER returned (SMS). 200 { sent, maskedMobile, expiresInDays: 7 }. Errors: 404 NOT_FOUND (flag off), 403 MEMBER_WORKSPACE_NOT_ALLOWED, 404 MEMBER_NOT_FOUND (role), 422 MEMBER_PERMISSION_DENIED (Owner role), 422 MEMBER_SAME_PAN, 422 MEMBER_ALREADY_MEMBER, 403 MEMBER_PLAN_LIMIT_REACHED data { limit, used }, 429.',
-        body: { phoneno: '9876543210', roleId: '<roleId from List Roles>', title: 'Director — Finance' }
+        path: 'api/v1/signup/mobile/resend',
+        description: 'Same draft, a fresh code. Counted against the per-identifier cap in Mongo, not the per-IP limiter.',
+        body: { draftToken: '<from screen 1>' }
+      },
+      {
+        name: 'Signup — Screen 2, Verify Code',
+        method: 'POST',
+        path: 'api/v1/signup/mobile/verify',
+        description: 'The FIRST AND ONLY place an existing account is named, and only after a correct code (§8.2). SMS autofill is fine here: this is a 6-digit code, unlike §4.2\'s 8-character invite password.',
+        body: { draftToken: '<from screen 1>', code: '123456' }
+      },
+      {
+        name: 'Signup — Screen 3, Business or Individual',
+        method: 'POST',
+        path: 'api/v1/signup/kind',
+        description: 'One tap, and the fork: business goes to the company PAN, individual to DigiLocker. Moved from in front of sign-in to step 3 of signup.',
+        body: { draftToken: '<draft>', kind: 'business' }
+      },
+      {
+        name: 'Signup — Screen 4 (business), Company PAN',
+        method: 'POST',
+        path: 'api/v1/signup/company-pan',
+        description: 'The PAN goes out to KYC and the name, type and incorporation date come back to be confirmed. §3.4 discovers the GSTINs from it — one tax identity in, the rest found.',
+        body: { draftToken: '<draft>', pan: 'ABCDE1234F' }
+      },
+      {
+        name: 'Signup — Screen 4 (business), Confirm',
+        method: 'POST',
+        path: 'api/v1/signup/company-pan/confirm',
+        description: 'Confirms what the lookup returned. Nothing is retyped.',
+        body: { draftToken: '<draft>' }
+      },
+      {
+        name: 'Signup — Screen 4 (individual), Start DigiLocker',
+        method: 'POST',
+        path: 'api/v1/signup/identity/start',
+        description: 'Decision R17 reverses the direction of the old screen: DigiLocker is the SOURCE of the name and date of birth, not a test against a typed PAN.',
+        body: { draftToken: '<draft>' }
+      },
+      {
+        name: 'Signup — Screen 4 (individual), Verify DigiLocker',
+        method: 'POST',
+        path: 'api/v1/signup/identity/verify',
+        description: 'Completes the DigiLocker leg. The name it returns is pre-filled and NOT editable on screen 5.',
+        body: { draftToken: '<draft>' }
+      },
+      {
+        name: 'Signup — Screen 5, Complete',
+        method: 'POST',
+        path: 'api/v1/signup/complete',
+        description: 'The one write to the real tables: the person, the tenant and the owner membership. ONE password box and no confirm-password field anywhere in the product (decision L9). §4.5 mints the username here; it is shown on a dashboard card (R15) and never typed.',
+        body: { draftToken: '<draft>', name: 'Asha Nair', email: 'asha@example.com', password: '<password>' }
+      },
+      {
+        name: 'Signup — Resume a Stopped Draft',
+        method: 'POST',
+        path: 'api/v1/signup/resume',
+        description: '§3.3: the nudge link, or the same number typed again. Always costs a fresh code.',
+        body: { mobile: '9876543210' }
+      },
+      {
+        name: 'Signup — Stop the Nudges',
+        method: 'GET',
+        path: 'api/v1/signup/stop',
+        description: '§3.3\'s opt-out. A GET because it is one tap in an SMS, and public because whoever taps it has no account and no session.',
+        query: [{ key: 'token', value: '<opt-out token from the SMS>' }]
+      },
+      // ── §5.1-§5.2 sign-in, public ──
+      {
+        name: 'Sign In',
+        method: 'POST',
+        path: 'api/v1/auth/login',
+        description: '§5.1. A known handset answers with a session; an unknown one, or one unseen for 30 days, answers a ticket and sends a code (§5.2) — a `next`, not an error. `deviceSecret` is a secret the app STORED, never an identifier the handset claims about itself, and it lives in secure storage so a forced sign-out does not make every sign-out look like a new phone.',
+        body: { identifier: '9876543210', password: '<password>', deviceSecret: '<stored secret, optional>' }
+      },
+      {
+        name: 'Sign In — New Device Code',
+        method: 'POST',
+        path: 'api/v1/auth/login/device',
+        description: '§5.2. `remember` is the "Remember this device for 30 days" tick box.',
+        body: { ticket: '<from sign-in>', code: '123456', remember: true }
+      },
+      {
+        name: 'Sign In — Resend Device Code',
+        method: 'POST',
+        path: 'api/v1/auth/login/device/resend',
+        body: { ticket: '<from sign-in>' }
+      },
+      // ── §5.4 the switcher, session ──
+      {
+        name: 'My Workspaces',
+        method: 'GET',
+        path: 'api/v1/auth/workspaces',
+        description: '§5.4. A workspace whose plan has lapsed is LISTED, badged "Payment due", and opens read-only — the call never refuses it (decision R6). A person with none gets a 200 and §5.4\'s NoWorkspaceScreen, never a 401 and never a sign-out.'
+      },
+      {
+        name: 'Switch Workspace',
+        method: 'POST',
+        path: 'api/v1/auth/workspace/switch',
+        description: '§5.4. Swaps the session token IN THE SAME RESPONSE, so the app is never tokenless. This is ONE identity moving between its own workspaces, not the retired account switcher — which is what let §11.2 delete /user/account-links outright.',
+        body: { tenantId: '<from My Workspaces>' }
+      },
+      // ── §5.7 the email gate, session ──
+      {
+        name: 'Email Gate — Status',
+        method: 'GET',
+        path: 'api/v1/auth/email/status',
+        description: '§5.7. These four stay reachable for a person the gate is blocking — the gate lives in the app rather than as a refusal in front of them, because a gated person whose verify endpoint is gated can never leave. The gate is keyed on the PERSON, so it blocks every workspace.'
+      },
+      { name: 'Email Gate — Verify', method: 'POST', path: 'api/v1/auth/email/verify', body: { code: '123456' } },
+      { name: 'Email Gate — Resend', method: 'POST', path: 'api/v1/auth/email/resend' },
+      {
+        name: 'Email Gate — Change Address',
+        method: 'POST',
+        path: 'api/v1/auth/email/change',
+        description: 'The escape hatch that stops the gate being a lockout (§5.7).',
+        body: { email: 'asha@example.com' }
+      },
+      // ── §3.1 the workspace PAN, session ──
+      {
+        name: 'Attach Workspace PAN',
+        method: 'POST',
+        path: 'api/v1/tenant/pan',
+        description: '§3.1 / §3.2\'s PAN arriving inside a LIVE session instead of a signup draft — the route the app\'s PAN re-verify screen needed and never had, because the old flow finished by minting a second session. The tenant comes ONLY from the session row: `X-Tenant-Id` does not exist as an input anywhere (§8.7 rule 2).',
+        body: { pan: 'ABCDE1234F' }
+      }
+    ]
+  },
+
+  account: {
+    key: 'account',
+    name: 'Team & Access',
+    description:
+      'A company workspace\'s staff. THE INVITATION FAMILY IS DELETED: RBAC_MASTER_PLAN.md §4.1 has the admin CREATE the member outright (POST /account/memberships — four fields: full name, mobile, email optional, role) and §4.2 has the person claim it with an 8-character one-time password on a sign-in-side screen, so /members/invite, /invites/:id and /invitations* are gone for good. ' +
+      'Statuses are invited | active | suspended (§7.3) — `pending_approval` is gone and removal hard-deletes, so there is no `removed`. Roles are per tenant with four system rows, Administrator (stored key `administration`), Accountant, Clerk and Viewer (§6.1), over the TWENTY-SIX permission names of §6.4. Only the OWNER may create, edit or assign a role carrying team.manage or roles.manage, or suspend, remove or re-role somebody who holds one (§6.2, §6.3). ' +
+      'MID-REBUILD: §11.3 phase 5 moves all of this onto `memberships` + `tenant_roles`, so the shapes below are what the server answers today, not what it will answer. ' +
+      'Delegated JWT = { id: <company>, sid, act: <director>, mem: <membership> } (no phoneno); a token without act is an owner/personal session and may do everything. ' +
+      'Every delegated request passes the member gate first: 403 MEMBER_PERMISSION_DENIED (role lacks it / unmapped route) or 403 MEMBER_OWNER_ONLY; 401 { reason: "access_revoked" } MEMBER_ACCESS_REVOKED when the membership is gone, suspended or pending, or the feature is off. ' +
+      'MEMBERS_ENABLED (server env, default OFF): create, role change, role create/update/delete and enter answer 404 NOT_FOUND; the GETs and member status/remove still answer. ' +
+      'Member validation errors are 422 VALIDATION_FAILED. OTP login is still the fixed 123456 in dev. Set {{token}} to the owner JWT for the owner calls and the member\'s own PERSONAL JWT for memberships.',
+    endpoints: [
+      // ── Owner side (non-delegated; business workspace) ──
+      {
+        name: 'List Members',
+        method: 'GET',
+        path: 'api/v1/account/members',
+        description: 'Owner session only (the controller refuses every delegated session with 403 MEMBER_OWNER_ONLY). Returns { members: [{ id (membership id), userId, name, maskedMobile, avatarUrl, role: { id, name } | null, status, title, isOwner, lastAccessAt }], pendingInvites: [] }. `pendingInvites` is legacy and now ALWAYS EMPTY — the invite collection is deleted, and §4.3 shows a created-but-unclaimed person as an `invited` ROW in members instead, with no handle on it in either state. Statuses are invited | active | suspended (§7.3). Not sorted. Not flag-gated; seeds the four system roles and the owner row as a side effect.'
+      },
+      {
+        name: 'Create Staff Member',
+        method: 'POST',
+        path: 'api/v1/account/memberships',
+        description: 'Owner session, business workspace. §4.1\'s add-staff screen — the admin CREATES the member and nothing is invited. Four fields: name, mobile, role, plus an optional email; `pan`, `dob` and `title` are pre-plan extras the route still accepts. NO username field: §4.5 mints the handle and decision R15 shows it on a dashboard card. Mounted on `memberships` rather than `members` because MEMBER_ROUTE_POLICY already maps that prefix to OWNER_ONLY, and an unmapped path is how a route ships with no member gate. Rate limited with the invite limiter: creating a member creates a person row and may call the KYC vendor. Over the plan\'s seats → 409 TENANT_SEAT_UNAVAILABLE naming the numbers, which is §4.7\'s ONE prompt behind all five seat refusals. 201 on success.',
+        body: { name: 'Asha Nair', mobile: '9876543210', email: 'asha@example.com', role: '<roleId from List Roles>', title: 'Accounts — GST' }
       },
       {
         name: 'Approve / Suspend / Re-activate Member',
@@ -160,13 +306,16 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Owner session. Ends every session the director holds on the company, removes their AccountLinks (and the switch sessions they minted), handset rows and Cabinet PIN row, then deletes the membership (no tombstone — history is in the audit log). Their uploads stay. 200 "That person no longer has access." { removed: true }. 422 MEMBER_OWNER_ONLY for the owner row. Not flag-gated.',
         pathVars: [{ key: 'id', value: '<membershipId>' }]
       },
-      {
-        name: 'Cancel Invitation',
-        method: 'DELETE',
-        path: 'api/v1/account/invites/:id',
-        description: 'Owner session. Hard delete — the seat is freed at once. Works on an expired invite the nightly sweep has not removed yet. 200 "Invitation cancelled." { cancelled: true }. 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND.',
-        pathVars: [{ key: 'id', value: '<inviteId from pendingInvites>' }]
-      },
+      /*
+       * GONE, NOT MISSING — Cancel Invitation, My Invitations, Claim Invitation and
+       * Decline Invitation, plus the two stale entries (`GET /account/invites/:id`,
+       * `GET /account/invitations/:id/decline`) that never had routes. §11.2 deletes
+       * `AccountInvite`, its sweep cron and all five routes. §4.2's claim is a
+       * SIGN-IN-side screen taking a mobile and an 8-character one-time password —
+       * which is not a 6-digit OTP and must never go through numeric autofill — so it
+       * does not belong in this section at all, and its route is Phase 5 server work
+       * that does not exist yet.
+       */
       // ── Roles ──
       {
         name: 'List Roles',
@@ -178,7 +327,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create Custom Role',
         method: 'POST',
         path: 'api/v1/account/roles',
-        description: 'Owner session. Unknown keys STRIPPED (isSystem/systemKey/moduleAccess ignored). name 1-60, not "owner" nor a system role name nor another role here (case-insensitive). description ≤ 200. permissions ≤ 100 from the 41-name vocabulary (members.read/invite/approve/update/remove, roles.read/create/update/delete, account.read/update, auditLogs.read, sessions.read/revoke, billing.read/purchase, gst|roc|tds|itr|investment .read/.refresh/.manage, vault.read/upload/delete/share, support.read/create, notifications.read, calendar.read, reports.read/export); legacy vault.unlock is accepted and dropped. members.invite/approve/update/remove and roles.create/update/delete are owner-only → 422 MEMBER_PERMISSION_DENIED data { permissions }. 201 "Role created." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED ("Unknown permission: x." data { permissions }), 409 MEMBER_ROLE_NAME_TAKEN.',
+        description: 'Owner session. Unknown keys STRIPPED (isSystem/systemKey/moduleAccess ignored). name 1-60, not a system role name nor another role here (case-insensitive); §6.3 reserves "Owner", "Administrator", "Administration", "Accountant", "Clerk" and "Viewer" — BOTH spellings of the everything-role, because the label is Administrator and the stored key is `administration` (decision R1). description ≤ 200. THE PERMISSION LIST COMES FROM THE SERVER, never from a client: §6.4 cuts the vocabulary to twenty-six names — gst|roc|tds|itr|investment each × read/refresh/manage, vault.read/upload/delete, reports.read/export, billing.read, team.read/manage, roles.manage, audit.read, support.use — and §7.12 serves them with their labels at GET /v1/meta/permissions (not built yet). The role editor is also where two rules bite: the RESULTING set must be a subset of what the writer holds on create, copy AND edit alike (§6.3), and only the OWNER may create, edit or assign a role carrying team.manage or roles.manage, which is the lock that stops the everything-role being cloned under another name. SEATS: a role holding none of *.refresh, vault.upload, *.manage, vault.delete or reports.export is read-only and costs nothing; anything else costs a seat, and an edit that crosses that line is refused 409 TENANT_SEAT_UNAVAILABLE before any permission change is persisted (§7.10). 201 "Role created." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 409 MEMBER_ROLE_NAME_TAKEN.',
         body: { name: 'CA Firm', description: 'Our auditors', permissions: ['gst.read', 'itr.read', 'vault.read'] }
       },
       {
@@ -193,30 +342,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Delete Custom Role',
         method: 'DELETE',
         path: 'api/v1/account/roles/:id',
-        description: 'Owner session. Refused while any membership (any status) or a LIVE invite holds the role — 409 MEMBER_ROLE_IN_USE; expired invites naming it are deleted with it. 200 "Role deleted." { deleted: true }. Also 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE.',
+        description: 'Owner session. Refused while any membership (any status) holds the role — 409 MEMBER_ROLE_IN_USE; §6.3 reports the count, so the refusal reads "4 people use this role. Move them first." 200 "Role deleted." { deleted: true }. Also 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE.',
         pathVars: [{ key: 'id', value: '<roleId>' }]
       },
-      // ── Invitee side (the director's PERSONAL session) ──
-      {
-        name: 'My Invitations',
-        method: 'GET',
-        path: 'api/v1/account/invitations',
-        description: 'Personal (non-delegated) session; a delegated one gets 403 MEMBER_OWNER_ONLY. Live invitations addressed to the caller\'s own mobile, excluding any the caller sent: { invitations: [{ id, account: { id, name }, role (name string | null), title, expiresAt }] }. Not flag-gated.'
-      },
-      {
-        name: 'Claim Invitation',
-        method: 'POST',
-        path: 'api/v1/account/invitations/claim',
-        description: 'Personal session of an INDIVIDUAL-workspace account with a PAN on file. Limiter 10 / 15 min per user. Unknown keys refused; every validation error uses MEMBER_INVALID_INVITE. code = the 6-digit SMS code. Send invitationId (24 hex) — required when the caller has more than one live invite (422 data { invitationIdRequired: true }). 5 attempts per invite. Creates the membership as pending_approval (an existing row is returned unchanged). 200 { membershipId, status }. Errors: 404 NOT_FOUND (flag), 422 MEMBER_WORKSPACE_NOT_ALLOWED, 422 MEMBER_PAN_REQUIRED, 422 MEMBER_INVALID_INVITE (wrong code data { attemptsRemaining }, different PAN, not found), 422 MEMBER_INVITE_EXPIRED, 429 MEMBER_INVITE_ATTEMPTS, 422 MEMBER_SAME_PAN (claimant PAN = company PAN), 429.',
-        body: { invitationId: '<id from My Invitations>', code: '123456' }
-      },
-      {
-        name: 'Decline Invitation',
-        method: 'POST',
-        path: 'api/v1/account/invitations/:id/decline',
-        description: 'Personal session; the invite must be addressed to the caller\'s mobile. No body. Hard delete so the owner can re-invite later. 200 "Invitation declined." { declined: true }. 404 NOT_FOUND (flag), 404 MEMBER_NO_ACCOUNT, 404 MEMBER_NOT_FOUND.',
-        pathVars: [{ key: 'id', value: '<invitationId>' }]
-      },
+      // ── Member side (their own PERSONAL session) ──
       {
         name: 'My Memberships (switcher)',
         method: 'GET',
@@ -230,12 +359,19 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Personal session (not from inside another company). Send the device headers (X-Device-Id, X-Device-Name, X-Device-Platform, X-App-Version) — they are stored on the session row; the same X-Device-Id keeps only the newest session, and a director holds at most MAX_DEVICE_SESSIONS (default 3) on one company (oldest evicted → 401 another_device). No refresh token; the delegated JWT lasts 1 day. Keep the personal token — to leave, POST /auth/logout with the delegated token and switch back. 200 { token, account: { id, name }, role, permissions[] } (permissions go stale on a role change — re-read Me Permissions). Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 403 MEMBER_NOT_FOUND, 403 MEMBER_PENDING_APPROVAL, 403 MEMBER_ACCESS_REVOKED (suspended — 403, not 401), 404 MEMBER_NO_ACCOUNT (company deleted or blocked).',
         body: { accountId: '<accountId from My Memberships>' }
       },
+      {
+        name: 'Leave Membership',
+        method: 'POST',
+        path: 'api/v1/account/memberships/:id/leave',
+        description: 'A server route neither the console nor the collection reached until now. Leaving is the MEMBER\'s own decision, taken from their own personal session — not the owner removing them, which is Remove Member. Frees the seat like any other seat-freeing operation (§7.10): the membership is written and `seatsUsed` is recounted absolutely, with no reservation needed.',
+        pathVars: [{ key: 'id', value: '<membershipId from My Memberships>' }]
+      },
       // ── Any session ──
       {
         name: 'Me — Permissions',
         method: 'GET',
         path: 'api/v1/account/me/permissions',
-        description: 'Any session; the authoritative read the app gates on. Non-delegated (any workspace): { isOwner: true, accountName, roleName: "Owner", permissions: [all 41], membersEnabled }. Delegated: { isOwner: false, accountName, roleName, permissions (current role), membersEnabled }. Not flag-gated — this is how the app reads MEMBERS_ENABLED.'
+        description: 'Any session; the authoritative read the app gates on. §7.12 REPLACES this with GET /v1/workspace/access, whose envelope also carries ownerOnly, isOwner and the X-Access-Version a role change bumps so the change lands on the next tap — not built on the server yet, so this is still the answer, and §6.4 cuts the vocabulary from 41 names to 26. Non-delegated (any workspace): { isOwner: true, accountName, roleName: "Owner", permissions: [every name in the served vocabulary], membersEnabled }. Delegated: { isOwner: false, accountName, roleName, permissions (current role), membersEnabled }. Not flag-gated — this is how the app reads MEMBERS_ENABLED.'
       },
       {
         name: 'Activity Log (audit)',
@@ -486,6 +622,43 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Summary using the profile\'s stored token (no taxpayer_token needed). type = gstr1|gstr1a|gstr3b|gstr9|gstr9c|gstr2a|gstr2b; ret_period is MMYYYY. gstr2a/gstr2b return the auto-drafted ITC statements through this same endpoint — and nothing is recorded as "filed" for them, because the taxpayer never files them.',
         pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'type', value: 'gstr2b' }],
         body: { ret_period: '042024' }
+      },
+      /*
+       * The four ITC-statement routes the console has driven since 2026-09-09 and the
+       * Postman collection never carried. Bucket C of `scripts/route-diff.mjs` is what
+       * found them: a client method with no catalog entry ships a console that works
+       * and a collection that cannot reproduce it.
+       */
+      {
+        name: 'Profile — GSTR-2A (inward supplies)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/gstr2a',
+        description: 'Auto-drafted inward-supply statement, by section (default b2b). ret_period is MMYYYY. Nothing is ever recorded as "filed" for 2A — the taxpayer does not file it.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { ret_period: '042024', section: 'b2b' }
+      },
+      {
+        name: 'Profile — GSTR-2B (auto-drafted ITC)',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/gstr2b',
+        description: 'The auto-drafted ITC statement. ret_period is MMYYYY; `filenum` fetches one file of a multi-file statement.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { ret_period: '042024' }
+      },
+      {
+        name: 'Profile — Generate GSTR-2B',
+        method: 'POST',
+        path: 'api/v1/b2b/gst/profiles/:id/gstr2b/generate',
+        description: 'On-demand generation for a period the portal has not drafted yet. Returns an internal transaction id; poll the status route below with it rather than re-requesting the statement.',
+        pathVars: [{ key: 'id', value: '<profileId>' }],
+        body: { ret_period: '042024' }
+      },
+      {
+        name: 'Profile — GSTR-2B Generation Status',
+        method: 'GET',
+        path: 'api/v1/b2b/gst/profiles/:id/gstr2b/status/:intTranId',
+        description: 'Progress of one generate request. A not-ready answer is a normal state, not an error.',
+        pathVars: [{ key: 'id', value: '<profileId>' }, { key: 'intTranId', value: '<from Generate GSTR-2B>' }]
       },
       {
         name: 'Profile — Return Summary PDF (stored token)',
@@ -853,49 +1026,30 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   tds: {
     key: 'tds',
     name: 'TDS',
-    description: 'TRACES Form 16 / 16A jobs (B2B): submit returns a jobId immediately and is background-polled server-side; track progress with GET /jobs (no creds). certificate_type (form16|form16a) is a path variable. CONNECT ONCE: save a TdsProfile (see the profile endpoints) and submit/poll/potential-notices may omit username+password — the server decrypts them per call, and the background cron re-resolves them from the profile once the 6h credential cache expires. Also covers "Connect TDS account" (link/read the deductor TAN), TDS "Potential Notices" (async analytics, no TRACES creds), and the TDS Calculator (non-salary + salary/sync synchronous; bulk salary job + poll — no creds, shared B2B + B2C). Set {{token}}.',
+    description: 'TRACES certificate jobs (B2B), RESTRUCTURED 2026-09: the family moved to /certificates/:form where :form is 130 (salary TDS, was Form 16) or 131 (other TDS, was Form 16A) — the old submit-job / poll-job / fetch-jobs paths and the form16 / form16a slugs are GONE and 404. THERE IS NO POLLING ROUTE AND NO POLLING CRON: completion arrives on the Sandbox webhook (POST /webhook/sandbox/tds), and POST /jobs/:jobId/refresh is the escape hatch for a missed delivery, not a loop. The body is quarter + tax_year (+ optional profileId) — tax_year is "TY 2025-26" and the server refuses "FY …" rather than spend a credit on a guaranteed provider 400. CONNECT ONCE: save a TdsProfile (see the profile endpoints) and the certificate and potential-notice routes take no credentials at all — the server decrypts them per call from the profile. Also covers "Connect TDS account" (link/read the deductor TAN), TDS "Potential Notices" (async analytics, no TRACES creds), and the TDS Calculator (non-salary + salary/sync synchronous; bulk salary job + poll — no creds, shared B2B + B2C). Set {{token}}.',
     endpoints: [
       {
-        name: 'Submit TDS Job',
+        name: 'Submit TDS Certificate Job',
         method: 'POST',
-        path: 'api/v1/b2b/tds/submit-job/:certificate_type',
-        description: 'Costs 1 TDS credit. username / password / tan are OPTIONAL: with a saved profile send only security_captcha (plus an optional profileId) and the server resolves the login. Inline credentials still win when present. A job that later fails asynchronously refunds the credit.',
-        pathVars: [{ key: 'certificate_type', value: 'form16' }],
-        body: {
-          profileId: '<optional — omit to use your default profile>',
-          username: '<optional when a profile is connected>',
-          password: '<optional when a profile is connected>',
-          tan: 'MUMU12345A',
-          security_captcha: {
-            quarter: 'Q1',
-            financial_year: 'FY 2024-25',
-            form: '24Q',
-            bsr_code: '0000000',
-            challan_date: '01/05/2024',
-            challan_serial_no: '00001',
-            provisional_receipt_number: '000000000000000',
-            challan_amount: 10000,
-            unique_pan_amount_combination_for_challan: [
-              ['sr_no', 'pan', 'total_amount_deposited_against_pan'],
-              [1, 'ABCDE1234F', 5000]
-            ]
-          },
-          remember_me: true
-        }
+        path: 'api/v1/b2b/tds/certificates/:form',
+        description: 'Costs 1 TDS credit, refunded automatically when TRACES later fails the job. 202 with a jobId; completion arrives on the webhook. The TRACES login comes from the saved TdsProfile — the credentials and the whole challan block are NOT body fields any more.',
+        pathVars: [{ key: 'form', value: '130' }],
+        body: { quarter: 'Q1', tax_year: 'TY 2025-26', profileId: '<optional — omit to use your default profile>' }
       },
       {
-        name: 'Poll TDS Job',
+        name: 'Refresh One TDS Job',
         method: 'POST',
-        path: 'api/v1/b2b/tds/poll-job/:certificate_type',
-        pathVars: [{ key: 'certificate_type', value: 'form16' }],
-        body: { job_id: '<job_id>', username: '<traces-username>', password: '<traces-password>', tan: 'MUMU12345A' }
+        path: 'api/v1/b2b/tds/jobs/:jobId/refresh',
+        description: 'On-demand status read for a job whose webhook was missed. Free at the provider, and NOT a poll loop — the old POST /poll-job/:certificate_type is deleted, credentials and all.',
+        pathVars: [{ key: 'jobId', value: '<jobId>' }]
       },
       {
-        name: 'Fetch TDS Jobs',
+        name: 'Search TDS Jobs (provider history)',
         method: 'POST',
-        path: 'api/v1/b2b/tds/fetch-jobs/:certificate_type',
-        pathVars: [{ key: 'certificate_type', value: 'form16' }],
-        body: { tan: 'MUMU12345A', financial_year: 'FY 2024-25', quarter: 'Q1', form: '24Q', page_size: 10 }
+        path: 'api/v1/b2b/tds/certificates/:form/search',
+        description: 'Reads the PROVIDER\'s own job list for this deductor rather than ours; free. tan, tax_year and quarter are all required, and `financial_year` and the statement form are not fields on this route.',
+        pathVars: [{ key: 'form', value: '130' }],
+        body: { tan: 'MUMU12345A', tax_year: 'TY 2025-26', quarter: 'Q1', page_size: 10 }
       },
       {
         name: 'List My TDS Jobs',
@@ -904,7 +1058,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Persisted TDS jobs with status + summary (newest first). Low input — the progress tracker / history.',
         query: [
           { key: 'status', value: '', description: 'optional: processing|completed|failed' },
-          { key: 'certificate_type', value: '', description: 'optional: form16|form16a' },
+          { key: 'certificate_type', value: '', description: 'optional: 130|131' },
           { key: 'kind', value: '', description: 'optional: certificate|potential_notice — certificates and notice analyses share this collection; "certificate" also matches legacy rows with no kind' }
         ]
       },
@@ -916,10 +1070,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'jobId', value: '<jobId>' }]
       },
       {
-        name: 'Download TDS Certificate',
+        name: 'TDS Certificate Links',
         method: 'GET',
-        path: 'api/v1/b2b/tds/jobs/:jobId/certificate',
-        description: 'Streams the completed certificate. The server proxies the provider\'s short-lived URL, so the client never handles it. 404 while TRACES is still preparing the file; 502 if the fetch itself fails.',
+        path: 'api/v1/b2b/tds/jobs/:jobId/certificates',
+        description: 'Presigned links to the certificate PDFs mirrored into our own storage — plural, which is the route that exists; the old singular /certificate streamed a blob and is deleted. An EMPTY list is the normal answer while TRACES is still preparing the files, not an error.',
         pathVars: [{ key: 'jobId', value: '<jobId>' }]
       },
       {
@@ -932,7 +1086,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Connect TDS Profile',
         method: 'POST',
         path: 'api/v1/b2b/tds/profiles',
-        description: '"Connect once": stores the deductor TAN plus an encrypted TRACES username/password. Once a profile exists, submit-job / poll-job / potential-notices may omit username+password entirely. A NEW TAN counts against the plan\'s per-TAN cap; re-connecting an existing one updates it in place.',
+        description: '"Connect once": stores the deductor TAN plus an encrypted TRACES username/password. Once a profile exists, the certificate and potential-notice routes take no credentials at all. A NEW TAN counts against the plan\'s per-TAN cap; re-connecting an existing one updates it in place.',
         body: { tan: 'MUMB01234F', tracesUsername: '<traces-user>', tracesPassword: '<traces-password>', label: 'Head office' }
       },
       {
@@ -1575,7 +1729,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'User Team (director access)',
         method: 'GET',
         path: 'api/admin/v1/users/:userId/team',
-        description: 'Requires users.team.read. Pure read (never seeds roles or rows). { membersEnabled, workspace, memberLimit (LAPSE-AWARE: 1 once the plan expired), seatsUsed, memberships: [{ id, member: { id, fullName, maskedMobile }, role: { id, name, isSystem }, status, title, isOwner, invitedAt, approvedAt, lastAccessAt }] (owner first, then oldest), invites: [{ id, maskedMobile, roleName, title, expiresAt, expired }] (expired ones not yet swept included), memberOf: [{ account: { id, name }, roleName, status, lastAccessAt }] }. No full mobile, code or PAN is ever included. 422 VALIDATION_FAILED "That id is not valid.", 404 NOT_FOUND "User not found.".',
+        description: 'Requires users.team.read. Pure read (never seeds roles or rows). { membersEnabled, workspace, memberLimit (LAPSE-AWARE: 1 once the plan expired), seatsUsed, memberships: [{ id, member: { id, fullName, maskedMobile }, role: { id, name, isSystem }, status, title, isOwner, invitedAt, approvedAt, lastAccessAt }] (owner first, then oldest), memberOf: [{ account: { id, name }, roleName, status, lastAccessAt }] }. `invites` IS NO LONGER RETURNED — adminTeamService.getTeam() stopped emitting it when AccountInvite was deleted, so a consumer doing `team.invites ?? []` reports "no pending invitations" on a workspace that has people waiting, which is a lie rather than a crash; read the `invited` memberships instead (§4.3, §7.3). Statuses are invited | active | suspended. memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10). No full mobile, code or PAN is ever included. 422 VALIDATION_FAILED "That id is not valid.", 404 NOT_FOUND "User not found.".',
         pathVars: [{ key: 'userId', value: '<userId>' }]
       },
       {
@@ -1586,14 +1740,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'membershipId', value: '<membershipId>' }],
         body: { reason: 'Customer asked support to remove a former director.' }
       },
-      {
-        name: 'Cancel Team Invitation',
-        method: 'DELETE',
-        path: 'api/admin/v1/users/:userId/team/invites/:inviteId',
-        description: 'Requires users.team.revoke. Also works on expired invites. Optional body { reason ≤ 500 }. 200 "Invitation cancelled." { cancelled: true }. Errors: 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 403.',
-        pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'inviteId', value: '<inviteId>' }],
-        body: { reason: '' }
-      },
+      /*
+       * GONE, NOT MISSING — `DELETE /users/:userId/team/invites/:inviteId`.
+       * `adminTeamRoutes` now mounts only `GET /:userId/team` and
+       * `DELETE /:userId/team/members/:membershipId`, and `adminTeamController` has
+       * only `getTeam` and `revokeMember`. There is no invitation left to cancel
+       * (§11.2); a created-but-unclaimed person is an `invited` membership and the
+       * member revoke above already removes one.
+       */
       {
         name: 'Cancel Subscription',
         method: 'POST',

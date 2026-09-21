@@ -5,10 +5,14 @@ import PageHeader from '@/components/PageHeader';
 import { b2bApi } from '@/api/b2bApi';
 import { Receipt } from 'lucide-react';
 
-// Path slug Sandbox expects (no hyphen).
+/*
+ * `:form` on /b2b/tds/certificates/:form. The server accepts ONLY "130" or "131"
+ * and 400s on anything else, so the old `form16` / `form16a` slugs are gone: they
+ * were the pre-2026-09 path segment and every call carrying them was refused.
+ */
 const CERT_TYPES = [
-  { label: 'Form 16 (Salary TDS)',     value: 'form16'  },
-  { label: 'Form 16A (Non-salary TDS)', value: 'form16a' },
+  { label: '130 — Salary TDS (was Form 16)',      value: '130' },
+  { label: '131 — Other TDS (was Form 16A)',      value: '131' },
 ];
 
 // Quarterly statement form — distinct from the certificate type above.
@@ -24,8 +28,16 @@ const QUARTERS = [
   { label: 'Q4 (Jan–Mar)', value: 'Q4' },
 ];
 
-// Value carries the "FY " prefix the API expects (submit + fetch).
+// Value carries the "FY " prefix the calculator + potential-notice routes expect.
 const FY_OPTIONS = ['2025-26','2024-25', '2023-24', '2022-23','2021-22'].map(v => ({ label: `FY ${v}`, value: `FY ${v}` }));
+
+/*
+ * The CERTIFICATE routes take "TY 2025-26", not "FY 2025-26" — Sandbox rejects the
+ * FY form outright, so the server pins the pattern and refuses it before a credit
+ * is spent. Two separate lists rather than one, because one list is how a stale
+ * value reaches the route that charges.
+ */
+const TY_OPTIONS = ['2025-26','2024-25', '2023-24', '2022-23','2021-22'].map(v => ({ label: `TY ${v}`, value: `TY ${v}` }));
 
 // ── TDS Calculator option lists (mirror Sandbox docs) ──
 const DEDUCTEE_TYPES = [
@@ -97,20 +109,13 @@ function buildSalary(o: {
 }
 
 export default function TdsPage() {
-  const [certType, setCertType]   = useState('form16');
-  const [username, setUsername]   = useState('');
-  const [password, setPassword]   = useState('');
+  const [certType, setCertType]   = useState('130');
+  const [taxYear, setTaxYear]     = useState('TY 2025-26');
+  const [profileId, setProfileId] = useState('');
   const [tan, setTan]             = useState('');
   const [form, setForm]           = useState('24Q');
   const [quarter, setQuarter]     = useState('Q1');
   const [fy, setFy]               = useState('FY 2025-26');
-  const [bsr, setBsr]             = useState('');
-  const [challanSerial, setChallan] = useState('');
-  const [challanDate, setChallanDate] = useState('');
-  const [challanAmount, setChallanAmount] = useState('');
-  const [prn, setPrn]             = useState('');
-  const [pan, setPan]             = useState('');
-  const [panAmount, setPanAmount] = useState('');
   const [jobId, setJobId]         = useState('');
   const [pnJobId, setPnJobId]     = useState('');
 
@@ -142,38 +147,28 @@ export default function TdsPage() {
     salary: buildSalary({ panStatus, employeeCategory, salary171, stdDeduction, hraExemption, housePropertyIncome, deductible80c }),
   });
 
-  const jobPayload = {
-    username, password, tan,
-    security_captcha: {
-      quarter,
-      financial_year: fy,
-      form,
-      bsr_code: bsr,
-      challan_date: challanDate,
-      challan_serial_no: challanSerial,
-      challan_amount: Number(challanAmount),
-      provisional_receipt_number: prn,
-      // First row is the required header; second row is one PAN/amount entry.
-      unique_pan_amount_combination_for_challan: [
-        ['sr_no', 'pan', 'total_amount_deposited_against_pan'],
-        [1, pan, Number(panAmount)],
-      ],
-    },
-  };
+  /*
+   * `jobPayload` is gone with the route that took it. The certificate job used to
+   * carry the TRACES username, password and the whole challan block; the 2026-09
+   * restructure moved the login onto the saved TDS profile, so the body is now
+   * quarter + tax_year (+ optional profileId) and those eleven fields had no
+   * receiver anywhere on the server.
+   */
 
   return (
     <div className="max-w-3xl">
       <PageHeader
         title="TDS — TRACES Compliance"
-        subtitle="Fetch Form 16 / 16A from TRACES via Sandbox. Submit once → the server tracks the job in the background → check status with just the job id."
+        subtitle="Fetch TDS certificates from TRACES via Sandbox. Submit once → the Sandbox WEBHOOK reports completion → read the status and the certificate links with just the job id. Restructured 2026-09: /certificates/:form (130 or 131), and the credentials live on the saved profile."
         icon={<Receipt size={18} />}
         badge="B2B Only"
         postmanSection="tds"
       />
 
       <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        <strong>Flow:</strong> Submit Job (returns a job id immediately) → the server background-polls TRACES →
-        Check Job Status / My TDS Jobs with just the id (no credentials). Manual poll &amp; Sandbox history search are below as fallbacks.
+        <strong>Flow:</strong> Submit Job (202 + a job id) → <strong>the Sandbox webhook</strong> (POST /webhook/sandbox/tds) advances it —
+        there is no polling route and no polling cron → Check Job Status / My TDS Jobs / Certificate Links with just the id, no credentials.
+        Refresh One Job is the escape hatch for a missed webhook, not a loop; the provider history search is below it.
       </div>
 
       <div className="mb-4 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500">
@@ -188,28 +183,22 @@ export default function TdsPage() {
           step={1}
           title="Submit TDS Certificate Job"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/submit-job/${certType}`}
-          description="Submits a TRACES job and returns a job id immediately (persisted + background-polled). 'Form' is the quarterly statement (24Q/26Q/…), separate from the certificate type."
+          endpoint={`/api/v1/b2b/tds/certificates/${certType}`}
+          description="Three fields, not fourteen. The 2026-09 Sandbox restructure moved this to /certificates/:form (130 = salary TDS, 131 = other TDS) and took the TRACES credentials and the whole challan block out of the body — the saved TDS profile supplies the login, so send only quarter + tax_year (+ an optional profileId). tax_year is 'TY 2025-26'; the server refuses 'FY …' rather than spend a credit on a guaranteed provider 400. Returns 202 with a jobId; completion arrives on the webhook."
           onSubmit={async () => {
-            const res = await b2bApi.submitTdsJob(certType, jobPayload);
+            const res = await b2bApi.submitTdsJob(certType, {
+              quarter,
+              tax_year: taxYear,
+              ...(profileId.trim() ? { profileId: profileId.trim() } : {}),
+            });
             const id = res.data?.data?.jobId;
             if (id) setJobId(id);
             return res;
           }}
         >
-          <Field label="TRACES Username" value={username} onChange={setUsername} placeholder="TRACES portal username" />
-          <Field label="TRACES Password" value={password} onChange={setPassword} placeholder="••••••••" type="password" />
-          <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMU12345A" />
-          <SelectField label="Form (statement)" value={form} onChange={setForm} options={FORM_TYPES} />
           <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
-          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
-          <Field label="BSR Code" value={bsr} onChange={setBsr} placeholder="Bank BSR code" />
-          <Field label="Challan Date" value={challanDate} onChange={setChallanDate} placeholder="DD/MM/YYYY" />
-          <Field label="Challan Serial No." value={challanSerial} onChange={setChallan} placeholder="Serial number" />
-          <Field label="Challan Amount (₹)" value={challanAmount} onChange={setChallanAmount} placeholder="0" type="number" />
-          <Field label="Provisional Receipt No." value={prn} onChange={setPrn} placeholder="15-digit PRN" />
-          <Field label="PAN (deductee)" value={pan} onChange={setPan} placeholder="ABCDE1234F" />
-          <Field label="Amount against PAN (₹)" value={panAmount} onChange={setPanAmount} placeholder="0" type="number" />
+          <SelectField label="Tax Year" value={taxYear} onChange={setTaxYear} options={TY_OPTIONS} />
+          <Field label="Profile ID (optional)" value={profileId} onChange={setProfileId} placeholder="defaults to your default TDS profile" fullWidth />
         </ApiCard>
 
         {/* 2. Check status — low input */}
@@ -218,7 +207,7 @@ export default function TdsPage() {
           title="Check Job Status"
           method="GET"
           endpoint="/api/v1/b2b/tds/jobs/:jobId"
-          description="Reads the persisted job's status + summary (processing | completed | failed). No credentials, no TRACES round-trip — the background cron keeps it updated."
+          description="Reads the persisted job's status + summary. No credentials and no TRACES round-trip: the Sandbox webhook advances it, not a cron and not this read."
           onSubmit={() => b2bApi.getTdsJob(jobId)}
         >
           <Field label="Job ID" value={jobId} onChange={setJobId} placeholder="Auto-filled from Submit" fullWidth />
@@ -240,34 +229,42 @@ export default function TdsPage() {
           <p className="text-xs text-slate-400 mb-3">Use these only if the background tracker can't proceed (e.g. Redis off) or to query TRACES history directly.</p>
         </div>
 
-        {/* Manual poll */}
+        {/* Refresh one job — the missed-webhook escape hatch */}
         <ApiCard
           step={4}
-          title="Manual Poll (re-enter credentials)"
+          title="Refresh One Job (missed webhook)"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/poll-job/${certType}`}
-          description="Forces a TRACES poll for a job id using freshly supplied credentials, and updates the stored job."
-          onSubmit={() => b2bApi.pollTdsJob(certType, jobId, { username, password, tan })}
+          endpoint="/api/v1/b2b/tds/jobs/:jobId/refresh"
+          description="Re-reads one job's state on demand. There is NO polling route and no polling cron — completion arrives on the Sandbox webhook (POST /webhook/sandbox/tds); this is the escape hatch for a job whose webhook was missed, not a loop to call. No credentials: the saved profile supplies the login."
+          onSubmit={() => b2bApi.refreshTdsJob(jobId.trim())}
         >
           <Field label="Job ID" value={jobId} onChange={setJobId} placeholder="From submit response" fullWidth />
-          <Field label="TRACES Username" value={username} onChange={setUsername} placeholder="TRACES portal username" />
-          <Field label="TRACES Password" value={password} onChange={setPassword} placeholder="••••••••" type="password" />
-          <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMU12345A" />
+        </ApiCard>
+
+        {/* Presigned certificate links */}
+        <ApiCard
+          step={5}
+          title="Certificate Links"
+          method="GET"
+          endpoint="/api/v1/b2b/tds/jobs/:jobId/certificates"
+          description="Presigned links to the PDFs mirrored into our own storage. Empty while TRACES is still preparing the files — an empty list is the normal in-progress answer, not an error."
+          onSubmit={() => b2bApi.getTdsJobCertificates(jobId.trim())}
+        >
+          <Field label="Job ID" value={jobId} onChange={setJobId} placeholder="From submit response" fullWidth />
         </ApiCard>
 
         {/* Sandbox history search */}
         <ApiCard
-          step={5}
+          step={6}
           title="Fetch TDS History (TRACES search)"
           method="POST"
-          endpoint={`/api/v1/b2b/tds/fetch-jobs/${certType}`}
-          description="Searches past certificate jobs for this deductor directly on TRACES."
-          onSubmit={() => b2bApi.fetchTdsJobs(certType, { tan, financial_year: fy, quarter, form })}
+          endpoint={`/api/v1/b2b/tds/certificates/${certType}/search`}
+          description="Reads the PROVIDER's own job list for this deductor rather than ours; free, no credit. tan, tax_year and quarter are all required — `financial_year` and the statement form are not fields on this route."
+          onSubmit={() => b2bApi.fetchTdsJobs(certType, { tan, tax_year: taxYear, quarter })}
         >
           <Field label="TAN" value={tan} onChange={setTan} placeholder="MUMU12345A" />
-          <SelectField label="Form (statement)" value={form} onChange={setForm} options={FORM_TYPES} />
           <SelectField label="Quarter" value={quarter} onChange={setQuarter} options={QUARTERS} />
-          <SelectField label="Financial Year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+          <SelectField label="Tax Year" value={taxYear} onChange={setTaxYear} options={TY_OPTIONS} />
         </ApiCard>
 
         {/* Divider — Connect Account & Potential Notices */}
@@ -278,7 +275,7 @@ export default function TdsPage() {
 
         {/* Link TAN */}
         <ApiCard
-          step={6}
+          step={7}
           title="Link TDS TAN (Connect Account)"
           method="POST"
           endpoint="/api/v1/b2b/tds/link-tan"
@@ -290,7 +287,7 @@ export default function TdsPage() {
 
         {/* Get linked TAN */}
         <ApiCard
-          step={7}
+          step={8}
           title="Get Linked TAN"
           method="GET"
           endpoint="/api/v1/b2b/tds/tan"
@@ -300,7 +297,7 @@ export default function TdsPage() {
 
         {/* Submit potential notice */}
         <ApiCard
-          step={8}
+          step={9}
           title="Submit Potential Notice"
           method="POST"
           endpoint="/api/v1/b2b/tds/potential-notices"
@@ -320,7 +317,7 @@ export default function TdsPage() {
 
         {/* Potential notice status */}
         <ApiCard
-          step={9}
+          step={10}
           title="Potential Notice Status"
           method="GET"
           endpoint="/api/v1/b2b/tds/potential-notices?job_id="
@@ -332,7 +329,7 @@ export default function TdsPage() {
 
         {/* Search potential notices */}
         <ApiCard
-          step={10}
+          step={11}
           title="Search Potential Notices (Sandbox history)"
           method="POST"
           endpoint="/api/v1/b2b/tds/potential-notices/search"
@@ -353,7 +350,7 @@ export default function TdsPage() {
 
         {/* 11. Non-salary calculator */}
         <ApiCard
-          step={11}
+          step={12}
           title="Calculator — Non-Salary TDS"
           method="POST"
           endpoint="/api/v1/b2b/tds/calculator/non-salary"
@@ -381,7 +378,7 @@ export default function TdsPage() {
 
         {/* 12. Salary calculator (sync) */}
         <ApiCard
-          step={12}
+          step={13}
           title="Calculator — Salary TDS (sync)"
           method="POST"
           endpoint="/api/v1/b2b/tds/calculator/salary/sync"
@@ -400,7 +397,7 @@ export default function TdsPage() {
 
         {/* 13. Salary calculator (bulk submit) */}
         <ApiCard
-          step={13}
+          step={14}
           title="Calculator — Salary TDS bulk (submit)"
           method="POST"
           endpoint="/api/v1/b2b/tds/calculator/salary"
@@ -415,7 +412,7 @@ export default function TdsPage() {
 
         {/* 14. Salary calculator (bulk status) */}
         <ApiCard
-          step={14}
+          step={15}
           title="Calculator — Salary TDS bulk (status)"
           method="GET"
           endpoint="/api/v1/b2b/tds/calculator/salary?job_id="

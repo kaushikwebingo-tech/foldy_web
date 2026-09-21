@@ -24,22 +24,18 @@ export const userApi = {
 
   dismissReminder: (id: string) =>
     client.post(`/user/reminders/${id}/dismiss`),
-
-  // Account switching — server-tracked linked accounts (Chrome-style multi-login).
-  // Link by supplying a LIVE session token for the other account (ownership proof);
-  // switch mints a fresh full session for the target; list/unlink manage the group.
-  // All four are OWNER_ONLY: a delegated (director) session gets 403 MEMBER_OWNER_ONLY,
-  // a delegated token cannot be linked (422), and switching to a company you are a
-  // member of is refused (403) — use accountApi.enterMembership instead.
-  listAccountLinks: () =>
-    client.get('/user/account-links'),
-
-  addAccountLink: (token: string) =>
-    client.post('/user/account-links', { token }),
-
-  switchAccount: (userId: string) =>
-    client.post(`/user/account-links/${userId}/switch`),
-
-  unlinkAccount: (userId: string) =>
-    client.delete(`/user/account-links/${userId}`),
 };
+
+/*
+ * GONE, NOT MISSING — `/user/account-links` (list, link, switch, unlink).
+ *
+ * Retired deliberately by RBAC_MASTER_PLAN.md §11.2: `AccountLink` was the last
+ * remaining way to bind two separate identities into one session group, which is
+ * the exact problem the identity redesign exists to remove. The server's four
+ * routes, the model, the service and the controller are all deleted, so these
+ * four client methods are removed rather than left to 404.
+ *
+ * The replacement is not a switcher over linked accounts but one person in several
+ * workspaces (§5.4): `identityApi.workspaces()` + `identityApi.switchWorkspace()`,
+ * which swap the session token inside a single identity.
+ */

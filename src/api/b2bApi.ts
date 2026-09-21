@@ -92,18 +92,34 @@ export const b2bApi = {
   trackGstReturns:    (gstin: string, financial_year: string, gstr?: string) =>
     client.post('/b2b/gst/get-finance-status', { gstin, financial_year, gstr }),
 
-  // TDS — TRACES jobs.
-  // username/password/tan are OPTIONAL now: with a saved profile send only the
-  // challan block (plus an optional profileId) and the server supplies the
-  // login. Inline credentials still win when present.
+  /*
+   * TDS — TRACES certificate jobs, RE-POINTED at the routes the server has.
+   *
+   * The 2026-09 Sandbox restructure moved this family and nothing updated the
+   * console: `submit-job/:type`, `poll-job/:type` and `fetch-jobs/:type` do not
+   * exist on the server and every call 404'd. `:form` is 130 (salary TDS, was Form
+   * 16) or 131 (other TDS, was Form 16A) — `certificateType` carries it.
+   *
+   * THERE IS NO POLLING ROUTE, deliberately: completion arrives on the Sandbox
+   * webhook (POST /webhook/sandbox/tds). `refreshTdsJob` is the escape hatch for a
+   * job whose webhook was missed, not a loop to call — which is why the old
+   * `pollTdsJob(certificateType, jobId, credentials)` could not simply be
+   * re-pathed: it took credentials the new route neither needs nor accepts.
+   *
+   * username/password/tan are OPTIONAL: with a saved profile send only the challan
+   * block (plus an optional profileId) and the server supplies the login. Inline
+   * credentials still win when present. Creating a job costs 1 TDS credit, refunded
+   * automatically when TRACES later fails it.
+   */
   submitTdsJob:       (certificateType: string, data: Record<string, unknown>) =>
-    client.post(`/b2b/tds/submit-job/${certificateType}`, data),
+    client.post(`/b2b/tds/certificates/${certificateType}`, data),
 
-  pollTdsJob:         (certificateType: string, jobId: string, credentials: Record<string, unknown>) =>
-    client.post(`/b2b/tds/poll-job/${certificateType}`, { ...credentials, job_id: jobId }),
+  // On-demand re-read of one job's state, for a missed webhook. No credentials.
+  refreshTdsJob:      (jobId: string) =>
+    client.post(`/b2b/tds/jobs/${jobId}/refresh`),
 
   fetchTdsJobs:       (certificateType: string, data: Record<string, unknown>) =>
-    client.post(`/b2b/tds/fetch-jobs/${certificateType}`, data),
+    client.post(`/b2b/tds/certificates/${certificateType}/search`, data),
 
   // Persisted TDS jobs — low-input progress tracking (background-polled server-side).
   // `kind` separates certificate history from notice analyses, which share this
@@ -114,11 +130,13 @@ export const b2bApi = {
   getTdsJob:          (jobId: string) =>
     client.get(`/b2b/tds/jobs/${jobId}`),
 
-  // Streams the completed certificate. The server proxies the provider's
-  // short-lived URL, so the caller never sees it; 404 while TRACES is still
-  // preparing the file.
-  downloadTdsCertificate: (jobId: string) =>
-    client.get(`/b2b/tds/jobs/${jobId}/certificate`, { responseType: 'blob' }),
+  // Presigned links to the certificate PDFs mirrored into our own storage —
+  // `/jobs/:jobId/certificates`, plural, which is the route the server has. The old
+  // singular `/certificate` streamed a blob and no longer exists, so this returns
+  // JSON links, not a `responseType: 'blob'` body: the caller opens a link.
+  // Empty while TRACES is still preparing the files.
+  getTdsJobCertificates: (jobId: string) =>
+    client.get(`/b2b/tds/jobs/${jobId}/certificates`),
 
   // TDS "Potential Notices" — async analytics, no TRACES credentials. Submit
   // returns a job id; the cron polls Sandbox; GET returns the parsed notices.

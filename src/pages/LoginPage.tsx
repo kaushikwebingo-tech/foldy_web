@@ -33,7 +33,10 @@ function PanLoginCards() {
         description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → use the Onboarding page (needs Name + DOB). Copy referenceId into step 2."
         onSubmit={async () => {
           const { data } = await authApi.panEntry(pan, "", "", workspace);
-          const { referenceId } = data?.data;
+          // Destructuring `data?.data` throws the moment the envelope is anything
+          // but the happy one — which is exactly what a half-rebuilt server returns.
+          // Read the field, do not unwrap the shape.
+          const referenceId = data?.data?.referenceId;
           if (referenceId) setReferenceId(referenceId);
           return data;
         }}
