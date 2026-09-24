@@ -12,7 +12,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   auth: {
     key: 'auth',
     name: 'Auth & Session',
-    description: 'Session helpers: push-token registration, logout, and the authenticated user\'s plan/storage status. Login & registration are PAN-first (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
+    description: 'Session helpers: push-token registration and the authenticated user\'s plan/storage status (logout is in the Identity section). Login & registration are PAN-first (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
     endpoints: [
       {
         name: 'Forgot Password',
@@ -35,12 +35,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Registers the device push token. Requires auth. device_type = android|ios|web. Needs the X-Device-Id header: the server upserts a device row { user: <token id>, deviceId } with actor = the person. On a DELEGATED token the legacy User.notificationToken mirror is not written (a director\'s handset never replaces the owner\'s); company pushes reach it only while the membership is active. Validation errors are 400 VALIDATION_FAILED.',
         body: { notification_token: '<fcm-or-onesignal-token>', device_type: 'android' }
       },
-      {
-        name: 'Logout',
-        method: 'POST',
-        path: 'api/v1/auth/logout',
-        description: 'Revokes the presented JWT (token denylist) and removes its sid from the token\'s account. Also how a director LEAVES a company: call it with the delegated token (ends that company session row), then switch back to the personal token — there is no exit endpoint. data null.'
-      },
+      // `POST /auth/logout` lives in the Identity section: the new PUBLIC,
+      // always-200 handler now answers that path for both token kinds.
       {
         name: 'My Profile',
         method: 'GET',
@@ -79,7 +75,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Plan / Subscription Status',
         method: 'GET',
         path: 'api/v1/user/plan-status',
-        description: 'Current subscription/trial status + plan limits. A director sees the COMPANY\'s plan. SEATS ARE NOT HEADS (RBAC_MASTER_PLAN.md §6.1 decision L3, §7.10): memberLimit counts SEAT-CONSUMING ROLES with the owner always taking one — Administrator and Clerk consume a seat, Accountant and Viewer consume none (the outside adviser is free on purpose), and a custom role consumes one unless it holds no *.refresh, no vault.upload, no *.manage, no vault.delete and no reports.export. -1 is unlimited. The plan ladder is trial 2 / individual 1 / starter 3 / growth 7 / pro 15 / enterprise -1, plus a +5 seat pack; a row without the field reads as 1, and enforcement uses 1 once the plan has expired. seatsUsed = 1 (owner) + memberships that are active or invited AND seat-consuming; a SUSPENDED member consumes none (decision R18), so suspending frees a seat at once and reactivating can be refused 409 TENANT_SEAT_UNAVAILABLE. `pending_approval` no longer exists (§7.3).'
+        description: 'Current subscription/trial status + plan limits. A director sees the COMPANY\'s plan. THE SEAT PAIR HERE IS THE LEGACY COUNT, NOT §7.10\'s. memberLimit = memberLimitOf(plan) as stored (-1 unlimited; ladder trial 2 / individual 1 / starter 3 / growth 7 / pro 15 / enterprise -1, plus a +5 seat pack; a row without the field reads as 1) and is NOT reduced for a lapsed plan. seatsUsed = accountMemberService.seatsUsed: 1 (owner) + old-style AccountMembership rows in active | pending_approval, whatever their role; new-model staff are not counted. The authoritative pair (seat-consuming roles only: Administrator and Clerk pay, Accountant and Viewer are free, a SUSPENDED member is free; effective limit 1 from day 61 after the plan\'s end date) is GET /v1/workspace/access `seats`.'
       },
       {
         name: 'Storage Status',
@@ -99,13 +95,12 @@ export const API_SECTIONS: Record<string, ApiSection> = {
    * The NEW identity model. RBAC_MASTER_PLAN.md §3 (signup), §5.1-§5.2 (sign-in),
    * §5.4 (the switcher), §5.7 (the email gate) and §3.1 (the workspace PAN).
    *
-   * These routes are LIVE on the server today — `signupRoutes` and
-   * `identityAuthRoutes` (plus its `tenantRouter`), all mounted in
+   * These routes are LIVE on the server today — `signupRoutes`, `identityAuthRoutes`
+   * (plus its `tenantRouter`), `workspaceRoutes` and `metaRoutes`, all mounted in
    * `routes/app/v1/index.ts` AHEAD of the legacy PAN-first `authRoutes`, which still
-   * answers until §12 retires it. Nothing is declared in both files. The two routes
-   * the plan specifies and the server has NOT built — GET /v1/meta/permissions (§6.4)
-   * and GET /v1/workspace/access (§7.12) — are deliberately absent rather than
-   * shipped as entries that would 404 in a shared collection.
+   * answers until §12 retires it. `POST /auth/logout` is the one path declared in
+   * both files, and the new handler shadows the legacy one as a superset.
+   * GET /v1/workspace/access (§7.12) and GET /v1/meta/permissions (§6.4) are BUILT.
    */
   identity: {
     key: 'identity',
@@ -115,7 +110,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       'NO SESSION EXISTS during signup or during the public half of sign-in, so what stands in for one is the draft token plus a code answered on THIS attempt; re-opening a draft clears the proof, which is why a resume link skips the typing and never the proof. ' +
       'ONE LIMITER over the whole public family: 300 per 15 minutes per IP on its own Redis prefix, because one sign-in is two to four calls behind carrier-grade NAT. It fails OPEN; the per-identifier caps that decide whether an SMS is paid for are counted in Mongo and fail CLOSED. ' +
       'A 401 MEANS EXACTLY ONE THING (§8.9): the session named by this sid is no longer live. Every other refusal arrives as 403 / 409 / 422 / 429 and is drawn from its own code — one refusal tagged wrong is a user silently signed out. ' +
-      'Set {{token}} only for the session half (workspaces, switch, the email gate, tenant/pan).',
+      'Set {{token}} (a NEW-model session: sub + sid + tid + mid) only for the session half — workspaces, switch, the email gate, tenant/pan, step-up, workspace/access, meta/permissions, devices and logout-all. Logout is PUBLIC and sends the bearer if it has one.',
     endpoints: [
       // ── §3 signup, public ──
       {
@@ -136,7 +131,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Signup — Screen 2, Verify Code',
         method: 'POST',
         path: 'api/v1/signup/mobile/verify',
-        description: 'The FIRST AND ONLY place an existing account is named, and only after a correct code (§8.2). SMS autofill is fine here: this is a 6-digit code, unlike §4.2\'s 8-character invite password.',
+        description: 'The FIRST AND ONLY place an existing account is named, and only after a correct code (§8.2). A 6-digit code, so SMS autofill is fine here.',
         body: { draftToken: '<from screen 1>', code: '123456' }
       },
       {
@@ -253,134 +248,244 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/tenant/pan',
         description: '§3.1 / §3.2\'s PAN arriving inside a LIVE session instead of a signup draft — the route the app\'s PAN re-verify screen needed and never had, because the old flow finished by minting a second session. The tenant comes ONLY from the session row: `X-Tenant-Id` does not exist as an input anywhere (§8.7 rule 2).',
         body: { pan: 'ABCDE1234F' }
+      },
+      // ── §7.12 / §6.4 access and vocabulary, session ──
+      {
+        name: 'Workspace Access',
+        method: 'GET',
+        path: 'api/v1/workspace/access',
+        description: 'ANY_MEMBER — a live session and an active membership, nothing more: this is the call that TELLS the app what the person may do, so it is never gated on a permission. §7.12\'s envelope: { workspace: { id, name, kind, status (active|grace|read_only|seats_collapsed|suspended), readOnly, paymentDue }, isOwner, role: { id, name, isSystem, systemKey? }, permissions[] (the §6.4 names this membership holds), ownerCapabilities[] (§6.2 ids; empty for staff), modules: { gst|roc|tds|itr|investment: { enabled, limit } }, seats: { used, limit } (-1 unlimited), owner: { name }, plan: { status, readOnly, paymentDue, staffSuspended }, accessVersion, membersEnabled }. accessVersion is the number the X-Access-Version response header carries; a role, membership or plan write bumps it so the change lands on the next tap. Replaces the legacy GET /account/me/permissions.'
+      },
+      {
+        name: 'Permission Catalog',
+        method: 'GET',
+        path: 'api/v1/meta/permissions',
+        description: 'ANY_MEMBER (a session, no permission). §6.4\'s served vocabulary — the words behind the 26 names: { groups: [{ id, title, subtitle, view, permissions: [{ key, label, seat, ownerOnlyToGrant? }] }] }. `seat` marks a permission that makes a role seat-consuming (§7.10); `ownerOnlyToGrant` marks team.manage and roles.manage (§6.3). Clients read the list from here and never carry one of their own.'
+      },
+      // ── §8.5 step-up, session ──
+      {
+        name: 'Step-Up — Start',
+        method: 'POST',
+        path: 'api/v1/auth/step-up/start',
+        description: 'ANY_MEMBER — a step-up proves WHO is acting and is never itself the gate; each gated route keeps its own permission. Closed body { action }; an unknown action is 422. Texts a 6-digit code to the SESSION\'S OWN mobile, so there is no identifier to enumerate. Class B ids — team.staff (suspend/reactivate/remove staff, setup resend; Add Staff needs none), team.staff.role (change a role), team.roles (custom-role writes), billing.purchase, credential.link, vault.bulk_export, vault.pin_reset — mint a token reusable for 10 minutes; Class A ids are single use. 200 { action, class, fresh, maskedMobile, resendIn, expiresAt }. Bounded by the per-mobile code budget and 5 guesses per code, counted in Mongo and failing CLOSED (429 / 503) — never 401.',
+        body: { action: 'team.staff' }
+      },
+      {
+        name: 'Step-Up — Verify',
+        method: 'POST',
+        path: 'api/v1/auth/step-up/verify',
+        description: 'Closed body { action, code }. The code is bound to the ACTION it was started for — one started for team.staff cannot mint team.staff.role. 200 "Confirmed." { stepUpToken, expiresIn (seconds), expiresAt, action, class, fresh }: send stepUpToken as the X-Step-Up header on the gated call (add it by hand in Postman). A wrong, expired or spent code is one 422 OTP_INVALID sentence (§8.2, §8.9). A gated route without a valid token answers 403 AUTH_STEP_UP_REQUIRED { action, class, fresh } and never 401.',
+        body: { action: 'team.staff', code: '123456' }
+      },
+      // ── §5.2 devices and §8.6 sign-out ──
+      {
+        name: 'My Devices',
+        method: 'GET',
+        path: 'api/v1/auth/devices',
+        description: 'ANY_MEMBER, no permission and no step-up: these rows are the PERSON\'s own handsets (keyed on the person, not the workspace). 200 { devices: [{ id, name, platform?, current, trusted, lastUsedAt?, trustedUntil? }], maxTrusted, trustDays }. Masked by default — no IP, city, push token or client-minted deviceId.'
+      },
+      {
+        name: 'Remove Device',
+        method: 'DELETE',
+        path: 'api/v1/auth/devices/:id',
+        description: '§5.2\'s Remove. :id is the device ROW id from My Devices, never the client deviceId, re-read with the person in the filter: a device that is not yours is 404, never 403. Forgets the trust AND ends that handset\'s sessions; removing the phone in your hand is allowed and the answer says so. 200 { id, trusted: false, current, sessionsEnded, signedOut, message }. No step-up — §8.5 leaves Remove off both lists.',
+        pathVars: [{ key: 'id', value: '<devices[].id>' }]
+      },
+      {
+        name: 'Logout',
+        method: 'POST',
+        path: 'api/v1/auth/logout',
+        description: 'PUBLIC by design and ALWAYS 200 — even with a dead, missing or unverifiable token (§8.6 rule 8: a 401 or a 422 on logout makes clients loop). The handler reads the bearer itself and does nothing at all when it will not verify. Ends THIS session only — a new-model sub+sid token or a legacy id+sid token — and deletes this device\'s push token; { forgetDevice: true } also revokes the device trust (anything else means no). 200 { forgotDevice }. It shadows the legacy POST /auth/logout as a superset.',
+        body: { forgetDevice: false }
+      },
+      {
+        name: 'Logout Everywhere',
+        method: 'POST',
+        path: 'api/v1/auth/logout-all',
+        description: 'ANY_MEMBER and NO step-up (§8.6 rule 9 — demanding a code to lock down a possibly-compromised account is backwards). Ends every session this person has; device trust is left alone. 200 { sessionsEnded, devicesForgotten: 0, message }.'
       }
     ]
   },
 
+  /*
+   * Staff on the NEW model — `routes/app/v1/staffRoutes.ts` + `teamRoleRoutes.ts`
+   * mounted at `/team`, and the staff member's own half under `/auth/setup`
+   * (`identityAuthRoutes`). RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5.
+   *
+   * GONE, NOT MISSING: every invitation / claim / `login/password` /
+   * `pendingInvites` row and the `/account/memberships` family (create, my
+   * memberships, enter, leave). Decision R21: no invitation exists anywhere, and
+   * R22: a new staff member sets their password through an EMAILED single-use
+   * 72-hour link. The `/account/members` family below is still mounted
+   * (`accountMemberRoutes`) and is kept only as LEGACY.
+   */
   account: {
     key: 'account',
-    name: 'Team & Access',
+    name: 'Team & Access (staff)',
     description:
-      'A company workspace\'s staff. THE INVITATION FAMILY IS DELETED: RBAC_MASTER_PLAN.md §4.1 has the admin CREATE the member outright (POST /account/memberships — four fields: full name, mobile, email optional, role) and §4.2 has the person claim it with an 8-character one-time password on a sign-in-side screen, so /members/invite, /invites/:id and /invitations* are gone for good. ' +
-      'Statuses are invited | active | suspended (§7.3) — `pending_approval` is gone and removal hard-deletes, so there is no `removed`. Roles are per tenant with four system rows, Administrator (stored key `administration`), Accountant, Clerk and Viewer (§6.1), over the TWENTY-SIX permission names of §6.4. Only the OWNER may create, edit or assign a role carrying team.manage or roles.manage, or suspend, remove or re-role somebody who holds one (§6.2, §6.3). ' +
-      'MID-REBUILD: §11.3 phase 5 moves all of this onto `memberships` + `tenant_roles`, so the shapes below are what the server answers today, not what it will answer. ' +
-      'Delegated JWT = { id: <company>, sid, act: <director>, mem: <membership> } (no phoneno); a token without act is an owner/personal session and may do everything. ' +
-      'Every delegated request passes the member gate first: 403 MEMBER_PERMISSION_DENIED (role lacks it / unmapped route) or 403 MEMBER_OWNER_ONLY; 401 { reason: "access_revoked" } MEMBER_ACCESS_REVOKED when the membership is gone, suspended or pending, or the feature is off. ' +
-      'MEMBERS_ENABLED (server env, default OFF): create, role change, role create/update/delete and enter answer 404 NOT_FOUND; the GETs and member status/remove still answer. ' +
-      'Member validation errors are 422 VALIDATION_FAILED. OTP login is still the fixed 123456 in dev. Set {{token}} to the owner JWT for the owner calls and the member\'s own PERSONAL JWT for memberships.',
+      'A company workspace\'s staff on the NEW identity model (RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5). There is NO invitation anywhere (decision R21): the admin CREATES the staff member ACTIVE at once, and the person chooses their own password through an EMAILED single-use 72-hour link (R22) — the admin never sees, sets or resets it. ' +
+      'Every /team route needs a NEW-model session ({{token}} from Identity → Sign In: sub + sid + tid + mid); the tenant comes only from that session (§8.7 rule 2). Reads need team.read; every staff write needs team.manage, which the owner holds through the everything-role and an Administrator holds too (L1). ' +
+      'Only the OWNER may assign a role carrying team.manage or roles.manage (403 RBAC_OWNER_ONLY); nobody may assign a role granting more than they hold (403 RBAC_PERMISSION_DENIED); a non-owner may not suspend, remove or re-role a colleague holding either (403 RBAC_SENIORITY_DENIED); nobody acts on their own row or the owner\'s (403 RBAC_PERMISSION_DENIED, data.reason self | owner_membership). An individual workspace has no team: 403 TEAM_UNAVAILABLE. ' +
+      'FIVE actions need an X-Step-Up header (§8.5, Class B, reusable for 10 minutes): team.staff for suspend, reactivate, remove and setup/resend, team.staff.role for the role change. Mint it with Identity → Step-Up Start then Verify and add the header by hand; without it the answer is 403 AUTH_STEP_UP_REQUIRED { action, class, fresh }. ' +
+      'A 401 MEANS ONLY "this session is over" (§8.9): every refusal here is 403 / 404 / 409 / 422 / 429 with an errorCode. Rows marked LEGACY are the pre-RBAC /account co-user API on the legacy JWT.',
     endpoints: [
-      // ── Owner side (non-delegated; business workspace) ──
+      // ── §4.3 / §4.1 — the team, new model ──
       {
-        name: 'List Members',
+        name: 'List Team Roles',
+        method: 'GET',
+        path: 'api/v1/team/roles',
+        description: 'team.read or roles.manage (403 RBAC_PERMISSION_DENIED otherwise). { roles } — the four system roles (Administrator, Accountant, Clerk, Viewer) and this workspace\'s custom roles; roles[].id is the `role` Add Staff and Change Role take. The three writes on /team/roles need roles.manage plus X-Step-Up team.roles.'
+      },
+      {
+        name: 'List Staff',
+        method: 'GET',
+        path: 'api/v1/team/staff',
+        description: 'team.read (team.manage is NOT needed to look). §4.3\'s team list, keyset-paged on _id ascending, so a colleague added mid-scroll neither duplicates nor hides a row: pass nextCursor back as cursor (opaque; one the server cannot read is 422). limit 1-100, default 25; status = active | suspended (`invited` is refused 422 — no row carries it, R21); any other key is 422. 200 { members: [{ id (MEMBERSHIP id), name, username (only when this workspace minted it, else null), status, isOwner, isYou, title, role: { id, name, systemKey?, seatConsuming }, contact: { mobile, email } (BOTH masked at the source), lastActiveAt, joinedAt, setupPending (no password chosen yet), can: { changeRole, suspend, reactivate, remove, resendSetup }, seniorityLocked }], nextCursor | null }. `can` is decided by the server for THIS reader; the app draws it and never recomputes it.',
+        // Only limit is pre-filled: the generator sends every listed param and an
+        // EMPTY cursor or status is refused 422. Add them by hand when needed.
+        query: [
+          { key: 'limit', value: '25', description: '1-100, default 25. Optional (add only with a value): status = active | suspended, cursor = nextCursor' }
+        ]
+      },
+      {
+        name: 'Read Staff Member',
+        method: 'GET',
+        path: 'api/v1/team/staff/:id',
+        description: 'team.read. :id is the MEMBERSHIP id (members[].id), re-read with the tenant in the filter: another workspace\'s id and one that never existed both answer 404 NOT_FOUND "That person is not in this workspace." (never 403 — §8.7 rule 1), and a malformed id answers 422 with the same sentence. 200 { member } — the list row plus addedAt, addedBy { id, name } | null, suspendedAt, suspendedBy { id, name } | null, suspendReason | null and permissions[] (the resolved grant of their role).',
+        pathVars: [{ key: 'id', value: '<membershipId>' }]
+      },
+      {
+        name: 'Add Staff Member',
+        method: 'POST',
+        path: 'api/v1/team/staff',
+        description: 'team.manage (no X-Step-Up on this route). §4.1\'s one screen with a CLOSED body — unknown keys are 422, so no username, password, pan, status or isOwner can ride along: name 2-80; mobile, Indian only (10 digits starting 6-9, +91 / 0 tolerated); email REQUIRED, ≤ 254 — the set-password link goes there; role, a 24-hex id from List Team Roles (another workspace\'s → 404); title optional, ≤ 60. The member is ACTIVE at once — no invitation, no `invited` status (R21). A person new to Foldy is emailed a single-use set-password link valid 72 hours (R22); one who already has an account is emailed a plain notice. 201 "Staff member added." { membershipId, name, role: { id, name }, status: "active", title?, seats: { used, limit } } — BYTE-IDENTICAL in both branches (§8.2), so the response never answers "is this mobile on Foldy?". Refusals: 409 TEAM_MEMBER_EXISTS { membershipId } (already someone in THIS workspace); 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } or 409 TENANT_PLAN_CHANGE_PENDING, and nothing is written; 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign; 403 TEAM_UNAVAILABLE on an individual workspace; 429 OTP_SEND_LIMIT { retryAfterSeconds } past 10 adds per 15 minutes or 40 per day; 503 when the server cannot build the link.',
+        body: { name: 'Asha Nair', mobile: '9876543210', email: 'asha@example.com', role: '<roles[].id from List Team Roles>', title: 'Accounts — GST' }
+      },
+      // ── §4.4 — the membership actions, X-Step-Up gated ──
+      {
+        name: 'Change Staff Role',
+        method: 'PATCH',
+        path: 'api/v1/team/staff/:id/role',
+        description: 'team.manage + X-Step-Up team.staff.role (add the header by hand). Closed body { role, acknowledgeAlertShrink? }. Takes effect on their very next tap — the access version is bumped in the same write. Refusals: 403 AUTH_STEP_UP_REQUIRED; 422 "They already have the … role."; 404 for a role or member not in this workspace; 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED / RBAC_SENIORITY_DENIED; 409 TENANT_SEAT_UNAVAILABLE when a free role becomes a paid one and no seat is free; 409 TEAM_ALERT_SHRINK_UNCONFIRMED { modules, person, acknowledge: "acknowledgeAlertShrink" } when the change would leave a module\'s alerts with the owner alone — show the message, then retry with acknowledgeAlertShrink: true. 200 "Role changed." { membershipId, person: { id, name }, status, role: { id, name }, seats: { used, limit }, alertsEmptied[] }.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }],
+        body: { role: '<roles[].id>', acknowledgeAlertShrink: false }
+      },
+      {
+        name: 'Suspend Staff Member',
+        method: 'POST',
+        path: 'api/v1/team/staff/:id/suspend',
+        description: 'team.manage + X-Step-Up team.staff. Closed body { reason? (≤ 200, "" = none), acknowledgeAlertShrink? }. Frees the seat AT ONCE (R18) and ends their sessions in THIS workspace only — their device trust and other workspaces are untouched. Refusals: 403 AUTH_STEP_UP_REQUIRED; 409 MEMBERSHIP_NOT_SUSPENDABLE when already suspended; 409 TEAM_ALERT_SHRINK_UNCONFIRMED (retry with acknowledgeAlertShrink: true); 429 TEAM_CHURN_LIMIT { retryAfterSeconds } after 3 suspend/reactivate transitions of one person in 24 h (the owner is told); plus the seniority / self / owner 403s. 200 "Access suspended." with the same result shape as Change Staff Role.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }],
+        body: { reason: 'On leave until March', acknowledgeAlertShrink: false }
+      },
+      {
+        name: 'Reactivate Staff Member',
+        method: 'POST',
+        path: 'api/v1/team/staff/:id/reactivate',
+        description: 'team.manage + X-Step-Up team.staff. Takes NO body — any key is 422. Takes a seat again: a full workspace answers 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } and nothing is written. Also 409 MEMBERSHIP_NOT_SUSPENDABLE when already active and 429 TEAM_CHURN_LIMIT. 200 "Access restored." with the same result shape as Change Staff Role.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }]
+      },
+      {
+        name: 'Remove Staff Member',
+        method: 'DELETE',
+        path: 'api/v1/team/staff/:id',
+        description: 'team.manage + X-Step-Up team.staff. Optional closed body { acknowledgeAlertShrink } — 409 TEAM_ALERT_SHRINK_UNCONFIRMED first when the removal would empty a module\'s alert list. HARD-deletes the membership (no tombstone; history lives in the audit log), ends their sessions in this workspace, voids any contact-change proposal this workspace has open against them and frees the seat. Their person row, username, device trust and other workspaces are untouched. 200 with a body, not 204: "Removed from the workspace." with status "removed" and the seat numbers.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }]
+      },
+      {
+        name: 'Resend Set-Password Email',
+        method: 'POST',
+        path: 'api/v1/team/staff/:id/setup/resend',
+        description: 'team.manage + X-Step-Up team.staff. Takes NO body — the link is system-generated. Only while the row\'s setupPending is true and only for the workspace that CREATED the person (row.can.resendSetup); once they have chosen a password it is theirs: 403 RBAC_NOT_MANAGED_PERSON (they use Forgot password). Re-mints the link and restarts the 72-hour window. 429 OTP_SEND_LIMIT { retryAfterSeconds } within 60 s of the last send or after 3 sends in one window; 422 VALIDATION_FAILED when no email is on file. 200 { membershipId, person: { id, name }, sentTo (masked) | null, expiresAt, sends: { used, limit }, resendIn } — identical whether the email went out or was dropped by the silent recipient cap (§8.2). The link is never in the response.',
+        pathVars: [{ key: 'id', value: '<membershipId>' }]
+      },
+      // ── §4.2 — the staff member's own half, PUBLIC ──
+      {
+        name: 'Set-Password Page (from the email)',
+        method: 'GET',
+        path: 'api/v1/auth/setup',
+        description: 'PUBLIC — the page the emailed link opens. Server-rendered HTML, NOT JSON and not the ApiResponse envelope (Cache-Control: no-store). t = <membershipId>.<secret> exactly as the link carried it. 200 with the password form while the link is live; 422 with the same "This link is no longer valid" page for every way a link can be wrong (§8.2). The form posts to Complete Setup. Under the identity family\'s per-IP limiter; no {{token}} is needed.',
+        query: [{ key: 't', value: '<membershipId>.<secret from the email>' }]
+      },
+      {
+        name: 'Complete Setup (first password)',
+        method: 'POST',
+        path: 'api/v1/auth/setup/complete',
+        description: 'PUBLIC. Closed body { t, password }. Writes the staff member\'s FIRST password, once. Signup\'s password policy applies (at least 10 characters; one built from their name, mobile or the work email is 422 AUTH_WEAK_PASSWORD). A dead, spent, malformed or unknown link is one 422 AUTH_TICKET_INVALID sentence. The link is burned and the address it reached becomes their verified email when nobody else holds it. MINTS NO SESSION: 200 { next: "done", message } — they then sign in on POST /auth/login like anybody else.',
+        body: { t: '<membershipId>.<secret from the email>', password: '<their new password>' }
+      },
+      // ── LEGACY — accountMemberRoutes on the legacy JWT (the Activity Log entry below is NOT legacy) ──
+      {
+        name: 'LEGACY — List Members',
         method: 'GET',
         path: 'api/v1/account/members',
-        description: 'Owner session only (the controller refuses every delegated session with 403 MEMBER_OWNER_ONLY). Returns { members: [{ id (membership id), userId, name, maskedMobile, avatarUrl, role: { id, name } | null, status, title, isOwner, lastAccessAt }], pendingInvites: [] }. `pendingInvites` is legacy and now ALWAYS EMPTY — the invite collection is deleted, and §4.3 shows a created-but-unclaimed person as an `invited` ROW in members instead, with no handle on it in either state. Statuses are invited | active | suspended (§7.3). Not sorted. Not flag-gated; seeds the four system roles and the owner row as a side effect.'
+        description: 'LEGACY — the pre-RBAC co-user API (accountMemberRoutes, legacy businessAuth JWT), still mounted until §12 retires it; the new model is List Staff. Owner session only (403 MEMBER_OWNER_ONLY for a delegated one). { members: [{ id, userId, name, nameWithheld, nameVerified, nameSource, sharesOwnerMobile, isPerson, maskedMobile, avatarUrl, role: { id, name } | null, status, title, isOwner, lastAccessAt }] }. Seeds the system roles and the owner row as a side effect.'
       },
       {
-        name: 'Create Staff Member',
-        method: 'POST',
-        path: 'api/v1/account/memberships',
-        description: 'Owner session, business workspace. §4.1\'s add-staff screen — the admin CREATES the member and nothing is invited. Four fields: name, mobile, role, plus an optional email; `pan`, `dob` and `title` are pre-plan extras the route still accepts. NO username field: §4.5 mints the handle and decision R15 shows it on a dashboard card. Mounted on `memberships` rather than `members` because MEMBER_ROUTE_POLICY already maps that prefix to OWNER_ONLY, and an unmapped path is how a route ships with no member gate. Rate limited with the invite limiter: creating a member creates a person row and may call the KYC vendor. Over the plan\'s seats → 409 TENANT_SEAT_UNAVAILABLE naming the numbers, which is §4.7\'s ONE prompt behind all five seat refusals. 201 on success.',
-        body: { name: 'Asha Nair', mobile: '9876543210', email: 'asha@example.com', role: '<roleId from List Roles>', title: 'Accounts — GST' }
-      },
-      {
-        name: 'Approve / Suspend / Re-activate Member',
+        name: 'LEGACY — Suspend / Re-activate Member',
         method: 'PATCH',
         path: 'api/v1/account/members/:id',
-        description: 'Owner session. :id = MEMBERSHIP id (members[].id). status active approves a pending member or re-activates a suspended one — both need a free seat (403 MEMBER_PLAN_LIMIT_REACHED data { limit, used }). suspended frees the seat and ends every session under this membership, its AccountLinks and handset rows (repeatable; the Cabinet PIN is kept). 200 "Access approved." / "Access suspended." { status }. 422 MEMBER_OWNER_ONLY for the owner row, 404 MEMBER_NOT_FOUND. Not flag-gated.',
+        description: 'LEGACY — the pre-RBAC co-user API, still mounted; the new model is Suspend / Reactivate Staff Member. Owner session. :id = legacy membership id. status active | suspended.',
         pathVars: [{ key: 'id', value: '<membershipId>' }],
         body: { status: 'active' }
       },
       {
-        name: 'Change Member Role',
+        name: 'LEGACY — Change Member Role',
         method: 'PATCH',
         path: 'api/v1/account/members/:id/role',
-        description: 'Owner session. Applies on the member\'s NEXT request (the gate re-reads the role every time; sessions are not ended). Same role = no-op 200. 200 "Role updated." { roleId }. Errors: 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 422 MEMBER_OWNER_ONLY (owner row), 422 MEMBER_PERMISSION_DENIED (Owner role).',
+        description: 'LEGACY — the pre-RBAC co-user API, still mounted; the new model is Change Staff Role. Owner session. 200 "Role updated." { roleId }.',
         pathVars: [{ key: 'id', value: '<membershipId>' }],
         body: { roleId: '<roleId>' }
       },
       {
-        name: 'Remove Member',
+        name: 'LEGACY — Remove Member',
         method: 'DELETE',
         path: 'api/v1/account/members/:id',
-        description: 'Owner session. Ends every session the director holds on the company, removes their AccountLinks (and the switch sessions they minted), handset rows and Cabinet PIN row, then deletes the membership (no tombstone — history is in the audit log). Their uploads stay. 200 "That person no longer has access." { removed: true }. 422 MEMBER_OWNER_ONLY for the owner row. Not flag-gated.',
+        description: 'LEGACY — the pre-RBAC co-user API, still mounted; the new model is Remove Staff Member. Owner session. 200 "That person no longer has access." { removed: true }.',
         pathVars: [{ key: 'id', value: '<membershipId>' }]
       },
-      /*
-       * GONE, NOT MISSING — Cancel Invitation, My Invitations, Claim Invitation and
-       * Decline Invitation, plus the two stale entries (`GET /account/invites/:id`,
-       * `GET /account/invitations/:id/decline`) that never had routes. §11.2 deletes
-       * `AccountInvite`, its sweep cron and all five routes. §4.2's claim is a
-       * SIGN-IN-side screen taking a mobile and an 8-character one-time password —
-       * which is not a 6-digit OTP and must never go through numeric autofill — so it
-       * does not belong in this section at all, and its route is Phase 5 server work
-       * that does not exist yet.
-       */
-      // ── Roles ──
       {
-        name: 'List Roles',
+        name: 'LEGACY — List Roles',
         method: 'GET',
         path: 'api/v1/account/roles',
-        description: 'Owner session (a delegated custom role holding members.read also passes). { roles: [{ id, name, description, systemKey (owner|manager|accountant|viewer|null), isSystem, permissions[], moduleAccess }] }. System-role permissions resolve from code. moduleAccess is stored but NOT enforced. Not sorted. Not flag-gated; seeds the four system roles.'
+        description: 'LEGACY — the pre-RBAC role API, still mounted; the new model is List Team Roles (GET /team/roles). { roles: [{ id, name, description, systemKey, isSystem, permissions[], moduleAccess }] }.'
       },
       {
-        name: 'Create Custom Role',
+        name: 'LEGACY — Create Custom Role',
         method: 'POST',
         path: 'api/v1/account/roles',
-        description: 'Owner session. Unknown keys STRIPPED (isSystem/systemKey/moduleAccess ignored). name 1-60, not a system role name nor another role here (case-insensitive); §6.3 reserves "Owner", "Administrator", "Administration", "Accountant", "Clerk" and "Viewer" — BOTH spellings of the everything-role, because the label is Administrator and the stored key is `administration` (decision R1). description ≤ 200. THE PERMISSION LIST COMES FROM THE SERVER, never from a client: §6.4 cuts the vocabulary to twenty-six names — gst|roc|tds|itr|investment each × read/refresh/manage, vault.read/upload/delete, reports.read/export, billing.read, team.read/manage, roles.manage, audit.read, support.use — and §7.12 serves them with their labels at GET /v1/meta/permissions (not built yet). The role editor is also where two rules bite: the RESULTING set must be a subset of what the writer holds on create, copy AND edit alike (§6.3), and only the OWNER may create, edit or assign a role carrying team.manage or roles.manage, which is the lock that stops the everything-role being cloned under another name. SEATS: a role holding none of *.refresh, vault.upload, *.manage, vault.delete or reports.export is read-only and costs nothing; anything else costs a seat, and an edit that crosses that line is refused 409 TENANT_SEAT_UNAVAILABLE before any permission change is persisted (§7.10). 201 "Role created." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 409 MEMBER_ROLE_NAME_TAKEN.',
+        description: 'LEGACY — the pre-RBAC role API, still mounted; the new model is POST /team/roles (roles.manage + X-Step-Up team.roles). The vocabulary is §6.4\'s 26 names, served at GET /v1/meta/permissions. 201 "Role created." { role }; 409 MEMBER_ROLE_NAME_TAKEN, 422 VALIDATION_FAILED.',
         body: { name: 'CA Firm', description: 'Our auditors', permissions: ['gst.read', 'itr.read', 'vault.read'] }
       },
       {
-        name: 'Update Custom Role',
+        name: 'LEGACY — Update Custom Role',
         method: 'PATCH',
         path: 'api/v1/account/roles/:id',
-        description: 'Owner session. At least one of name / description ("" clears it) / permissions (REPLACES the list); same rules as create. 200 "Role updated." { role }. Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE (Owner/Manager/Accountant/Viewer), 422 MEMBER_PERMISSION_DENIED, 409 MEMBER_ROLE_NAME_TAKEN.',
+        description: 'LEGACY — the pre-RBAC role API, still mounted; the new model is PATCH /team/roles/:id. At least one of name / description / permissions (REPLACES the list). 403 MEMBER_ROLE_IMMUTABLE for a system role.',
         pathVars: [{ key: 'id', value: '<roleId>' }],
         body: { permissions: ['gst.read', 'itr.read', 'vault.read', 'reports.read'] }
       },
       {
-        name: 'Delete Custom Role',
+        name: 'LEGACY — Delete Custom Role',
         method: 'DELETE',
         path: 'api/v1/account/roles/:id',
-        description: 'Owner session. Refused while any membership (any status) holds the role — 409 MEMBER_ROLE_IN_USE; §6.3 reports the count, so the refusal reads "4 people use this role. Move them first." 200 "Role deleted." { deleted: true }. Also 404 NOT_FOUND (flag), 404 MEMBER_NOT_FOUND, 403 MEMBER_ROLE_IMMUTABLE.',
+        description: 'LEGACY — the pre-RBAC role API, still mounted; the new model is DELETE /team/roles/:id. 409 MEMBER_ROLE_IN_USE while any membership holds it.',
         pathVars: [{ key: 'id', value: '<roleId>' }]
       },
-      // ── Member side (their own PERSONAL session) ──
       {
-        name: 'My Memberships (switcher)',
-        method: 'GET',
-        path: 'api/v1/account/memberships',
-        description: 'Personal session. All of the caller\'s non-owner memberships, EVERY status: { accounts: [{ membershipId, accountId, name, workspace, avatarUrl, role (name | null), status: pending_approval|active|suspended }] }. Only active rows can be entered. Not flag-gated.'
-      },
-      {
-        name: 'Enter Company (delegated session)',
-        method: 'POST',
-        path: 'api/v1/account/memberships/enter',
-        description: 'Personal session (not from inside another company). Send the device headers (X-Device-Id, X-Device-Name, X-Device-Platform, X-App-Version) — they are stored on the session row; the same X-Device-Id keeps only the newest session, and a director holds at most MAX_DEVICE_SESSIONS (default 3) on one company (oldest evicted → 401 another_device). No refresh token; the delegated JWT lasts 1 day. Keep the personal token — to leave, POST /auth/logout with the delegated token and switch back. 200 { token, account: { id, name }, role, permissions[] } (permissions go stale on a role change — re-read Me Permissions). Errors: 404 NOT_FOUND (flag), 422 VALIDATION_FAILED, 403 MEMBER_NOT_FOUND, 403 MEMBER_PENDING_APPROVAL, 403 MEMBER_ACCESS_REVOKED (suspended — 403, not 401), 404 MEMBER_NO_ACCOUNT (company deleted or blocked).',
-        body: { accountId: '<accountId from My Memberships>' }
-      },
-      {
-        name: 'Leave Membership',
-        method: 'POST',
-        path: 'api/v1/account/memberships/:id/leave',
-        description: 'A server route neither the console nor the collection reached until now. Leaving is the MEMBER\'s own decision, taken from their own personal session — not the owner removing them, which is Remove Member. Frees the seat like any other seat-freeing operation (§7.10): the membership is written and `seatsUsed` is recounted absolutely, with no reservation needed.',
-        pathVars: [{ key: 'id', value: '<membershipId from My Memberships>' }]
-      },
-      // ── Any session ──
-      {
-        name: 'Me — Permissions',
+        name: 'LEGACY — Me Permissions',
         method: 'GET',
         path: 'api/v1/account/me/permissions',
-        description: 'Any session; the authoritative read the app gates on. §7.12 REPLACES this with GET /v1/workspace/access, whose envelope also carries ownerOnly, isOwner and the X-Access-Version a role change bumps so the change lands on the next tap — not built on the server yet, so this is still the answer, and §6.4 cuts the vocabulary from 41 names to 26. Non-delegated (any workspace): { isOwner: true, accountName, roleName: "Owner", permissions: [every name in the served vocabulary], membersEnabled }. Delegated: { isOwner: false, accountName, roleName, permissions (current role), membersEnabled }. Not flag-gated — this is how the app reads MEMBERS_ENABLED.'
+        description: 'LEGACY — the pre-RBAC permission read, still mounted; GET /v1/workspace/access (Identity section) is BUILT and replaces it. { isOwner, accountName, roleName, permissions[], membersEnabled }.'
       },
       {
         name: 'Activity Log (audit)',
         method: 'GET',
         path: 'api/v1/account/audit',
-        description: 'Owner session, or a delegated role with auditLogs.read (no default non-owner role has it). Always scoped to the token\'s account. Unknown query keys → 422. Newest first, keyset paged: pass nextCursor back as cursor. from/to accept ISO or bare YYYY-MM-DD (IST whole day; to must be ≥ from). Items: { id, createdAt, actor: { id, name, phoneMasked }, roleName, area, operation, action, targetType, targetId, description, outcome: pending|success|failure, statusCode }. area/operation examples: members/invite_member|approve_member|remove_member|enter_account…, vault/upload|trash|restore|purge|download|lock_set…, <segment>/access_denied (gate refusals). Retention: deletions 6 years, downloads 12 months, everything else 1 year. Not flag-gated.',
+        description: 'NOT LEGACY: auditRoutes on secured(), so it needs a NEW-model session (personAuth: sub + tid + mid; a legacy JWT gets 401 session_ended) and the audit.read permission. Always scoped to the session\'s account. Unknown query keys → 422. Newest first, keyset paged: pass nextCursor back as cursor. from/to accept ISO or bare YYYY-MM-DD (IST whole day; to must be ≥ from). Items: { id, createdAt, actor: { id, name, phoneMasked }, roleName, area, operation, action, targetType, targetId, description, outcome: pending|success|failure, statusCode }. area/operation examples: members/approve_member|remove_member|enter_account…, vault/upload|trash|restore|purge|download|lock_set…, <segment>/access_denied (gate refusals). Retention: deletions 6 years, downloads 12 months, everything else 1 year. Not flag-gated.',
         // Only limit is pre-filled: the generator always sends every listed param, and an
         // EMPTY area/actor/operation/from/to/cursor is refused with 422. Add the optional
-        // filters by hand: area (exact, e.g. members | vault | gst), actor (24-hex user id),
+        // filters by hand: area (exact, e.g. members | vault | gst), actor (24-hex Person id),
         // operation (exact, e.g. trash | access_denied), from / to (ISO or YYYY-MM-DD, IST),
         // cursor (nextCursor from the previous page).
         query: [
@@ -1726,27 +1831,25 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { gst: false, roc: false, tds: true, itr: true, investment: true }
       },
       {
-        name: 'User Team (director access)',
+        name: 'User Team (staff)',
         method: 'GET',
         path: 'api/admin/v1/users/:userId/team',
-        description: 'Requires users.team.read. Pure read (never seeds roles or rows). { membersEnabled, workspace, memberLimit (LAPSE-AWARE: 1 once the plan expired), seatsUsed, memberships: [{ id, member: { id, fullName, maskedMobile }, role: { id, name, isSystem }, status, title, isOwner, invitedAt, approvedAt, lastAccessAt }] (owner first, then oldest), memberOf: [{ account: { id, name }, roleName, status, lastAccessAt }] }. `invites` IS NO LONGER RETURNED — adminTeamService.getTeam() stopped emitting it when AccountInvite was deleted, so a consumer doing `team.invites ?? []` reports "no pending invitations" on a workspace that has people waiting, which is a lie rather than a crash; read the `invited` memberships instead (§4.3, §7.3). Statuses are invited | active | suspended. memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10). No full mobile, code or PAN is ever included. 422 VALIDATION_FAILED "That id is not valid.", 404 NOT_FOUND "User not found.".',
+        description: 'Requires users.team.read. Pure read, served from the identity model (Membership / Person / TenantRole / Tenant) through the legacy user row\'s tenant; a legacy row without one reads as an empty team. { membersEnabled, workspace, memberLimit (the limit that applies now, -1 unlimited), seatsUsed (§7.10\'s formula evaluated, never a recount), memberships: [{ id (membership id), person: { id, name | null, contact: { mobile, email } (both MASKED, same helpers as the app; email is their own address once set, else the work address the admin typed) }, role: { id, name | null, isSystem, systemKey?, seatConsuming }, status: active | suspended, isOwner, title | null, addedAt, joinedAt, lastActiveAt, suspendedAt, setupPending (no password chosen yet) }] (owner first, then oldest), memberOf: [{ id, tenant: { id, name, kind }, role, status, joinedAt, lastActiveAt }] }. There is NO `invited` status and no `invites` array (decision R21): a pre-R21 row reads as active with setupPending. memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10). No full mobile, full email, password hash or PAN is ever included. 422 VALIDATION_FAILED "That id is not valid.", 404 NOT_FOUND "User not found.".',
         pathVars: [{ key: 'userId', value: '<userId>' }]
       },
       {
         name: 'Force-Revoke Team Member',
         method: 'DELETE',
         path: 'api/admin/v1/users/:userId/team/members/:membershipId',
-        description: 'Requires users.team.revoke. Runs the owner\'s own removal path (sessions, links, handset rows, Cabinet PIN, then the row). Optional body { reason ≤ 500 } recorded only in the admin audit trail; the customer\'s Activity log shows remove_member by "Foldy support". 200 "Access revoked. Their sessions have been ended." { removed: true }. Errors: 422 VALIDATION_FAILED, 404 MEMBER_NOT_FOUND, 409 MEMBER_OWNER_ONLY (owner row), 403 FORBIDDEN (admin identity has no email). Support can never add, approve or re-role a member.',
-        pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'membershipId', value: '<membershipId>' }],
+        description: 'Requires users.team.revoke. Runs the owner\'s own removal path (staffActionService.removeMember, acting AS the owner with the alert-shrink warning pre-acknowledged): the membership is hard-deleted, that workspace\'s sessions end, any contact-change proposal is voided, the seat is recounted and the person and the owner are told. Optional body { reason ≤ 500 } recorded only in the admin audit trail; the customer\'s Activity log names "Foldy support". 200 "Access revoked. Their sessions have been ended." { membershipId, person: { id, name }, status: "removed", role: { id, name }, seats: { used, limit }, alertsEmptied[] }. Errors: 422 VALIDATION_FAILED, 404 NOT_FOUND ("User not found." or "That person is not in this workspace."), 403 RBAC_PERMISSION_DENIED { reason: "owner_membership" } for the owner row, 403 TEAM_UNAVAILABLE (individual workspace, or no owner membership). Support can never add, re-role or reactivate anyone.',
+        pathVars: [{ key: 'userId', value: '<userId>' }, { key: 'membershipId', value: '<memberships[].id>' }],
         body: { reason: 'Customer asked support to remove a former director.' }
       },
       /*
        * GONE, NOT MISSING — `DELETE /users/:userId/team/invites/:inviteId`.
-       * `adminTeamRoutes` now mounts only `GET /:userId/team` and
-       * `DELETE /:userId/team/members/:membershipId`, and `adminTeamController` has
-       * only `getTeam` and `revokeMember`. There is no invitation left to cancel
-       * (§11.2); a created-but-unclaimed person is an `invited` membership and the
-       * member revoke above already removes one.
+       * `adminTeamRoutes` mounts only `GET /:userId/team` and
+       * `DELETE /:userId/team/members/:membershipId`. There is no invitation to
+       * cancel and no `invited` membership (decision R21).
        */
       {
         name: 'Cancel Subscription',

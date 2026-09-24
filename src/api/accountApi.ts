@@ -2,7 +2,8 @@ import { client } from './client';
 
 /*
  * Team & access on a company workspace. Mirrors /api/v1/account/*
- * (accountMemberRoutes + accountAuditRoutes) AS THE SERVER STANDS TODAY.
+ * (accountMemberRoutes on the legacy JWT, plus auditRoutes' `/account/audit`,
+ * which is on the NEW-model session) AS THE SERVER STANDS TODAY.
  *
  * THIS SURFACE IS MID-REBUILD, AND THE SPLIT MATTERS. RBAC_MASTER_PLAN.md §11.3
  * phase 5 rewrites `AccountMembership` / `AccountRole` into `memberships` (§7.3)
@@ -16,8 +17,8 @@ import { client } from './client';
  *     fields: full name, mobile, email optional, role) and the person claims it
  *     with a one-time password (§4.2). `POST /account/memberships` is that route
  *     already; `/members/invite`, `/invites/:id` and `/invitations*` are DELETED.
- *   - Statuses are `invited | active | suspended` (§7.3). `pending_approval` is
- *     gone; removal hard-deletes the row, so there is no `removed` either.
+ *   - Statuses served are `active | suspended` — no `invited` (R21), no
+ *     `pending_approval`; removal hard-deletes the row, so there is no `removed` either.
  *   - Roles are per tenant with four system rows — Administrator (stored key
  *     `administration`), Accountant, Clerk, Viewer (§6.1) — and the permission
  *     vocabulary is the TWENTY-SIX names of §6.4, not the old 41. The console must
@@ -41,9 +42,8 @@ import { client } from './client';
  */
 export const accountApi = {
   // ── Owner side ──────────────────────────────────────────────────────
-  // { members[], pendingInvites[] }. Seeds the four system roles + owner row on
-  // first call. `pendingInvites` is legacy and is already empty — the invite
-  // collection is deleted; §4.3 replaces it with an `invited` row in `members`.
+  // { members[] } only — there is no `pendingInvites` and no `invited` row (R21).
+  // Seeds the four system roles + owner row on first call.
   listMembers: () =>
     client.get('/account/members'),
 
@@ -123,16 +123,17 @@ export const accountApi = {
 
   // ── Any session ─────────────────────────────────────────────────────
   // { isOwner, accountName, roleName, permissions[], membersEnabled } — the
-  // authoritative "am I delegated / what may I do" read. §7.12 replaces it with the
-  // access envelope and §6.4 adds GET /v1/meta/permissions for the catalog; NEITHER
-  // route is on the server yet, so this one is still the answer.
+  // legacy "am I delegated / what may I do" read. §7.12's access envelope
+  // (GET /v1/workspace/access) and §6.4's GET /v1/meta/permissions are BUILT and
+  // replace it for new-model sessions.
   myPermissions: () =>
     client.get('/account/me/permissions'),
 
   // Activity log, newest first, keyset paged. Unknown query keys are refused (422).
+  // NOT legacy: auditRoutes serves it on the NEW-model session (personAuth needs
+  // sub/tid/mid) with `audit.read`; a legacy JWT gets 401. `actor` is a Person id.
   // from/to: ISO or bare YYYY-MM-DD (IST whole day). Pass nextCursor back as cursor.
-  // §6.2: reading it in the app is `audit.read`; EXPORTING it is owner-only and is
-  // deliberately not a permission at all.
+  // §6.2: EXPORTING it is owner-only and is deliberately not a permission at all.
   listAudit: (params: {
     area?: string;
     actor?: string;

@@ -27,11 +27,11 @@ export default function AdminPage() {
   // Blank = not sent (create defaults to 1 server-side; update leaves it alone).
   const [planMemberLimit, setPlanMemberLimit] = useState("");
 
-  // A customer's co-users (director access)
+  // A customer's staff (identity model). There is no invitation for support to
+  // cancel and no `invited` status anywhere (decision R21).
   const [teamUserId, setTeamUserId] = useState("");
   const [teamMembershipId, setTeamMembershipId] = useState("");
-  // `teamInviteId` is gone with the route that took it — there is no invitation for
-  // support to cancel any more (RBAC_MASTER_PLAN.md §11.2).
+  const [teamView, setTeamView] = useState<AdminTeamView | null>(null);
 
   // Statistics (Super Admin)
   const [statsActiveDays, setStatsActiveDays] = useState("30");
@@ -665,26 +665,31 @@ export default function AdminPage() {
           />
         </ApiCard>
 
-        {/* ---------- A customer's team (director access) ---------- */}
+        {/* ---------- A customer's team (identity model) ---------- */}
         <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
           Team · a customer's staff (users.team.*)
         </p>
 
         <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-          <strong>Two routes, not three.</strong> <code>adminTeamRoutes</code> now mounts only the read and the member
-          revoke; <code>DELETE /users/:userId/team/invites/:inviteId</code> is deleted with the whole invitation path
-          (RBAC_MASTER_PLAN.md §11.2), so the Cancel Invitation card has gone rather than being left to 404. A
-          created-but-unclaimed person is an <code>invited</code> MEMBERSHIP (§4.3), and Force-Revoke already removes one.
-          Support can still never add, approve or re-role anybody.
+          <strong>Two routes.</strong> <code>adminTeamRoutes</code> mounts only the read and the member revoke, both served
+          from the identity model (Membership / Person / TenantRole). There is no invitation and no <code>invited</code>{" "}
+          status (R21): a person who has not opened their set-password email yet is an <code>active</code> row with{" "}
+          <code>setupPending: true</code>. Support can never add, re-role or reactivate anybody.
         </div>
 
         <ApiCard
           title="Get User Team"
           method="GET"
           endpoint="/api/admin/v1/users/:userId/team"
-          description="Needs users.team.read. Pure read: membersEnabled, workspace, memberLimit, seatsUsed, memberships (owner first) and memberOf. Never shows a full mobile, code or PAN. NOTE: `invites` is no longer in the response — read the `invited` memberships. And memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10): Administrator and Clerk take a seat, Accountant and Viewer take none, a suspended member takes none, -1 is unlimited."
+          description="Needs users.team.read. Pure read: { membersEnabled, workspace, memberLimit, seatsUsed, memberships: [{ id, person: { id, name, contact: { mobile, email } }, role: { id, name, isSystem, systemKey?, seatConsuming }, status: active | suspended, isOwner, title, addedAt, joinedAt, lastActiveAt, suspendedAt, setupPending }] (owner first), memberOf[] }. Contacts are MASKED with the app's own helpers; no full mobile, email, password hash or PAN. memberLimit counts SEAT-CONSUMING ROLES, not people (§6.1 L3, §7.10); -1 is unlimited. A legacy user row with no tenant reads as an empty team."
           buttonLabel="Fetch Team"
-          onSubmit={() => adminApi.getUserTeam(teamUserId.trim())}
+          onSubmit={async () => {
+            setTeamView(null);
+            const res = await adminApi.getUserTeam(teamUserId.trim());
+            const data: unknown = res.data?.data;
+            setTeamView(data && typeof data === "object" ? (data as AdminTeamView) : null);
+            return res;
+          }}
         >
           <Field
             label="User ID"
@@ -695,11 +700,13 @@ export default function AdminPage() {
           />
         </ApiCard>
 
+        {teamView ? <AdminTeamTable team={teamView} onPick={setTeamMembershipId} /> : null}
+
         <ApiCard
           title="Force-Revoke Team Member"
           method="DELETE"
           endpoint="/api/admin/v1/users/:userId/team/members/:membershipId"
-          description="Needs users.team.revoke. Runs the owner's removal path: sessions, links, handset rows and Cabinet PIN go, then the membership. The popup asks for a reason (the server accepts it optionally, ≤ 500) that goes to the admin audit trail only. The owner row answers 409 MEMBER_OWNER_ONLY."
+          description="Needs users.team.revoke. Runs the owner's own removal path as the owner (alert-shrink pre-acknowledged): the membership is hard-deleted, that workspace's sessions end, any contact-change proposal is voided, the seat is recounted, and the person and the owner are told. The popup's reason (optional server-side, ≤ 500) goes to the admin audit trail only. 200 { membershipId, person: { id, name }, status: 'removed', role, seats: { used, limit }, alertsEmptied[] }. The owner row is 403 RBAC_PERMISSION_DENIED (reason owner_membership); another workspace's id is 404; an individual workspace is 403 TEAM_UNAVAILABLE."
           buttonLabel="Revoke"
           onSubmit={async () => {
             const r = await confirmAction({
@@ -1132,6 +1139,159 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/*
+ * The admin Team read as `adminTeamService.getTeam()` serves it — the identity
+ * model's shape (person.name, person.contact.*, addedAt, setupPending; status is
+ * active | suspended and never `invited`, decision R21). Every field is optional
+ * and every null renders nothing, so a sparse or legacy payload cannot crash the
+ * page.
+ */
+type AdminTeamRole = { id?: string; name?: string | null; isSystem?: boolean; systemKey?: string; seatConsuming?: boolean } | null;
+
+type AdminTeamRow = {
+  id?: string;
+  person?: { id?: string; name?: string | null; contact?: { mobile?: string | null; email?: string | null } | null } | null;
+  role?: AdminTeamRole;
+  status?: string;
+  isOwner?: boolean;
+  title?: string | null;
+  addedAt?: string | null;
+  joinedAt?: string | null;
+  lastActiveAt?: string | null;
+  suspendedAt?: string | null;
+  setupPending?: boolean;
+};
+
+type AdminTeamMemberOf = {
+  id?: string;
+  tenant?: { id?: string; name?: string | null; kind?: string | null } | null;
+  role?: AdminTeamRole;
+  status?: string;
+  lastActiveAt?: string | null;
+};
+
+type AdminTeamView = {
+  membersEnabled?: boolean;
+  workspace?: string | null;
+  memberLimit?: number;
+  seatsUsed?: number;
+  memberships?: AdminTeamRow[] | null;
+  memberOf?: AdminTeamMemberOf[] | null;
+};
+
+const teamDate = (value?: string | null): string => {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+/** A non-empty string the server sent, else undefined — an object or number never reaches JSX. */
+const teamText = (value: unknown): string | undefined => (typeof value === "string" && value ? value : undefined);
+
+/** Only object elements: a null or scalar entry in the array is dropped, never dereferenced. */
+const teamObjects = <T,>(value: unknown): T[] =>
+  Array.isArray(value) ? value.filter((entry): entry is T => !!entry && typeof entry === "object") : [];
+
+function AdminTeamTable({ team, onPick }: { team: AdminTeamView; onPick: (membershipId: string) => void }) {
+  const rows = teamObjects<AdminTeamRow>(team.memberships);
+  const memberOf = teamObjects<AdminTeamMemberOf>(team.memberOf);
+  const seats =
+    typeof team.seatsUsed === "number" && typeof team.memberLimit === "number"
+      ? `${team.seatsUsed} of ${team.memberLimit === -1 ? "unlimited" : team.memberLimit} seats in use`
+      : "";
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-xs">
+      <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap gap-x-4 gap-y-1 text-slate-600">
+        <strong className="text-slate-800">Team</strong>
+        {seats ? <span>{seats}</span> : null}
+        {team.workspace ? <span>workspace: {team.workspace}</span> : null}
+        {typeof team.membersEnabled === "boolean" ? <span>membersEnabled: {String(team.membersEnabled)}</span> : null}
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-5 py-3 text-slate-500">No memberships — a legacy user row without a tenant reads as an empty team.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Person</th>
+                <th className="px-3 py-2 font-semibold">Contact (masked)</th>
+                <th className="px-3 py-2 font-semibold">Role</th>
+                <th className="px-3 py-2 font-semibold">Status</th>
+                <th className="px-3 py-2 font-semibold">Added / last active</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((m, i) => {
+                const id = teamText(m.id);
+                const title = teamText(m.title);
+                const mobile = teamText(m.person?.contact?.mobile);
+                const email = teamText(m.person?.contact?.email);
+                const roleName = teamText(m.role?.name);
+                const status = teamText(m.status);
+                return (
+                <tr key={id ?? i} className="border-t border-slate-100 align-top">
+                  <td className="px-3 py-2">
+                    <div className="font-semibold text-slate-800">{teamText(m.person?.name) ?? ""}</div>
+                    {title ? <div className="text-slate-500">{title}</div> : null}
+                    {m.isOwner ? <span className="inline-block mt-0.5 px-1.5 rounded bg-blue-100 text-blue-700">owner</span> : null}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {mobile ? <div>{mobile}</div> : null}
+                    {email ? <div>{email}</div> : null}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {roleName ? <div>{roleName}</div> : null}
+                    {typeof m.role?.seatConsuming === "boolean" ? (
+                      <div className="text-slate-400">{m.role.seatConsuming ? "takes a seat" : "free"}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2">
+                    {status ? (
+                      <span className={status === "suspended" ? "text-amber-700" : "text-green-700"}>{status}</span>
+                    ) : null}
+                    {m.setupPending ? <div className="text-slate-500">set-password pending</div> : null}
+                    {status === "suspended" && teamDate(m.suspendedAt) ? (
+                      <div className="text-slate-400">since {teamDate(m.suspendedAt)}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 text-slate-500">
+                    {teamDate(m.addedAt) ? <div>added {teamDate(m.addedAt)}</div> : null}
+                    {teamDate(m.lastActiveAt) ? <div>active {teamDate(m.lastActiveAt)}</div> : null}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {id && !m.isOwner ? (
+                      <button
+                        onClick={() => onPick(id)}
+                        className="text-[#1A73E8] font-semibold hover:underline"
+                        title="Put this membership id into the Force-Revoke card"
+                      >
+                        Use id
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {memberOf.length ? (
+        <div className="px-5 py-3 border-t border-slate-100 text-slate-600">
+          <strong className="text-slate-800">Staff elsewhere:</strong>{" "}
+          {memberOf
+            .map((o) => [teamText(o.tenant?.name), teamText(o.role?.name), teamText(o.status)].filter(Boolean).join(" · "))
+            .filter(Boolean)
+            .join("; ")}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ApiCard from '@/components/ApiCard';
 import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
-import { identityApi, routeExpectations } from '@/api/identityApi';
+import { identityApi } from '@/api/identityApi';
 import { setToken } from '@/lib/utils';
 import { KeyRound } from 'lucide-react';
 
@@ -368,25 +368,6 @@ export default function IdentityPage() {
         >
           <Field label="PAN" value={tenantPan} onChange={setTenantPan} placeholder="ABCDE1234F" fullWidth />
         </ApiCard>
-
-        {/* ── what the server still owes ─────────────────────────── */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Specified, not built yet</p>
-
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-          <p className="mb-2">
-            These are in the plan and the Flutter app already expects them, but no server route answers them today. They
-            are listed rather than called, because a card that always 404s teaches you to ignore red.
-          </p>
-          <ul className="space-y-1.5">
-            {routeExpectations.map((r) => (
-              <li key={`${r.method} ${r.path}`} className="leading-5">
-                <code className="font-semibold">{r.method} {r.path}</code>
-                <span className="text-amber-700"> — {r.section}</span>
-                <span className="block text-amber-800">{r.why}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </div>
   );

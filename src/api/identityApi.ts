@@ -10,13 +10,11 @@ import { client } from './client';
  * `routes/app/v1/index.ts` AHEAD of the legacy `authRoutes`. The two paths run side
  * by side until the PAN-first one is retired, and nothing is declared in both.
  *
- * WHAT IS NOT HERE, AND WHY. §6.4's served permission catalog
- * (`GET /v1/meta/permissions`) and §7.12's access envelope
- * (`GET /v1/workspace/access`) are specified by the plan and the Flutter app
- * already reads them, but the server has NOT built them yet — Phase 4's server half
- * is outstanding. They are deliberately absent rather than added as calls that would
- * 404 today; see `routeExpectations` at the foot of this file, which is the console's
- * record of what the remaining server phases still owe.
+ * WHAT IS NOT HERE. §6.4's served permission catalog (`GET /v1/meta/permissions`),
+ * §7.12's access envelope (`GET /v1/workspace/access`) and §8.5's step-up
+ * (`POST /v1/auth/step-up/start` + `/step-up/verify`) are BUILT (metaRoutes,
+ * workspaceRoutes, identityAuthRoutes) and are driven from the Team page. Password
+ * reset lives at `/v1/auth/password/reset/*`. There is no invite claim anywhere (R21).
  *
  * NO SESSION EXISTS during signup or during the public half of sign-in, so what
  * stands in for one is the draft token plus a code answered on THIS attempt. The
@@ -161,49 +159,3 @@ export const identityApi = {
   attachTenantPan: (pan: string) =>
     client.post('/tenant/pan', { pan }),
 };
-
-/*
- * WHAT THE PLAN SPECIFIES AND THE SERVER HAS NOT BUILT YET.
- *
- * Kept as data rather than as client methods so the console can SAY what is owed
- * without issuing a call that would 404. §11.4 is explicit that the route diff runs
- * after the server routes settle; this is the half of the answer a diff cannot give,
- * because a route nobody has written is invisible to an extractor.
- */
-export const routeExpectations: ReadonlyArray<{
-  method: string;
-  path: string;
-  section: string;
-  why: string;
-}> = [
-  {
-    method: 'GET',
-    path: '/api/v1/meta/permissions',
-    section: '§6.4 · §7.12',
-    why: 'The served 26-name catalog with its labels and grouping. The Flutter app already reads it and falls back to the 26 names; the console must never carry a list of its own.',
-  },
-  {
-    method: 'GET',
-    path: '/api/v1/workspace/access',
-    section: '§7.12 · §11.4 phase C',
-    why: 'The access envelope: permissions, ownerOnly and isOwner for the current workspace, plus the X-Access-Version a role change bumps. Replaces /account/me/permissions.',
-  },
-  {
-    method: 'POST',
-    path: '/api/v1/auth/invite/claim',
-    section: '§4.2',
-    why: 'Mobile plus the 8-character one-time password. Alphanumeric, so not a 6-digit OTP field and not numeric autofill (§14.4).',
-  },
-  {
-    method: 'POST',
-    path: '/api/v1/auth/password/forgot',
-    section: '§5.3',
-    why: 'Identify by mobile, email or username; the 24-hour hold and its one-tap cancel are part of the same flow.',
-  },
-  {
-    method: 'POST',
-    path: '/api/v1/auth/step-up',
-    section: '§8.5',
-    why: 'Class A fresh every time, Class B one code per ten minutes. A Class-A token is never cached.',
-  },
-] as const;

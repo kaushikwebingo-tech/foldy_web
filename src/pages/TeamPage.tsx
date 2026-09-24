@@ -3,74 +3,104 @@ import ApiCard from '@/components/ApiCard';
 import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { accountApi } from '@/api/accountApi';
-import { authApi } from '@/api/authApi';
-import { getToken, setToken, removeToken } from '@/lib/utils';
+import { client } from '@/api/client';
+import { getApiOrigin, getToken } from '@/lib/utils';
 import { Users } from 'lucide-react';
 
 /*
- * Team & access on a company workspace. Backend:
- * server/src/routes/app/v1/{accountMemberRoutes,accountAuditRoutes}.ts
- * (/api/v1/account) — the routes AS THEY STAND, which RBAC_MASTER_PLAN.md §11.3
- * phase 5 is in the middle of rewriting.
+ * Team & access on a company workspace — the NEW model. Backend:
+ * server/src/routes/app/v1/{staffRoutes,teamRoleRoutes,workspaceRoutes,metaRoutes,
+ * identityAuthRoutes}.ts, mounted at /api/v1/{team,workspace,meta,auth}.
  *
- * WHAT IS ALREADY TRUE AND DRIVEN HERE: the invitation family is deleted, so the
- * admin CREATES the member (§4.1) and there is no claim, decline or cancel on this
- * page. WHAT IS NOT BUILT YET, and therefore has no card: the served permission
- * catalog (GET /v1/meta/permissions, §6.4), the access envelope
- * (GET /v1/workspace/access, §7.12) and the invite claim (§4.2). Those are listed
- * in `identityApi.routeExpectations` rather than called, so a half-built server
- * cannot turn this page into a wall of 404s.
+ * NO INVITATION EXISTS ANYWHERE (decision R21): the admin creates the staff member
+ * ACTIVE at once, and the person sets their own password through an EMAILED
+ * single-use 72-hour link (R22). There is no claim, no temporary password and no
+ * `invited` status, so this page has no card for any of them.
  *
- * NEITHER THE ROLE LIST NOR THE PERMISSION LIST IS HARDCODED HERE. Roles come from
- * List Roles and permissions are typed against what the server serves — that is the
- * whole point of a served catalog (§6.4), and it is why this page names no role and
- * no permission of its own.
+ * FIVE ACTIONS ARE STEP-UP GATED (§8.5, Class B): `team.staff` for suspend,
+ * reactivate, remove and setup/resend, `team.staff.role` for the role change. The
+ * helper card below mints a token per action and keeps it in page state; each gated
+ * card sends the one for its own action as `X-Step-Up`, or no header at all — so the
+ * 403 AUTH_STEP_UP_REQUIRED refusal can be seen too. A 401 only ever means "this
+ * session is over" (§8.9).
  *
- * A delegated session is just another JWT, so "entering" a company can swap the
- * console token; the personal token is stashed so Leave can put it back — the
- * server has no exit endpoint and never gives the personal token back.
+ * Calls go through the console's one axios `client` (bearer from the sidebar token,
+ * host from the API Host setting), and the response panel is ApiCard's — nothing here
+ * is a second HTTP client. The LEGACY group at the foot drives the pre-RBAC
+ * `/account` co-user routes the server still mounts for the legacy JWT.
  */
-const PERSONAL_TOKEN_KEY = 'foldy_personal_token';
+
+type StepUpAction = 'team.staff' | 'team.staff.role' | 'team.roles';
+type StepUpTokens = Partial<Record<StepUpAction, { token: string; expiresAt?: string }>>;
+
+const STEP_UP_ACTIONS: { label: string; value: StepUpAction }[] = [
+  { label: 'team.staff — suspend / reactivate / remove / setup resend (add needs none)', value: 'team.staff' },
+  { label: 'team.staff.role — change a staff member\'s role', value: 'team.staff.role' },
+  { label: 'team.roles — create / edit / delete a custom role', value: 'team.roles' },
+];
+
+const csv = (s: string) => s.split(',').map((p) => p.trim()).filter(Boolean);
 
 function jwtPayload(token: string | null): Record<string, unknown> | null {
   if (!token) return null;
   try {
     const part = token.split('.')[1] ?? '';
     const b64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
-    return JSON.parse(atob(b64)) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(atob(b64));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }
 }
 
-const csv = (s: string) => s.split(',').map((p) => p.trim()).filter(Boolean);
+/** A path segment the user typed, refused locally when blank rather than sent as `//`. */
+function need(value: string, label: string): string {
+  const v = value.trim();
+  if (!v) throw new Error(`Enter the ${label} first.`);
+  return encodeURIComponent(v);
+}
+
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 sm:col-span-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-slate-300"
+      />
+      {label}
+    </label>
+  );
+}
 
 export default function TeamPage() {
-  // Re-render the session banner after the console token is swapped.
-  const [, setTokenTick] = useState(0);
-  const refreshSession = () => setTokenTick((t) => t + 1);
+  // New model: the team
+  const [staffId, setStaffId] = useState('');
+  const [listLimit, setListLimit] = useState('25');
+  const [listCursor, setListCursor] = useState('');
+  const [listStatus, setListStatus] = useState('');
 
-  // Owner: staff (§4.1's four fields — full name, mobile, email optional, role)
+  // §4.1's closed body — name, mobile, email (REQUIRED), role, title?
   const [staffName, setStaffName] = useState('');
-  const [phoneno, setPhoneno] = useState('');
+  const [staffMobile, setStaffMobile] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
   const [staffRoleId, setStaffRoleId] = useState('');
   const [staffTitle, setStaffTitle] = useState('');
-  const [membershipId, setMembershipId] = useState('');
-  const [memberStatus, setMemberStatus] = useState('active');
-  const [memberRoleId, setMemberRoleId] = useState('');
 
-  // Owner: roles
-  const [roleId, setRoleId] = useState('');
-  const [roleName, setRoleName] = useState('');
-  const [roleDesc, setRoleDesc] = useState('');
-  // Starts blank: Update sends permissions whenever this is non-empty and they REPLACE
-  // the role's list, so a pre-filled default would silently overwrite it on a rename.
-  const [rolePerms, setRolePerms] = useState('');
+  // §8.5 step-up — one token per action, kept in page state only
+  const [stepUpAction, setStepUpAction] = useState<StepUpAction>('team.staff');
+  const [stepUpCode, setStepUpCode] = useState('');
+  const [stepUp, setStepUp] = useState<StepUpTokens>({});
 
-  // Member (personal session)
-  const [accountId, setAccountId] = useState('');
-  const [switchToken, setSwitchToken] = useState('yes');
+  // §4.4's gated actions
+  const [newRoleId, setNewRoleId] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
+  const [ackShrink, setAckShrink] = useState(false);
+
+  // §4.2 — the staff member's own half (public)
+  const [setupT, setSetupT] = useState('');
+  const [setupPassword, setSetupPassword] = useState('');
 
   // Activity log
   const [area, setArea] = useState('');
@@ -81,16 +111,40 @@ export default function TeamPage() {
   const [cursor, setCursor] = useState('');
   const [limit, setLimit] = useState('50');
 
+  // LEGACY /account
+  const [legacyMemberId, setLegacyMemberId] = useState('');
+  const [memberStatus, setMemberStatus] = useState('active');
+  const [memberRoleId, setMemberRoleId] = useState('');
+  const [roleId, setRoleId] = useState('');
+  const [roleName, setRoleName] = useState('');
+  const [roleDesc, setRoleDesc] = useState('');
+  // Starts blank: Update sends permissions whenever this is non-empty and they REPLACE
+  // the role's list, so a pre-filled default would silently overwrite it on a rename.
+  const [rolePerms, setRolePerms] = useState('');
+
   const payload = jwtPayload(getToken());
-  const act = payload?.act ? String(payload.act) : '';
-  const delegated = !!act && act !== String(payload?.id ?? '');
-  const stashed = !!getToken(PERSONAL_TOKEN_KEY);
+  const newModel = !!payload?.sub && !!payload?.tid;
+
+  /** `X-Step-Up` for one action, or no header at all so the 403 can be seen. */
+  const stepUpHeaders = (action: StepUpAction): Record<string, string> => {
+    const token = stepUp[action]?.token?.trim();
+    return token ? { 'X-Step-Up': token } : {};
+  };
+  const ack = ackShrink ? { acknowledgeAlertShrink: true } : {};
+  const heldFor = (action: StepUpAction) => {
+    const held = stepUp[action];
+    if (!held?.token) return 'none held — the server will answer 403 AUTH_STEP_UP_REQUIRED';
+    return held.expiresAt ? `held, expires ${held.expiresAt}` : 'held (pasted)';
+  };
+  const setupPageUrl = setupT.trim()
+    ? `${getApiOrigin()}/api/v1/auth/setup?t=${encodeURIComponent(setupT.trim())}`
+    : '';
 
   return (
     <div className="max-w-3xl">
       <PageHeader
         title="Team & Access"
-        subtitle="The admin creates staff outright (§4.1) — no invitations. Member administration is owner-only today; memberships belong to the member's own personal session. Mid-rebuild: §11.3 phase 5 moves this onto memberships + tenant_roles."
+        subtitle="Staff on the new identity model (§4.1-§4.4): the admin creates a member ACTIVE at once and the person sets their password from an emailed 72-hour link — there is no invitation anywhere (R21, R22). Five actions need an X-Step-Up token (§8.5)."
         icon={<Users size={18} />}
         badge="Auth Required"
         postmanSection="account"
@@ -98,45 +152,304 @@ export default function TeamPage() {
 
       <div
         className={`mb-4 px-4 py-3 rounded-lg text-xs border ${
-          delegated ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-700'
+          payload && !newModel ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-700'
         }`}
       >
         {!payload ? (
-          <span><strong>No token.</strong> Log in first.</span>
-        ) : delegated ? (
+          <span><strong>No token.</strong> Sign in on the Identity page first.</span>
+        ) : newModel ? (
           <span>
-            <strong>Delegated session</strong> — company <code>{String(payload.id)}</code>, director{' '}
-            <code>{act}</code>, membership <code>{String(payload.mem ?? '')}</code>. The member gate applies to every call.
+            <strong>New-model session</strong> — person <code>{String(payload.sub)}</code>, workspace{' '}
+            <code>{String(payload.tid)}</code>
+            {payload.mid ? <>, membership <code>{String(payload.mid)}</code></> : null}. The tenant comes only from
+            this session (§8.7 rule 2).
           </span>
         ) : (
           <span>
-            <strong>Owner / personal session</strong> — account <code>{String(payload.id ?? '')}</code>. No gate: everything is allowed.
+            <strong>Legacy JWT.</strong> The /team, /workspace, /meta, /account/audit and step-up calls need a new-model session (Identity
+            → Sign In); this token only drives the LEGACY group at the foot of the page.
           </span>
         )}
         <span className="block mt-1">
-          The server flag <code>MEMBERS_ENABLED</code> is off by default: create, role change, role
-          create/update/delete and enter then answer <code>404 NOT_FOUND</code>. Read it with Me — Permissions.
-          A <code>404</code> here is the flag, not a missing route.
+          A <code>401</code> means only that the session is over (§8.9). Every refusal on these routes is 403 / 404 / 409 /
+          422 / 429 with an <code>errorCode</code>.
         </span>
       </div>
 
       <div className="space-y-4">
-        {/* ---------- Any session ---------- */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-2">Any session</p>
+        {/* ---------- Any member ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-2">Any member</p>
 
         <ApiCard
-          title="Me — Permissions"
+          title="Workspace Access"
           method="GET"
-          endpoint="/api/v1/account/me/permissions"
-          description="{ isOwner, accountName, roleName, permissions[], membersEnabled }. A non-delegated session gets isOwner true and every permission. §7.12 replaces this with GET /v1/workspace/access, whose envelope also carries ownerOnly and the X-Access-Version a role change bumps — not built yet, so this is still the answer. §6.4 cuts the vocabulary from 41 names to 26."
-          onSubmit={() => accountApi.myPermissions()}
+          endpoint="/api/v1/workspace/access"
+          description="§7.12's envelope — never gated on a permission: workspace, isOwner, role, permissions[], ownerCapabilities[], modules, seats { used, limit }, owner { name }, plan, accessVersion (the X-Access-Version header) and membersEnabled. Replaces the legacy /account/me/permissions."
+          onSubmit={() => client.get('/workspace/access')}
         />
+
+        <ApiCard
+          title="Permission Catalog"
+          method="GET"
+          endpoint="/api/v1/meta/permissions"
+          description="§6.4's served vocabulary: { groups: [{ id, title, subtitle, view, permissions: [{ key, label, seat, ownerOnlyToGrant? }] }] }. The console never carries a list of its own."
+          onSubmit={() => client.get('/meta/permissions')}
+        />
+
+        {/* ---------- The team ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Team · staff</p>
+
+        <ApiCard
+          step={1}
+          title="List Team Roles"
+          method="GET"
+          endpoint="/api/v1/team/roles"
+          description="team.read or roles.manage. roles[].id is the role Add Staff and Change Role take — the console names no role of its own."
+          onSubmit={() => client.get('/team/roles')}
+        />
+
+        <ApiCard
+          step={2}
+          title="List Staff"
+          method="GET"
+          endpoint="/api/v1/team/staff"
+          description="team.read. Keyset-paged: nextCursor from the answer is copied into Cursor, so pressing again fetches the next page (cleared when there is none). limit 1-100; status active | suspended — `invited` does not exist (R21). Rows carry masked contacts, setupPending and the server's own `can` flags. Blank fields are not sent."
+          onSubmit={async () => {
+            const res = await client.get('/team/staff', {
+              params: {
+                ...(listLimit.trim() ? { limit: Number(listLimit) } : {}),
+                ...(listCursor.trim() ? { cursor: listCursor.trim() } : {}),
+                ...(listStatus ? { status: listStatus } : {}),
+              },
+            });
+            const next: unknown = res.data?.data?.nextCursor;
+            setListCursor(typeof next === 'string' ? next : '');
+            return res;
+          }}
+        >
+          <Field label="Limit" value={listLimit} onChange={setListLimit} placeholder="1-100, default 25" type="number" />
+          <SelectField
+            label="Status (optional)"
+            value={listStatus}
+            onChange={setListStatus}
+            options={[
+              { label: 'any', value: '' },
+              { label: 'active', value: 'active' },
+              { label: 'suspended', value: 'suspended' },
+            ]}
+          />
+          <Field label="Cursor (optional)" value={listCursor} onChange={setListCursor} placeholder="nextCursor" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          step={3}
+          title="Read Staff Member"
+          method="GET"
+          endpoint="/api/v1/team/staff/:id"
+          description="team.read. :id is the MEMBERSHIP id (members[].id). Another workspace's id answers 404, never 403 (§8.7 rule 1). Adds addedAt, addedBy, suspendedAt, suspendedBy, suspendReason and the resolved permissions[] to the row."
+          onSubmit={() => client.get(`/team/staff/${need(staffId, 'Membership ID')}`)}
+        >
+          <Field label="Membership ID" value={staffId} onChange={setStaffId} placeholder="members[].id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          step={4}
+          title="Add Staff Member"
+          method="POST"
+          endpoint="/api/v1/team/staff"
+          description="team.manage. CLOSED body — unknown keys are 422. Email is REQUIRED: the single-use 72-hour set-password link goes there (R22). The member is active at once. 201 { membershipId, name, role, status: 'active', title?, seats } — byte-identical whether the mobile was already on Foldy or not (§8.2). 409 TEAM_MEMBER_EXISTS, 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } (nothing written), 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign."
+          buttonLabel="Add"
+          onSubmit={() =>
+            client.post('/team/staff', {
+              name: staffName.trim(),
+              mobile: staffMobile.trim(),
+              email: staffEmail.trim(),
+              role: staffRoleId.trim(),
+              ...(staffTitle.trim() ? { title: staffTitle.trim() } : {}),
+            })
+          }
+        >
+          <Field label="Full name (2-80)" value={staffName} onChange={setStaffName} placeholder="Asha Nair" />
+          <Field label="Mobile (Indian)" value={staffMobile} onChange={setStaffMobile} placeholder="9876543210" />
+          <Field label="Email (required)" value={staffEmail} onChange={setStaffEmail} placeholder="asha@example.com" type="email" />
+          <Field label="Role ID" value={staffRoleId} onChange={setStaffRoleId} placeholder="roles[].id from List Team Roles" />
+          <Field label="Title (optional, ≤ 60)" value={staffTitle} onChange={setStaffTitle} placeholder="Accounts — GST" fullWidth />
+        </ApiCard>
+
+        {/* ---------- Step-up ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">X-Step-Up helper · §8.5</p>
+
+        <ApiCard
+          title="X-Step-Up Helper"
+          method="POST"
+          endpoint={stepUpCode.trim() ? '/api/v1/auth/step-up/verify' : '/api/v1/auth/step-up/start'}
+          description="Leave Code empty and press Send code: the server texts a 6-digit code to the SESSION's own mobile. Then type the code and press Verify: the stepUpToken is stored below for that action (page state only, reusable for 10 minutes — Class B) and the gated cards send it as X-Step-Up. A code is bound to the action it was started for. A wrong code is 422 OTP_INVALID, never 401."
+          buttonLabel={stepUpCode.trim() ? 'Verify code' : 'Send code'}
+          onSubmit={async () => {
+            const code = stepUpCode.trim();
+            if (!code) return client.post('/auth/step-up/start', { action: stepUpAction });
+            const res = await client.post('/auth/step-up/verify', { action: stepUpAction, code });
+            const data = res.data?.data;
+            const token: unknown = data?.stepUpToken;
+            if (typeof token === 'string' && token) {
+              const expiresAt: unknown = data?.expiresAt;
+              setStepUp((prev) => ({
+                ...prev,
+                [stepUpAction]: { token, ...(typeof expiresAt === 'string' ? { expiresAt } : {}) },
+              }));
+              setStepUpCode('');
+            }
+            return res;
+          }}
+        >
+          <SelectField
+            label="Action"
+            value={stepUpAction}
+            onChange={(v) => setStepUpAction(v as StepUpAction)}
+            options={STEP_UP_ACTIONS}
+            fullWidth
+          />
+          <Field label="Code (empty = send one)" value={stepUpCode} onChange={setStepUpCode} placeholder="123456" />
+          <Field
+            label={`Token for ${stepUpAction} (stored, or paste one)`}
+            value={stepUp[stepUpAction]?.token ?? ''}
+            onChange={(v) =>
+              setStepUp((prev) => ({ ...prev, [stepUpAction]: { token: v.trim() } }))
+            }
+            placeholder="stepUpToken"
+          />
+          <p className="text-xs text-slate-500 sm:col-span-2">
+            team.staff: {heldFor('team.staff')} · team.staff.role: {heldFor('team.staff.role')} · team.roles:{' '}
+            {heldFor('team.roles')}
+          </p>
+        </ApiCard>
+
+        {/* ---------- Gated membership actions ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
+          Membership actions · team.manage + X-Step-Up
+        </p>
+
+        <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Membership ID (all five cards)" value={staffId} onChange={setStaffId} placeholder="members[].id" />
+            <Check
+              label="acknowledgeAlertShrink — send true (after a 409 TEAM_ALERT_SHRINK_UNCONFIRMED warning was shown)"
+              checked={ackShrink}
+              onChange={setAckShrink}
+            />
+          </div>
+          <p>
+            The refusals the rules produce: 403 RBAC_SENIORITY_DENIED (a non-owner acting on someone holding team.manage or
+            roles.manage), 403 RBAC_PERMISSION_DENIED with reason <code>self</code> or <code>owner_membership</code>, 409
+            TEAM_ALERT_SHRINK_UNCONFIRMED {'{ modules, person }'} until the change is acknowledged, 429 TEAM_CHURN_LIMIT
+            after three suspend/reactivate transitions of one person in 24 hours.
+          </p>
+        </div>
+
+        <ApiCard
+          title="Change Staff Role"
+          method="PATCH"
+          endpoint="/api/v1/team/staff/:id/role"
+          description={`X-Step-Up team.staff.role (${heldFor('team.staff.role')}). Body { role, acknowledgeAlertShrink? }. Lands on their next tap. Free → paid with no seat free is 409 TENANT_SEAT_UNAVAILABLE; the same role again is 422.`}
+          buttonLabel="Change Role"
+          onSubmit={() =>
+            client.patch(
+              `/team/staff/${need(staffId, 'Membership ID')}/role`,
+              { role: newRoleId.trim(), ...ack },
+              { headers: stepUpHeaders('team.staff.role') },
+            )
+          }
+        >
+          <Field label="New role ID" value={newRoleId} onChange={setNewRoleId} placeholder="roles[].id" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Suspend Staff Member"
+          method="POST"
+          endpoint="/api/v1/team/staff/:id/suspend"
+          description={`X-Step-Up team.staff (${heldFor('team.staff')}). Body { reason? ≤ 200, acknowledgeAlertShrink? }. Frees the seat at once (R18) and ends their sessions in THIS workspace only. Already suspended is 409 MEMBERSHIP_NOT_SUSPENDABLE.`}
+          buttonLabel="Suspend"
+          onSubmit={() =>
+            client.post(
+              `/team/staff/${need(staffId, 'Membership ID')}/suspend`,
+              { ...(suspendReason.trim() ? { reason: suspendReason.trim() } : {}), ...ack },
+              { headers: stepUpHeaders('team.staff') },
+            )
+          }
+        >
+          <Field label="Reason (optional, ≤ 200)" value={suspendReason} onChange={setSuspendReason} placeholder="On leave until March" fullWidth />
+        </ApiCard>
+
+        <ApiCard
+          title="Reactivate Staff Member"
+          method="POST"
+          endpoint="/api/v1/team/staff/:id/reactivate"
+          description={`X-Step-Up team.staff (${heldFor('team.staff')}). No body. Takes a seat again: a full workspace is 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } and nothing is written. Already active is 409 MEMBERSHIP_NOT_SUSPENDABLE.`}
+          buttonLabel="Reactivate"
+          onSubmit={() =>
+            client.post(`/team/staff/${need(staffId, 'Membership ID')}/reactivate`, undefined, {
+              headers: stepUpHeaders('team.staff'),
+            })
+          }
+        />
+
+        <ApiCard
+          title="Remove Staff Member"
+          method="DELETE"
+          endpoint="/api/v1/team/staff/:id"
+          description={`X-Step-Up team.staff (${heldFor('team.staff')}). Optional body { acknowledgeAlertShrink }. Hard-deletes the membership, ends their sessions here, voids this workspace's contact-change proposal and frees the seat; their person, username, device trust and other workspaces are untouched. 200 with status 'removed' and the seat numbers.`}
+          buttonLabel="Remove"
+          onSubmit={() =>
+            client.delete(`/team/staff/${need(staffId, 'Membership ID')}`, {
+              headers: stepUpHeaders('team.staff'),
+              ...(ackShrink ? { data: ack } : {}),
+            })
+          }
+        />
+
+        <ApiCard
+          title="Resend Set-Password Email"
+          method="POST"
+          endpoint="/api/v1/team/staff/:id/setup/resend"
+          description={`X-Step-Up team.staff (${heldFor('team.staff')}). No body. Only while setupPending and only for the workspace that created the person (row.can.resendSetup) — otherwise 403 RBAC_NOT_MANAGED_PERSON. 429 OTP_SEND_LIMIT within 60 s or after 3 sends in one 72-hour window. Answers { sentTo (masked), expiresAt, sends { used, limit }, resendIn } and never the link.`}
+          buttonLabel="Resend"
+          onSubmit={() =>
+            client.post(`/team/staff/${need(staffId, 'Membership ID')}/setup/resend`, undefined, {
+              headers: stepUpHeaders('team.staff'),
+            })
+          }
+        />
+
+        {/* ---------- The staff member's own half ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Staff member · the emailed link (public)</p>
+
+        <ApiCard
+          title="Complete Setup (first password)"
+          method="POST"
+          endpoint="/api/v1/auth/setup/complete"
+          description="PUBLIC. What the page GET /api/v1/auth/setup?t= (server-rendered HTML, not JSON) posts. t = <membershipId>.<secret> as the link carried it. Password policy is signup's (≥ 10 characters; 422 AUTH_WEAK_PASSWORD). Any bad link is one 422 AUTH_TICKET_INVALID. Mints NO session: 200 { next: 'done', message }, then they sign in on /auth/login."
+          buttonLabel="Set Password"
+          onSubmit={() => client.post('/auth/setup/complete', { t: setupT.trim(), password: setupPassword })}
+        >
+          <Field label="t (from the emailed link)" value={setupT} onChange={setSetupT} placeholder="<membershipId>.<secret>" fullWidth />
+          <Field label="New password" value={setupPassword} onChange={setSetupPassword} placeholder="at least 10 characters" type="password" />
+          {setupPageUrl ? (
+            <a
+              href={setupPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="self-end text-xs font-semibold text-[#1A73E8] hover:underline"
+            >
+              Open the set-password page ↗
+            </a>
+          ) : null}
+        </ApiCard>
 
         <ApiCard
           title="Activity Log"
           method="GET"
           endpoint="/api/v1/account/audit"
-          description="Owner, or a delegated role with auditLogs.read. Newest first; paste nextCursor into Cursor for the next page. Dates: ISO or YYYY-MM-DD (IST whole day). Blank fields are not sent (unknown keys are refused)."
+          description="NEW-model session (personAuth: sub/tid/mid — a legacy JWT gets 401), permission audit.read (auditRoutes on secured()). Newest first; paste nextCursor into Cursor for the next page. Dates: ISO or YYYY-MM-DD (IST whole day). Blank fields are not sent (unknown keys are refused)."
           onSubmit={() =>
             accountApi.listAudit({
               area: area.trim(),
@@ -151,111 +464,89 @@ export default function TeamPage() {
         >
           <Field label="Area (optional)" value={area} onChange={setArea} placeholder="members | vault | gst" />
           <Field label="Operation (optional)" value={operation} onChange={setOperation} placeholder="trash | access_denied" />
-          <Field label="Actor user id (optional)" value={actor} onChange={setActor} placeholder="24-hex user id" />
+          <Field label="Actor person id (optional)" value={actor} onChange={setActor} placeholder="24-hex Person id" />
           <Field label="Limit" value={limit} onChange={setLimit} placeholder="1-100" type="number" />
           <Field label="From (optional)" value={from} onChange={setFrom} placeholder="2026-09-01" />
           <Field label="To (optional)" value={to} onChange={setTo} placeholder="2026-09-17" />
           <Field label="Cursor (optional)" value={cursor} onChange={setCursor} placeholder="nextCursor" fullWidth />
         </ApiCard>
 
-        {/* ---------- Owner: members ---------- */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Owner · members &amp; invitations</p>
+        {/* ---------- LEGACY /account ---------- */}
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">
+          LEGACY · /account co-user API (pre-RBAC JWT)
+        </p>
+
+        <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+          <strong>Still mounted, superseded.</strong> <code>accountMemberRoutes</code> keeps these on the legacy{' '}
+          <code>businessAuth</code> JWT until §12 retires it; the cards above are the new model. The{' '}
+          <code>/account/memberships</code> family (create, my memberships, enter, leave) and every invitation and claim
+          card are gone from the console (R21).
+        </div>
 
         <ApiCard
-          step={1}
-          title="List Members + Pending Invites"
+          title="LEGACY — List Members"
           method="GET"
           endpoint="/api/v1/account/members"
-          description="Owner session only. members[].id is the MEMBERSHIP id used below. `pendingInvites` still appears in the envelope and is now always empty — the invite collection is deleted; §4.3 shows a created-but-unclaimed person as an `invited` ROW in members instead. Seeds the system roles and the owner row on first call."
+          description="Owner session only. { members[] } — members[].id is the legacy membership id used below."
           onSubmit={() => accountApi.listMembers()}
         />
 
         <ApiCard
-          step={2}
-          title="Create Staff Member"
-          method="POST"
-          endpoint="/api/v1/account/memberships"
-          description="§4.1's add-staff screen — the admin CREATES the member; there is no invitation any more. Four fields: full name, mobile, email (optional) and the role. No PAN box and no username box: §4.5 mints the handle, it is never typed. Mounted on `memberships` because that prefix is already OWNER_ONLY in MEMBER_ROUTE_POLICY. Over the plan's seats → 409 TENANT_SEAT_UNAVAILABLE with the numbers, which is §4.7's ONE prompt behind all five refusals."
-          buttonLabel="Create"
-          onSubmit={() =>
-            accountApi.createMember({
-              name: staffName.trim(),
-              mobile: phoneno.trim(),
-              role: staffRoleId.trim(),
-              ...(staffEmail.trim() ? { email: staffEmail.trim() } : {}),
-              ...(staffTitle.trim() ? { title: staffTitle.trim() } : {}),
-            })
-          }
-        >
-          <Field label="Full name" value={staffName} onChange={setStaffName} placeholder="Asha Nair" />
-          <Field label="Mobile" value={phoneno} onChange={setPhoneno} placeholder="9876543210" />
-          <Field label="Email (optional)" value={staffEmail} onChange={setStaffEmail} placeholder="asha@example.com" />
-          <Field label="Role ID" value={staffRoleId} onChange={setStaffRoleId} placeholder="from List Roles" />
-          <Field label="Title (optional, ≤ 80)" value={staffTitle} onChange={setStaffTitle} placeholder="Accounts — GST" fullWidth />
-        </ApiCard>
-
-        <ApiCard
-          step={3}
-          title="Approve / Suspend / Re-activate"
+          title="LEGACY — Suspend / Re-activate"
           method="PATCH"
           endpoint="/api/v1/account/members/:id"
-          description="§7.3 statuses are invited | active | suspended — `pending_approval` is gone, and removal hard-deletes, so there is no `removed`. §7.10 decision R18: suspending FREES a seat immediately, so reactivating CONSUMES one and can be refused 409 TENANT_SEAT_UNAVAILABLE on a full plan. Only an `active` membership may be suspended (an `invited` one is refused 409 MEMBERSHIP_NOT_SUSPENDABLE). §6.3: a non-owner may not touch anybody holding team.manage or roles.manage — 403 RBAC_SENIORITY_DENIED."
+          description="Owner session. status active | suspended."
           buttonLabel="Set Status"
-          onSubmit={() => accountApi.setMemberStatus(membershipId.trim(), memberStatus as 'active' | 'suspended')}
+          onSubmit={() => accountApi.setMemberStatus(need(legacyMemberId, 'legacy membership ID'), memberStatus as 'active' | 'suspended')}
         >
-          <Field label="Membership ID" value={membershipId} onChange={setMembershipId} placeholder="members[].id" />
+          <Field label="Legacy membership ID" value={legacyMemberId} onChange={setLegacyMemberId} placeholder="members[].id" />
           <SelectField
             label="Status"
             value={memberStatus}
             onChange={setMemberStatus}
             options={[
-              { label: 'active (approve / re-activate)', value: 'active' },
+              { label: 'active (re-activate)', value: 'active' },
               { label: 'suspended', value: 'suspended' },
             ]}
           />
         </ApiCard>
 
         <ApiCard
-          step={4}
-          title="Change Member Role"
+          title="LEGACY — Change Member Role"
           method="PATCH"
           endpoint="/api/v1/account/members/:id/role"
-          description="Applies on the member's NEXT TAP (§6.3), not their next login — the app invalidates on an X-Access-Version mismatch. §7.10: crossing the free/paid seat line moves a seat (Viewer and Accountant are free, Administrator and Clerk are paid, a custom role is paid unless read-only), and a change needing a seat with none free is refused BEFORE anything is written. Only the owner may assign a role carrying team.manage or roles.manage."
+          description="Owner session. Body { roleId }."
           buttonLabel="Change Role"
-          onSubmit={() => accountApi.changeMemberRole(membershipId.trim(), memberRoleId.trim())}
+          onSubmit={() => accountApi.changeMemberRole(need(legacyMemberId, 'legacy membership ID'), memberRoleId.trim())}
         >
-          <Field label="Membership ID" value={membershipId} onChange={setMembershipId} placeholder="members[].id" />
-          <Field label="Role ID" value={memberRoleId} onChange={setMemberRoleId} placeholder="from List Roles" />
+          <Field label="Legacy membership ID" value={legacyMemberId} onChange={setLegacyMemberId} placeholder="members[].id" />
+          <Field label="Role ID" value={memberRoleId} onChange={setMemberRoleId} placeholder="from LEGACY — List Roles" />
         </ApiCard>
 
         <ApiCard
-          step={5}
-          title="Remove Member"
+          title="LEGACY — Remove Member"
           method="DELETE"
           endpoint="/api/v1/account/members/:id"
-          description="Ends every session they hold on the company, removes their links, handset rows and Cabinet PIN, then deletes the membership. Their uploads stay, and so does their attribution: §7.8 denormalises the actor name and masked mobile into the audit row at write time, so the trail survives removal."
+          description="Owner session. 200 { removed: true }."
           buttonLabel="Remove"
-          onSubmit={() => accountApi.removeMember(membershipId.trim())}
+          onSubmit={() => accountApi.removeMember(need(legacyMemberId, 'legacy membership ID'))}
         >
-          <Field label="Membership ID" value={membershipId} onChange={setMembershipId} placeholder="members[].id" fullWidth />
+          <Field label="Legacy membership ID" value={legacyMemberId} onChange={setLegacyMemberId} placeholder="members[].id" fullWidth />
         </ApiCard>
 
-        {/* ---------- Owner: roles ---------- */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Owner · roles</p>
-
         <ApiCard
-          title="List Roles"
+          title="LEGACY — List Roles"
           method="GET"
           endpoint="/api/v1/account/roles"
-          description="The four system roles resolve from CODE on every request and cannot be edited; custom roles are per workspace. §6.1 names them Administrator (stored key `administration`), Accountant, Clerk and Viewer — read them from this response, never from a list in the console. §7.10: Administrator and Clerk consume a seat and Accountant and Viewer consume none, whatever their permissions."
+          description="The legacy role list; the new model is List Team Roles above."
           onSubmit={() => accountApi.listRoles()}
         />
 
         <ApiCard
-          title="Create Custom Role"
+          title="LEGACY — Create Custom Role"
           method="POST"
           endpoint="/api/v1/account/roles"
-          description="Permissions comma-separated, from the vocabulary THE SERVER SERVES — §6.4 cuts it to 26 names (gst|roc|tds|itr|investment each × read/refresh/manage, vault.read/upload/delete, reports.read/export, billing.read, team.read/manage, roles.manage, audit.read, support.use). §6.3: the RESULTING set must be a subset of what you hold, and only the OWNER may create or edit a role carrying team.manage or roles.manage — that lock is what stops the everything-role being cloned under another name. A role holding none of *.refresh, vault.upload, *.manage, vault.delete or reports.export is read-only and costs no seat. 201 on success."
+          description="Permissions comma-separated, from the vocabulary GET /v1/meta/permissions serves (Permission Catalog above). The new model's role writes are /team/roles with X-Step-Up team.roles."
           buttonLabel="Create"
           onSubmit={() =>
             accountApi.createRole({
@@ -271,13 +562,13 @@ export default function TeamPage() {
         </ApiCard>
 
         <ApiCard
-          title="Update Custom Role"
+          title="LEGACY — Update Custom Role"
           method="PATCH"
           endpoint="/api/v1/account/roles/:id"
-          description="Reuses the Create fields — only non-empty ones are sent (so a description cannot be cleared from here). A filled Permissions field REPLACES the whole list. System roles → 403 MEMBER_ROLE_IMMUTABLE. §6.3 applies the subset rule to the RESULTING set on EDIT as well as on create: stated as the creator’s own grant it covered creation and left editing open, which is the whole attack. §7.10: an edit that turns a free role paid recounts every holder in ONE reservation and is refused 409 before any permission change is persisted."
+          description="Reuses the Create fields — only non-empty ones are sent. A filled Permissions field REPLACES the whole list."
           buttonLabel="Update"
           onSubmit={() =>
-            accountApi.updateRole(roleId.trim(), {
+            accountApi.updateRole(need(roleId, 'role ID'), {
               ...(roleName.trim() ? { name: roleName.trim() } : {}),
               ...(roleDesc ? { description: roleDesc } : {}),
               ...(rolePerms.trim() ? { permissions: csv(rolePerms) } : {}),
@@ -288,98 +579,23 @@ export default function TeamPage() {
         </ApiCard>
 
         <ApiCard
-          title="Delete Custom Role"
+          title="LEGACY — Delete Custom Role"
           method="DELETE"
           endpoint="/api/v1/account/roles/:id"
-          description="Refused (409 MEMBER_ROLE_IN_USE) while any membership holds it — §6.3 reports the count, so the refusal reads ‘N people use this role. Move them first.’"
+          description="Refused 409 MEMBER_ROLE_IN_USE while any membership holds it."
           buttonLabel="Delete"
-          onSubmit={() => accountApi.deleteRole(roleId.trim())}
+          onSubmit={() => accountApi.deleteRole(need(roleId, 'role ID'))}
         >
           <Field label="Role ID" value={roleId} onChange={setRoleId} placeholder="roles[].id" fullWidth />
         </ApiCard>
 
-        {/* ---------- Director: personal session ---------- */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Director · personal session</p>
-
-        <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-          <strong>The invitation family is gone, not missing.</strong> My Invitations, Claim and Decline drove{' '}
-          <code>/account/invitations*</code>, which §11.2 deletes with <code>AccountInvite</code> and its sweep cron.
-          §4.2 replaces them: the admin creates the member above, the person claims it with an 8-character one-time
-          password on a <em>sign-in-side</em> screen, and nothing in a team panel ever holds that password. That claim route
-          is Phase 5's server work — it does not exist yet, so no card here pretends to call it.
-        </div>
-
         <ApiCard
-          step={1}
-          title="My Memberships"
+          title="LEGACY — Me Permissions"
           method="GET"
-          endpoint="/api/v1/account/memberships"
-          description="Companies this account belongs to, every status. Only active rows can be entered. §5.4 replaces this with GET /v1/auth/workspaces, which also LISTS a workspace whose plan has lapsed, badged ‘Payment due’, and opens it read-only rather than hiding it (decision R6)."
-          onSubmit={() => accountApi.listMemberships()}
+          endpoint="/api/v1/account/me/permissions"
+          description="The legacy permission read. GET /v1/workspace/access (Workspace Access above) is built and replaces it."
+          onSubmit={() => accountApi.myPermissions()}
         />
-
-        <ApiCard
-          step={2}
-          title="Enter Company"
-          method="POST"
-          endpoint="/api/v1/account/memberships/enter"
-          description="Returns a delegated token (1 day, no refresh). With Switch = yes the console stores it as the active token and stashes the personal one for Leave. Re-entering from the same device ends the earlier delegated session."
-          buttonLabel="Enter"
-          onSubmit={async () => {
-            const res = await accountApi.enterMembership(accountId.trim());
-            const token = res.data?.data?.token as string | undefined;
-            if (switchToken === 'yes' && token) {
-              const personal = getToken();
-              if (personal) setToken(personal, PERSONAL_TOKEN_KEY);
-              setToken(token);
-              refreshSession();
-            }
-            return res;
-          }}
-        >
-          <Field label="Account ID" value={accountId} onChange={setAccountId} placeholder="accounts[].accountId" />
-          <SelectField
-            label="Switch console to the delegated token"
-            value={switchToken}
-            onChange={setSwitchToken}
-            options={[
-              { label: 'yes', value: 'yes' },
-              { label: 'no (just show it)', value: 'no' },
-            ]}
-          />
-        </ApiCard>
-
-        <ApiCard
-          step={3}
-          title="Leave Company"
-          method="POST"
-          endpoint="/api/v1/auth/logout"
-          description={`Logs out the DELEGATED token (ends that company session row), then restores the stashed personal token even if the logout fails (e.g. 401 access_revoked). ${stashed ? 'A personal token is stashed.' : 'No personal token is stashed.'}`}
-          buttonLabel="Leave"
-          onSubmit={async () => {
-            const personal = getToken(PERSONAL_TOKEN_KEY);
-            if (!personal) throw new Error('No stashed personal token. Enter a company with Switch = yes first.');
-            try {
-              return await authApi.logout();
-            } finally {
-              setToken(personal);
-              removeToken(PERSONAL_TOKEN_KEY);
-              refreshSession();
-            }
-          }}
-        />
-
-        <ApiCard
-          step={4}
-          title="Leave Membership (give up my own access)"
-          method="POST"
-          endpoint="/api/v1/account/memberships/:id/leave"
-          description="A server route the console never reached. Leaving is the MEMBER's own decision, taken from their own personal session — not the owner removing them, which is Remove Member above. Send the membership id from My Memberships."
-          buttonLabel="Leave"
-          onSubmit={() => accountApi.leaveMembership(membershipId.trim())}
-        >
-          <Field label="Membership ID" value={membershipId} onChange={setMembershipId} placeholder="memberships[].id" fullWidth />
-        </ApiCard>
       </div>
     </div>
   );

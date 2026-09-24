@@ -100,12 +100,12 @@ export const adminApi = {
    *
    * `invites` IS NO LONGER IN THE RESPONSE. `adminTeamService.getTeam()` stopped
    * returning it when `AccountInvite` was deleted, so a consumer doing
-   * `team.invites ?? []` now shows "No pending invitations" on a workspace that has
-   * people waiting — a lie rather than a crash, which is the worse failure. Read the
-   * `invited` memberships instead (RBAC_MASTER_PLAN.md §4.3, §7.3).
+   * `team.invites ?? []` shows an empty list — and there is nothing to find: no
+   * invitation exists (R21). A member who has not yet used the emailed set-password
+   * link is an `active` row with `setupPending: true`.
    *
-   * Statuses are `invited | active | suspended` (§7.3): `pending_approval` is gone
-   * and removal hard-deletes, so there is no `removed` either.
+   * Statuses served are `active | suspended` only (adminTeamService `servedStatus`):
+   * never `invited`, no `pending_approval`, and removal hard-deletes, so no `removed`.
    *
    * `memberLimit` is a count of SEAT-CONSUMING roles, not of people (§6.1 decision
    * L3, §7.10): Administrator and Clerk consume a seat, Accountant and Viewer
@@ -116,7 +116,8 @@ export const adminApi = {
     adminClient.get(`/users/${userId}/team`),
 
   // Force-revoke (users.team.revoke). Runs the owner's own removal path. reason
-  // (≤ 500) goes to the admin audit trail only. The owner row → 409 MEMBER_OWNER_ONLY.
+  // (≤ 500) goes to the admin audit trail only. The owner row → 403
+  // RBAC_PERMISSION_DENIED { reason: 'owner_membership' }.
   revokeTeamMember: (userId: string, membershipId: string, reason?: string) =>
     adminClient.delete(`/users/${userId}/team/members/${membershipId}`, {
       data: reason ? { reason } : {},
@@ -129,9 +130,9 @@ export const adminApi = {
    * `DELETE /:userId/team/members/:membershipId`, and `adminTeamController` has only
    * `getTeam` and `revokeMember`. `cancelTeamInvite` 404'd on every call, so it is
    * removed rather than fixed: §11.2 deletes the whole invitation path and §4.1-§4.2
-   * replace it, so there is no invitation left for support to cancel. A created-but-
-   * unclaimed person is an `invited` MEMBERSHIP, and `revokeTeamMember` above already
-   * removes one.
+   * replace it, so there is no invitation left for support to cancel. A member still
+   * awaiting password setup is an `active` row (`setupPending`), and
+   * `revokeTeamMember` above already removes one.
    */
 
   refundPayment:  (paymentId: string, amount?: number, reason?: string) =>
