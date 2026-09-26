@@ -5,8 +5,9 @@ import { client } from './client';
  * manual data refresh, and compliance reminders. Mirrors /api/v1/user/*.
  */
 export const userApi = {
-  // Two-bucket wallet per module: this cycle's plan allowance (resets, no
-  // carryover) + the purchased top-up (never expires) and the spendable total.
+  // ONE pooled wallet for every feature: { wallet, modules: [wallet] }. Two
+  // buckets: this cycle's plan allowance (resets, no carryover) + the purchased
+  // top-up (never expires); plus lowBalanceAt / confirmAbove thresholds.
   getCredits: () =>
     client.get('/user/credits'),
   // This user's own credit ledger — allocations, resets, spends, top-ups.

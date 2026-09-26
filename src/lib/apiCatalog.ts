@@ -83,8 +83,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/user/storage-status',
         description: 'Storage usage summary for the logged-in user.'
       },
-      { name: 'Credits Wallet', method: 'GET', path: 'api/v1/user/credits', description: 'Two-bucket wallet per module: plan allowance for this cycle (planAllowed/planUsed/planRemaining + resetAt, no carryover) plus the purchased topupBalance (never expires) and the spendable `available` total.' },
-      { name: 'Credit History', method: 'GET', path: 'api/v1/user/credits/history', description: 'Credit ledger for the logged-in user, newest first — allocate / reset / topup / consume / refund / admin_adjust.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment (optional)' }, { key: 'limit', value: '50' }] },
+      { name: 'Credits Wallet', method: 'GET', path: 'api/v1/user/credits', description: 'ONE pooled wallet that pays for every feature (CREDIT_SYSTEM_PLAN D1): { wallet, modules: [wallet] } (modules repeats it for older app builds). The wallet has two buckets: the plan allowance for this cycle (planAllowed/planUsed/planRemaining + resetAt, no carryover; plan tokens per month: trial 20, individual 50, business 200, enterprise 1000) plus the purchased topupBalance (never expires), and the spendable `available` total; plan is spent first. It also serves lowBalanceAt (10: warn at or below), confirmAbove (5) and prices { "module.action": credits } (empty while charging is off). A metered call costing MORE than confirmAbove needs the header X-Credit-Confirm: <at least the price> (add it by hand here); without it the answer is 428 CREDITS_CONFIRM_REQUIRED { status: confirm_required, module, action, cost, available } — nothing reserved, nothing charged. Short of credits skips straight to the 402, and data that is still fresh is answered without asking. The first read moves any old per-module balances into the pool once, with a migration ledger row each. A metered call that cannot be paid answers 402 with errorCode CREDITS_INSUFFICIENT and data { status: insufficient_credits, module, cost, available } — nothing is charged; switch on errorCode (the data.status string stays for older clients). A metered action with NO price row while pricing is live answers 503 CREDITS_UNPRICED { module, action } — refused, nothing charged.' },
+      { name: 'Credit History', method: 'GET', path: 'api/v1/user/credits/history', description: 'Credit ledger for the logged-in user, newest first, a page at a time — allocate / reset / topup / consume / refund / admin_adjust / carryover / migration. Each entry: { id, type, bucket, amount (signed), feature, action, released, packName, createdAt }; who adjusted, notes and internal keys are never sent. A call that failed shows a consume + refund pair (released:true). A ROC order that fails or expires, and a TDS job that fails, are refunded automatically to the buckets that paid, once. Pass the response nextCursor as ?cursor= for the next page (null = last page). Bad module/limit/cursor -> 400.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment|pool (optional) — matches the feature a pooled charge paid for' }, { key: 'limit', value: '50', description: '1-200 (default 50)' }, { key: 'cursor', value: '', description: 'nextCursor from the previous page (optional)' }, { key: 'limit', value: '50' }] },
       { name: 'Manual Refresh', method: 'POST', path: 'api/v1/user/manualRefresh/:type', description: 'Re-fetch a module\'s data, spending a credit. type = module key (gst | roc | tds | itr | investment).', pathVars: [{ key: 'type', value: 'gst' }], body: {} },
       { name: 'Reminders', method: 'GET', path: 'api/v1/user/reminders', description: 'Compliance reminders (due/overdue nudges) for the user.' },
       { name: 'Dismiss Reminder', method: 'POST', path: 'api/v1/user/reminders/:id/dismiss', pathVars: [{ key: 'id', value: '<reminderId>' }] }
@@ -1418,7 +1418,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/payments/plans',
         description: 'Active catalog plans for the caller\'s workspace. A tier can have many plans — pick a plan _id to subscribe by planId. Each plan carries memberLimit (people incl. the owner; default 1, -1 = unlimited) — a plan below the account\'s seatsUsed cannot be bought.'
       },
-      { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable credit packs; optional ?module= filter.', query: [{ key: 'module', value: '', description: 'gst|roc|tds|itr|investment (optional)' }] },
+      { name: 'List Credit Packs', method: 'GET', path: 'api/v1/payments/credit-packs', description: 'Buyable top-up packs. They buy POOLED credits that pay for every feature and never expire: 20 = Rs 100 (minimum), 200 = Rs 900 (10% off), 1000 = Rs 4000 (20% off). Any other size (20-10000) can be bought through Create Order (credits) with `credits`. ?module= is accepted and ignored.' },
       {
         name: 'Create Order (plan)',
         method: 'POST',
@@ -1430,8 +1430,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Create Order (credits)',
         method: 'POST',
         path: 'api/v1/payments/create-order',
-        description: 'Credit top-up: purpose "credits" + packId (required). 200 "Credit order created successfully." { order, purpose, packId, module, credits, amount }. 400 "packId is required to buy credits." / "Credit pack not found or inactive.".',
-        body: { purpose: 'credits', packId: '<packId from List Credit Packs>' }
+        description: 'Credit top-up: purpose "credits" + EITHER packId OR credits (both -> 400). A pack sells at its catalog price; credits = any whole number from 20 to 10000, priced by the SERVER at Rs 5 each, Rs 4.50 from 200, Rs 4 from 1000 (the tiers are also served as wallet.topup for display; a body amount is ignored). 200 "Credit order created successfully." { order, purpose, packId? (packs only), module ("pool" for any-size), credits, amount }. The ORDER is what verify applies: the credits land in the never-expiring top-up bucket once, however often verify/webhook repeat. Errors: 400 (Joi / "packId or credits is required to buy credits." / "Credit pack not found or inactive."), 422 CREDITS_TOPUP_OUT_OF_RANGE { minCredits, maxCredits } — no order is created.',
+        body: { purpose: 'credits', credits: 250 }
       },
       {
         name: 'Verify Payment & Apply',
@@ -1621,13 +1621,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Lock Status',
         method: 'GET',
         path: 'api/v1/vault/lock',
-        description: 'Any member. The caller\'s own lock on this Cabinet. 200 "Lock status fetched.".'
+        description: 'Any member. The caller\'s own lock on this Cabinet. 200 "Lock status fetched." { mode device|pin|none, isSet, declined, autoLockMinutes, isLockedOut, lockedUntil, attemptsRemaining }. A lock is OFFERED, never forced: declined:true = the user chose no lock (skipped setup or removed it) and must not be asked again; isSet:false + declined:false = never asked.'
       },
       {
         name: 'Set / Change Lock',
         method: 'POST',
         path: 'api/v1/vault/lock',
-        description: 'Any member. mode device|pin; pin (4 or 6 digits) is required for "pin" and forbidden for "device"; currentPin to change an existing PIN; autoLockMinutes 0-60. Write limiter. 200 "Cabinet lock updated.".',
+        description: 'Any member. mode device|pin|none; pin (4 or 6 digits) is required for "pin" and forbidden otherwise; mode none = "Skip for now" (remembered, declined:true); currentPin to change or drop an existing PIN — none can never get around a PIN; autoLockMinutes 0-60. Write limiter. 200 "Cabinet lock updated.".',
         body: { mode: 'pin', pin: '482913', autoLockMinutes: 2 }
       },
       {
@@ -1641,7 +1641,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Remove Lock',
         method: 'DELETE',
         path: 'api/v1/vault/lock',
-        description: 'Any member. Optional body { pin }. Write limiter. 200 "Cabinet lock removed.".',
+        description: 'Any member. Optional body { pin } (required when the lock is a PIN). Removing is remembered as a choice: the status becomes mode none + declined:true, so the app does not ask to set a lock again. Write limiter. 200 "Cabinet lock removed.".',
         body: { pin: '482913' }
       },
       {
@@ -1753,7 +1753,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           interval: 'monthly',
           storageLimit: 21474836480,
           memberLimit: 5,
-          allowedCredits: { gst: 100, roc: 10, tds: 20, itr: 10, investment: 10 },
+          allowedCredits: { pool: 200 },
           isActive: true
         }
       },
@@ -1933,14 +1933,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Delete Calendar Event', method: 'DELETE', path: 'api/admin/v1/calendar/:id', pathVars: [{ key: 'id', value: '<eventId>' }] },
       { name: 'Bulk Create Calendar Events', method: 'POST', path: 'api/admin/v1/calendar/bulk', body: { events: [{ title: 'GSTR-3B due', date: '2026-07-20' }] } },
       { name: 'Import Previous Year', method: 'POST', path: 'api/admin/v1/calendar/import-previous-year', body: { targetMonth: '2026-07' } },
-      { name: 'Credit Costs', method: 'GET', path: 'api/admin/v1/credits/costs', description: 'Per-module credit costs (refresh / download) and their freshness windows.' },
-      { name: 'Update Credit Costs', method: 'PUT', path: 'api/admin/v1/credits/costs', description: 'Upserts ONE module+action rule. freshnessMinutes: a repeat refresh inside the window is served free (omit for the module default — GST 360, others 1440; 0 = always refetch).', body: { module: 'gst', action: 'refresh', creditCost: 1, freshnessMinutes: 360, description: '' } },
-      { name: 'List Credit Packs (admin)', method: 'GET', path: 'api/admin/v1/credits/packs' },
-      { name: 'Create Credit Pack', method: 'POST', path: 'api/admin/v1/credits/packs', body: { name: 'Starter', credits: 100, price: 499, module: 'gst' } },
-      { name: 'Update Credit Pack', method: 'PUT', path: 'api/admin/v1/credits/packs/:id', pathVars: [{ key: 'id', value: '<packId>' }], body: { price: 599 } },
-      { name: 'User Credits', method: 'GET', path: 'api/admin/v1/credits/users/:userId', description: 'A single user two-bucket wallet, one row per module.', pathVars: [{ key: 'userId', value: '<userId>' }] },
-      { name: 'User Credit Ledger', method: 'GET', path: 'api/admin/v1/credits/users/:userId/ledger', description: 'Why that balance is what it is — newest first.', pathVars: [{ key: 'userId', value: '<userId>' }], query: [{ key: 'module', value: '' }, { key: 'limit', value: '50' }] },
-      { name: 'Adjust User Credits', method: 'PATCH', path: 'api/admin/v1/credits/users/:userId', description: 'Adjust ONE module. planAllowed/topupBalance set absolute values; delta nudges a bucket (top-up unless bucket says otherwise — top-up survives the next cycle reset). Ledgered as admin_adjust against the acting admin.', pathVars: [{ key: 'userId', value: '<userId>' }], body: { module: 'gst', delta: 50, bucket: 'topup', note: 'Comped after a failed refresh' } },
+      { name: 'Credit Costs', method: 'GET', path: 'api/admin/v1/credits/costs', description: 'ALL TEN price slots (5 modules x refresh/download), priced or not: each row carries priced (false = no price row; once pricing is live that action is REFUSED 503 CREDITS_UNPRICED, never run free), creditCost (null when unpriced), freshnessMinutes (the admin override), defaultFreshnessMinutes + effectiveFreshnessMinutes (served by the server — the console keeps no copy), updatedBy (who last set the price: admin email or seed). Seed the book with `npm run seed:credit-costs` (insert-only: never overwrites an admin price). Needs admin permission credits.read (enforced on the server; 403 without it).' },
+      { name: 'Update Credit Costs', method: 'PUT', path: 'api/admin/v1/credits/costs', description: 'Upserts ONE module+action rule. freshnessMinutes: a repeat refresh inside the window is served free (omit for the module default — GST 360, others 1440; 0 = always refetch). The admin value is honoured for EVERY module, GST included. creditCost is a whole number 0..100 (422 above 100 — a fat-finger guard); 0 = deliberately free. Records updatedBy = the acting admin. Needs admin permission credits.update (enforced on the server; 403 without it).', body: { module: 'gst', action: 'refresh', creditCost: 1, freshnessMinutes: 360, description: '' } },
+      { name: 'List Credit Packs (admin)', method: 'GET', path: 'api/admin/v1/credits/packs', description: 'Every pack, active or not. Needs admin permission credits.read (enforced on the server; 403 without it).' },
+      { name: 'Create Credit Pack', method: 'POST', path: 'api/admin/v1/credits/packs', description: 'A buyable bundle of POOLED credits (module defaults to pool; a legacy per-module value still credits the pool). Needs admin permission credits.update (enforced on the server; 403 without it).', body: { name: '200 credits', credits: 200, price: 900 } },
+      { name: 'Update Credit Pack', method: 'PUT', path: 'api/admin/v1/credits/packs/:id', description: 'Edit one pack. Needs admin permission credits.update (enforced on the server; 403 without it).', pathVars: [{ key: 'id', value: '<packId>' }], body: { price: 599 } },
+      { name: 'User Credits', method: 'GET', path: 'api/admin/v1/credits/users/:userId', description: 'A single user pooled wallet (one row, module pool) with its plan and top-up buckets. Needs admin permission credits.read (enforced on the server; 403 without it).', pathVars: [{ key: 'userId', value: '<userId>' }] },
+      { name: 'User Credit Ledger', method: 'GET', path: 'api/admin/v1/credits/users/:userId/ledger', description: 'Why that balance is what it is — newest first. Needs admin permission credits.read (enforced on the server; 403 without it).', pathVars: [{ key: 'userId', value: '<userId>' }], query: [{ key: 'module', value: '' }, { key: 'limit', value: '50' }] },
+      { name: 'Adjust User Credits', method: 'PATCH', path: 'api/admin/v1/credits/users/:userId', description: 'Adjust the ONE pooled wallet (module is optional and ignored). planAllowed/topupBalance set absolute values; delta nudges a bucket (top-up unless bucket says otherwise — top-up survives the next cycle reset). Ledgered as admin_adjust against the acting admin. Needs admin permission credits.update (enforced on the server; 403 without it).', pathVars: [{ key: 'userId', value: '<userId>' }], body: { module: 'gst', delta: 50, bucket: 'topup', note: 'Comped after a failed refresh' } },
       // --- Report engine (universal builder). A report is a saved DEFINITION run by the safe, registry-whitelisted engine. Legacy module/reportView reports still supported. ---
       { name: 'Report Data Sources', method: 'GET', path: 'api/admin/v1/reports/data-sources', description: 'Catalog of reportable data sources + their fields/operators (drives the builder AND acts as the query whitelist).' },
       { name: 'Preview Report', method: 'POST', path: 'api/admin/v1/reports/preview', description: 'Run a report DEFINITION live — registry-whitelisted, row/time-capped, Redis-cached 120s. userScopeId scopes the whole report to one user.', body: { definition: { dataSource: 'payments', visualization: 'bar', groupBy: { field: 'module' }, metrics: [{ key: 'm1', label: 'Revenue', agg: 'sum', field: 'amount' }] }, page: 1, noCache: false } },
