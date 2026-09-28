@@ -56,7 +56,6 @@ export default function IdentityPage() {
   const [kind, setKind] = useState('business');
   const [companyPan, setCompanyPan] = useState('');
   const [typedCompanyName, setTypedCompanyName] = useState('');
-  const [personPan, setPersonPan] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -206,17 +205,6 @@ export default function IdentityPage() {
             placeholder="leave empty to confirm the fetched details"
             fullWidth
           />
-        </ApiCard>
-
-        <ApiCard
-          title="About you — Confirm your PAN (only when needsPan)"
-          method="POST"
-          endpoint="/api/v1/signup/identity/pan"
-          description="The person's OWN PAN (4th letter P), checked with Sandbox against the DigiLocker name and date of birth — so a PAN copied off somebody else's card fails (plan A5): 422 SIGNUP_PAN_MISMATCH with data.attemptsLeft. Three checks per draft, then 429 (support finishes it). PAN records down → 503 and no check is spent. A PAN that already has an account → 409 IDENTITY_PAN_TAKEN."
-          buttonLabel="Check PAN"
-          onSubmit={() => identityApi.signupConfirmPan(draftToken.trim(), personPan.trim())}
-        >
-          <Field label="Your PAN" value={personPan} onChange={setPersonPan} placeholder="ABCPK1234L" fullWidth />
         </ApiCard>
 
         <ApiCard

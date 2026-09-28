@@ -166,21 +166,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Signup — Screen 4, Verify DigiLocker',
         method: 'POST',
         path: 'api/v1/signup/identity/verify',
-        description: 'Completes the DigiLocker leg and returns what "About you" pre-fills: `verifiedName` (always; NOT editable), `verifiedDob`, `verifiedEmail` (when DigiLocker has one — a pre-fill only), and `panMasked` + `panSource: digilocker` when the person shared their PAN document (the number is read from the PANCR certificate; the document is never kept). `needsPan: true` means DigiLocker had no PAN — call Confirm Your PAN before Complete. `sessionId` is optional and only ever a CHECK against the session the draft already names.',
+        description: 'Completes the DigiLocker leg and returns what "About you" pre-fills: `verifiedName` (always; NOT editable), `verifiedDob`, `verifiedEmail` (when DigiLocker has one — a pre-fill only), and `panMasked` + `panSource: digilocker` when DigiLocker held the PAN document (the number is read from the PANCR certificate; the document is never kept). An INDIVIDUAL\'s PAN is mandatory and comes ONLY from DigiLocker (ONBOARDING_PLAN.md D7, revised 28 Sep 2026): if it is missing the call is a soft refusal — 200 with `verified:false`, `reason:\'pan_not_shared\'` and a "sync your PAN in DigiLocker" message — and the attempt is given back. A BUSINESS is allowed through without one (it types its organisation PAN next; a proprietor\'s own PAN is checked there). `sessionId` is optional and only ever a CHECK against the session the draft already names.',
         body: { token: '<draft>', sessionId: '' }
-      },
-      {
-        name: 'Signup — About You, Confirm Your PAN',
-        method: 'POST',
-        path: 'api/v1/signup/identity/pan',
-        description: "Only when Verify DigiLocker said `needsPan`. A PERSON's PAN (4th letter P — else 422 PERSON_PAN_NOT_INDIVIDUAL, with no vendor call). Checked with Sandbox against the DigiLocker name and date of birth, never against anything typed, so a PAN copied off somebody else's card fails (plan A5): 422 SIGNUP_PAN_MISMATCH with `data.attemptsLeft`. Three checks per draft, then 429 SIGNUP_ATTEMPTS_EXHAUSTED (support finishes it). PAN records down → 503 SIGNUP_PAN_CHECK_UNAVAILABLE and no check is spent. A PAN that already has an account → 409 IDENTITY_PAN_TAKEN; a second PAN on the same draft → 409 SIGNUP_STAGE_MISMATCH. A proprietor's business PAN is their own, so the app pre-fills it.",
-        body: { token: '<draft>', pan: 'ABCPK1234L' }
       },
       {
         name: 'Signup — Screen 5, Complete',
         method: 'POST',
         path: 'api/v1/signup/complete',
-        description: "The one write to the real tables: the person, the tenant and the owner membership. Refused with 409 SIGNUP_PAN_REQUIRED until the draft holds the person's own proven PAN (from DigiLocker, or Confirm Your PAN) — every self sign-up ends with one. The name is always DigiLocker's; `name` is read only when there is no verified name. The email is the one sent here — DigiLocker's is only a pre-fill — and is confirmed by code later (§5.7); the person records whether it was kept from DigiLocker or typed. One password on the wire: the app shows a confirm box and checks the two match on the handset (D3). §4.5 mints the username here; it is shown on a dashboard card (R15) and never typed.",
+        description: "The one write to the real tables: the person, the tenant and the owner membership. An INDIVIDUAL and a PROPRIETOR must hold their own PAN (from DigiLocker) — 409 SIGNUP_PAN_REQUIRED / 422 SIGNUP_PAN_NOT_SYNCED otherwise; a company/LLP files on its typed organisation PAN, so the registrant's personal PAN is optional. The name is always DigiLocker's; `name` is read only when there is no verified name. The email is the one sent here — DigiLocker's is only a pre-fill — and is confirmed by code later (§5.7). One password on the wire (the app collects it on its own screen and checks the confirm box, D3). §4.5 mints the username here; it is shown on a dashboard card (R15) and never typed.",
         body: { token: '<draft>', email: 'asha@example.com', password: '<password>' }
       },
       {

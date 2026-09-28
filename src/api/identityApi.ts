@@ -86,15 +86,10 @@ export const identityApi = {
     client.post('/signup/identity/start', { token: draftToken }),
 
   // Answers what "About you" pre-fills: verifiedName, verifiedEmail?, panMasked?
-  // + panSource, and needsPan when DigiLocker had no PAN.
+  // + panSource. An individual's PAN is mandatory from DigiLocker; a missing one
+  // is a soft refusal (verified:false, reason 'pan_not_shared').
   signupIdentityVerify: (draftToken: string, payload: Record<string, unknown> = {}) =>
     client.post('/signup/identity/verify', { token: draftToken, ...payload }),
-
-  // "About you", only when verify said needsPan: the person's own PAN, checked
-  // against the DigiLocker name and date of birth (plan A5). 422 on a mismatch
-  // with data.attemptsLeft; three checks per draft.
-  signupConfirmPan: (draftToken: string, pan: string) =>
-    client.post('/signup/identity/pan', { token: draftToken, pan }),
 
   // Last screen: the one write to the real tables — the person, the tenant, the
   // owner membership. 409 SIGNUP_PAN_REQUIRED until the draft holds a proven PAN.
