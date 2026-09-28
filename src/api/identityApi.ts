@@ -49,41 +49,60 @@ export const identityApi = {
   signupMobile: (mobile: string) =>
     client.post('/signup/mobile', { mobile }),
 
+  // The draft travels as `token` in every body — the server's Joi schema knows no
+  // other name, and refuses an unknown `draftToken` key outright.
+
   // Same draft, a fresh code. Counted against the per-identifier cap, not the IP one.
   signupResendCode: (draftToken: string) =>
-    client.post('/signup/mobile/resend', { draftToken }),
+    client.post('/signup/mobile/resend', { token: draftToken }),
 
   // Screen 2: the code. THE FIRST AND ONLY PLACE an existing account is named —
   // after a correct code, never before it (§8.2).
   signupVerifyMobile: (draftToken: string, code: string) =>
-    client.post('/signup/mobile/verify', { draftToken, code }),
+    client.post('/signup/mobile/verify', { token: draftToken, code }),
 
   // Screen 3: one tap. `kind` is the business/individual fork of §3.1 vs §3.2.
   signupKind: (draftToken: string, kind: 'business' | 'individual') =>
-    client.post('/signup/kind', { draftToken, kind }),
+    client.post('/signup/kind', { token: draftToken, kind }),
 
-  // Screen 4, business: the company PAN goes out to KYC and the name, type and
-  // incorporation date come back to be confirmed (§3.4 then discovers the GSTINs).
+  // Screen 5, business (after DigiLocker): the company PAN goes out to KYC and the
+  // name, type and incorporation date come back to be confirmed (§3.4 then
+  // discovers the GSTINs).
   signupCompanyPan: (draftToken: string, pan: string) =>
-    client.post('/signup/company-pan', { draftToken, pan }),
+    client.post('/signup/company-pan', { token: draftToken, pan }),
 
-  signupConfirmCompanyPan: (draftToken: string) =>
-    client.post('/signup/company-pan/confirm', { draftToken }),
+  // `typedName` only when the lookup failed ("Type it myself").
+  signupConfirmCompanyPan: (draftToken: string, pan: string, typedName?: string) =>
+    client.post('/signup/company-pan/confirm', {
+      token: draftToken,
+      pan,
+      ...(typedName ? { typedName } : {}),
+    }),
 
-  // Screen 4, individual: DigiLocker is the SOURCE of the name and date of birth,
-  // not a test against a typed PAN (decision R17).
+  // Screen 4, BOTH branches — DigiLocker first (ONBOARDING_PLAN.md D7, revised
+  // 28 Sep). It is the SOURCE of the name and date of birth, and of the PAN and
+  // email when it has them — never a test against anything typed (R17).
   signupIdentityStart: (draftToken: string) =>
-    client.post('/signup/identity/start', { draftToken }),
+    client.post('/signup/identity/start', { token: draftToken }),
 
+  // Answers what "About you" pre-fills: verifiedName, verifiedEmail?, panMasked?
+  // + panSource, and needsPan when DigiLocker had no PAN.
   signupIdentityVerify: (draftToken: string, payload: Record<string, unknown> = {}) =>
-    client.post('/signup/identity/verify', { draftToken, ...payload }),
+    client.post('/signup/identity/verify', { token: draftToken, ...payload }),
 
-  // Screen 5: the one write to the real tables — the person, the tenant, the owner
-  // membership. ONE password box, no confirm field anywhere in the product (L9).
+  // "About you", only when verify said needsPan: the person's own PAN, checked
+  // against the DigiLocker name and date of birth (plan A5). 422 on a mismatch
+  // with data.attemptsLeft; three checks per draft.
+  signupConfirmPan: (draftToken: string, pan: string) =>
+    client.post('/signup/identity/pan', { token: draftToken, pan }),
+
+  // Last screen: the one write to the real tables — the person, the tenant, the
+  // owner membership. 409 SIGNUP_PAN_REQUIRED until the draft holds a proven PAN.
+  // One password on the wire (the app's confirm box is checked on the handset).
   signupComplete: (
     draftToken: string,
     payload: { name?: string; email?: string; password?: string } = {},
-  ) => client.post('/signup/complete', { draftToken, ...payload }),
+  ) => client.post('/signup/complete', { token: draftToken, ...payload }),
 
   // §3.3: the nudge's deep link, or the same number typed again. Resuming skips the
   // typing, never the proof — re-opening a draft clears it and costs a fresh code.

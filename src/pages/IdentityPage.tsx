@@ -55,6 +55,8 @@ export default function IdentityPage() {
   const [code, setCode] = useState('');
   const [kind, setKind] = useState('business');
   const [companyPan, setCompanyPan] = useState('');
+  const [typedCompanyName, setTypedCompanyName] = useState('');
+  const [personPan, setPersonPan] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -149,7 +151,7 @@ export default function IdentityPage() {
           title="Screen 3 — Business or Individual"
           method="POST"
           endpoint="/api/v1/signup/kind"
-          description="One tap. This is the fork: business goes to the company PAN, individual to DigiLocker (decision R17)."
+          description="One tap, and the fork. BOTH branches verify the person with DigiLocker next (ONBOARDING_PLAN.md D7, revised 28 Sep); business then adds the company PAN."
           buttonLabel="Choose"
           onSubmit={() => identityApi.signupKind(draftToken.trim(), kind as 'business' | 'individual')}
         >
@@ -158,10 +160,29 @@ export default function IdentityPage() {
 
         <ApiCard
           step={4}
-          title="Screen 4 (business) — Company PAN"
+          title="Screen 4 — Start DigiLocker (both branches)"
+          method="POST"
+          endpoint="/api/v1/signup/identity/start"
+          description="DigiLocker first, on both branches. The session asks for the Aadhaar and PAN documents. DigiLocker is the SOURCE of the name and date of birth — and of the PAN and email when it has them — never a test against anything typed (decision R17)."
+          buttonLabel="Start"
+          onSubmit={() => identityApi.signupIdentityStart(draftToken.trim())}
+        />
+
+        <ApiCard
+          title="Screen 4 — Verify DigiLocker"
+          method="POST"
+          endpoint="/api/v1/signup/identity/verify"
+          description="Completes the DigiLocker leg and answers what 'About you' pre-fills: verifiedName (always, not editable), verifiedEmail (when DigiLocker has one — a pre-fill only), and panMasked + panSource 'digilocker' when the person shared their PAN document. needsPan: true means DigiLocker had no PAN — use 'Confirm your PAN' below before completing."
+          buttonLabel="Verify"
+          onSubmit={() => identityApi.signupIdentityVerify(draftToken.trim())}
+        />
+
+        <ApiCard
+          step={5}
+          title="Screen 5 (business) — Company PAN"
           method="POST"
           endpoint="/api/v1/signup/company-pan"
-          description="The PAN goes out to KYC and the name, type and incorporation date come back to be confirmed. §3.4 then discovers the GSTINs from it — one tax identity in, the rest found."
+          description="After DigiLocker. The PAN goes out to KYC and the name, type and incorporation date come back to be confirmed. §3.4 then discovers the GSTINs from it — one tax identity in, the rest found."
           buttonLabel="Look Up"
           onSubmit={() => identityApi.signupCompanyPan(draftToken.trim(), companyPan.trim())}
         >
@@ -169,38 +190,40 @@ export default function IdentityPage() {
         </ApiCard>
 
         <ApiCard
-          title="Screen 4 (business) — Confirm what came back"
+          title="Screen 5 (business) — Confirm what came back"
           method="POST"
           endpoint="/api/v1/signup/company-pan/confirm"
-          description="Confirms the fetched name, type and date. Nothing is typed twice."
+          description="Confirms the fetched name, type and date for the PAN above. Nothing is typed twice: fill the name only when the lookup failed ('Type it myself'). The workspace starts Pending until ownership is proved — a proprietor whose business PAN is their own DigiLocker PAN is Verified at once."
           buttonLabel="Confirm"
-          onSubmit={() => identityApi.signupConfirmCompanyPan(draftToken.trim())}
-        />
+          onSubmit={() =>
+            identityApi.signupConfirmCompanyPan(draftToken.trim(), companyPan.trim(), typedCompanyName.trim() || undefined)
+          }
+        >
+          <Field
+            label="Company name (only if the lookup failed)"
+            value={typedCompanyName}
+            onChange={setTypedCompanyName}
+            placeholder="leave empty to confirm the fetched details"
+            fullWidth
+          />
+        </ApiCard>
 
         <ApiCard
-          title="Screen 4 (individual) — Start DigiLocker"
+          title="About you — Confirm your PAN (only when needsPan)"
           method="POST"
-          endpoint="/api/v1/signup/identity/start"
-          description="The direction reverses from the old flow: DigiLocker is the SOURCE of the name and date of birth, not a test against a typed PAN (decision R17)."
-          buttonLabel="Start"
-          onSubmit={() => identityApi.signupIdentityStart(draftToken.trim())}
-        />
+          endpoint="/api/v1/signup/identity/pan"
+          description="The person's OWN PAN (4th letter P), checked with Sandbox against the DigiLocker name and date of birth — so a PAN copied off somebody else's card fails (plan A5): 422 SIGNUP_PAN_MISMATCH with data.attemptsLeft. Three checks per draft, then 429 (support finishes it). PAN records down → 503 and no check is spent. A PAN that already has an account → 409 IDENTITY_PAN_TAKEN."
+          buttonLabel="Check PAN"
+          onSubmit={() => identityApi.signupConfirmPan(draftToken.trim(), personPan.trim())}
+        >
+          <Field label="Your PAN" value={personPan} onChange={setPersonPan} placeholder="ABCPK1234L" fullWidth />
+        </ApiCard>
 
         <ApiCard
-          title="Screen 4 (individual) — Verify DigiLocker"
-          method="POST"
-          endpoint="/api/v1/signup/identity/verify"
-          description="Completes the DigiLocker leg. The name it returns is pre-filled and not editable on screen 5."
-          buttonLabel="Verify"
-          onSubmit={() => identityApi.signupIdentityVerify(draftToken.trim())}
-        />
-
-        <ApiCard
-          step={5}
-          title="Screen 5 — Identity, and the one write"
+          title="About you — Create the account (the one write)"
           method="POST"
           endpoint="/api/v1/signup/complete"
-          description="The first write to the real tables: the person, the tenant and the owner membership. ONE password box — there is no confirm-password field anywhere in the product (decision L9). §4.5's username is MINTED here and shown on a dashboard card; it is never typed."
+          description="The first write to the real tables: the person, the tenant and the owner membership. 409 SIGNUP_PAN_REQUIRED until the draft holds the person's proven PAN. The name is always DigiLocker's (a typed one is ignored); the email sent here is the one used, and is confirmed by code later. One password on the wire — the app's confirm box is checked on the handset (D3). §4.5's username is MINTED here and shown on a dashboard card; it is never typed."
           buttonLabel="Create Account"
           onSubmit={async () => {
             const res = await identityApi.signupComplete(draftToken.trim(), {
@@ -213,9 +236,9 @@ export default function IdentityPage() {
             return res;
           }}
         >
-          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="pre-filled on the individual branch" />
-          <Field label="Email" value={email} onChange={setEmail} placeholder="you@example.com" />
-          <Field label="Password" value={password} onChange={setPassword} placeholder="one box, no confirm field" type="password" />
+          <Field label="Full name" value={fullName} onChange={setFullName} placeholder="ignored — DigiLocker's name is used" />
+          <Field label="Email" value={email} onChange={setEmail} placeholder="DigiLocker's, or another" />
+          <Field label="Password" value={password} onChange={setPassword} placeholder="at least 10 characters" type="password" />
         </ApiCard>
 
         <ApiCard

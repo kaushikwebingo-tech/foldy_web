@@ -41,7 +41,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'My Profile',
         method: 'GET',
         path: 'api/v1/user/profile',
-        description: 'Profile section for the logged-in user: name, dob/incorporation date, email, mobile, PAN (masked for everybody). A DELEGATED session gets the company with email, mobile and dob (incorporation date) MASKED too, e.g. "a••••••@ashatraders.in", "••••••3210", "••/••/••••".'
+        description: 'Profile section for the logged-in user. data = { pan, email, name, mobile, dob, entityType, workspace, profileImage, modules, person, company }. The top-level fields are the ACCOUNT (for a business: the company, so `name` is the company name and email/mobile/dob are its registered contact and incorporation date); PAN is masked for everybody. Anyone who is not the owner gets email, mobile and dob MASKED too, e.g. "a••••••@ashatraders.in", "••••••3210", "••/••/••••": a legacy DELEGATED token, and a person token (sub/mid) whose membership is not the owner (fails closed when the person or membership cannot be read). `person` = the human signed in, their OWN contact unmasked: { name, username, mobile, email, emailVerified, role (role name, e.g. "Administrator"), isOwner } (legacy token: read from the users row, username/role null). `company` = null for an individual workspace, else { name (display name, else legal name), legalName, entityType, panMasked, tenantCode, incorporationDate, ownership: { status: "verified"|"pending"|"expired", expiresAt: ISO-8601 or null (null once verified) } }. The app greets `person.name`.'
       },
       {
         name: 'Active Sessions',
@@ -125,56 +125,63 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'POST',
         path: 'api/v1/signup/mobile/resend',
         description: 'Same draft, a fresh code. Counted against the per-identifier cap in Mongo, not the per-IP limiter.',
-        body: { draftToken: '<from screen 1>' }
+        body: { token: '<from screen 1>' }
       },
       {
         name: 'Signup — Screen 2, Verify Code',
         method: 'POST',
         path: 'api/v1/signup/mobile/verify',
         description: 'The FIRST AND ONLY place an existing account is named, and only after a correct code (§8.2). A 6-digit code, so SMS autofill is fine here.',
-        body: { draftToken: '<from screen 1>', code: '123456' }
+        body: { token: '<from screen 1>', code: '123456' }
       },
       {
         name: 'Signup — Screen 3, Business or Individual',
         method: 'POST',
         path: 'api/v1/signup/kind',
-        description: 'One tap, and the fork: business goes to the company PAN, individual to DigiLocker. Moved from in front of sign-in to step 3 of signup.',
-        body: { draftToken: '<draft>', kind: 'business' }
+        description: 'One tap, and the fork. BOTH branches verify the person with DigiLocker next (ONBOARDING_PLAN.md D7, revised 28 Sep); business then adds the company PAN. Moved from in front of sign-in to step 3 of signup.',
+        body: { token: '<draft>', kind: 'business' }
       },
       {
-        name: 'Signup — Screen 4 (business), Company PAN',
+        name: 'Signup — Screen 5 (business), Company PAN',
         method: 'POST',
         path: 'api/v1/signup/company-pan',
-        description: 'The PAN goes out to KYC and the name, type and incorporation date come back to be confirmed. §3.4 discovers the GSTINs from it — one tax identity in, the rest found.',
-        body: { draftToken: '<draft>', pan: 'ABCDE1234F' }
+        description: 'After DigiLocker. The PAN goes out to KYC and the name, type and incorporation date come back to be confirmed. §3.4 discovers the GSTINs from it — one tax identity in, the rest found.',
+        body: { token: '<draft>', pan: 'ABCDE1234F' }
       },
       {
-        name: 'Signup — Screen 4 (business), Confirm',
+        name: 'Signup — Screen 5 (business), Confirm',
         method: 'POST',
         path: 'api/v1/signup/company-pan/confirm',
-        description: 'Confirms what the lookup returned. Nothing is retyped.',
-        body: { draftToken: '<draft>' }
+        description: 'Confirms what the lookup returned. Nothing is retyped: send `typedName` only when the lookup failed ("Type it myself"). The workspace starts Pending until ownership is proved (GST OTP, director match or support) — a proprietor whose business PAN is their own DigiLocker PAN is Verified at once.',
+        body: { token: '<draft>', pan: 'ABCDE1234F', typedName: '' }
       },
       {
-        name: 'Signup — Screen 4 (individual), Start DigiLocker',
+        name: 'Signup — Screen 4, Start DigiLocker (both branches)',
         method: 'POST',
         path: 'api/v1/signup/identity/start',
-        description: 'Decision R17 reverses the direction of the old screen: DigiLocker is the SOURCE of the name and date of birth, not a test against a typed PAN.',
-        body: { draftToken: '<draft>' }
+        description: 'DIGILOCKER FIRST, on both branches (ONBOARDING_PLAN.md D7, revised 28 Sep). The session asks for the Aadhaar and PAN documents. DigiLocker is the SOURCE of the name and date of birth — and of the PAN and email when it has them — never a test against anything typed (decision R17).',
+        body: { token: '<draft>' }
       },
       {
-        name: 'Signup — Screen 4 (individual), Verify DigiLocker',
+        name: 'Signup — Screen 4, Verify DigiLocker',
         method: 'POST',
         path: 'api/v1/signup/identity/verify',
-        description: 'Completes the DigiLocker leg. The name it returns is pre-filled and NOT editable on screen 5.',
-        body: { draftToken: '<draft>' }
+        description: 'Completes the DigiLocker leg and returns what "About you" pre-fills: `verifiedName` (always; NOT editable), `verifiedDob`, `verifiedEmail` (when DigiLocker has one — a pre-fill only), and `panMasked` + `panSource: digilocker` when the person shared their PAN document (the number is read from the PANCR certificate; the document is never kept). `needsPan: true` means DigiLocker had no PAN — call Confirm Your PAN before Complete. `sessionId` is optional and only ever a CHECK against the session the draft already names.',
+        body: { token: '<draft>', sessionId: '' }
+      },
+      {
+        name: 'Signup — About You, Confirm Your PAN',
+        method: 'POST',
+        path: 'api/v1/signup/identity/pan',
+        description: "Only when Verify DigiLocker said `needsPan`. A PERSON's PAN (4th letter P — else 422 PERSON_PAN_NOT_INDIVIDUAL, with no vendor call). Checked with Sandbox against the DigiLocker name and date of birth, never against anything typed, so a PAN copied off somebody else's card fails (plan A5): 422 SIGNUP_PAN_MISMATCH with `data.attemptsLeft`. Three checks per draft, then 429 SIGNUP_ATTEMPTS_EXHAUSTED (support finishes it). PAN records down → 503 SIGNUP_PAN_CHECK_UNAVAILABLE and no check is spent. A PAN that already has an account → 409 IDENTITY_PAN_TAKEN; a second PAN on the same draft → 409 SIGNUP_STAGE_MISMATCH. A proprietor's business PAN is their own, so the app pre-fills it.",
+        body: { token: '<draft>', pan: 'ABCPK1234L' }
       },
       {
         name: 'Signup — Screen 5, Complete',
         method: 'POST',
         path: 'api/v1/signup/complete',
-        description: 'The one write to the real tables: the person, the tenant and the owner membership. ONE password box and no confirm-password field anywhere in the product (decision L9). §4.5 mints the username here; it is shown on a dashboard card (R15) and never typed.',
-        body: { draftToken: '<draft>', name: 'Asha Nair', email: 'asha@example.com', password: '<password>' }
+        description: "The one write to the real tables: the person, the tenant and the owner membership. Refused with 409 SIGNUP_PAN_REQUIRED until the draft holds the person's own proven PAN (from DigiLocker, or Confirm Your PAN) — every self sign-up ends with one. The name is always DigiLocker's; `name` is read only when there is no verified name. The email is the one sent here — DigiLocker's is only a pre-fill — and is confirmed by code later (§5.7); the person records whether it was kept from DigiLocker or typed. One password on the wire: the app shows a confirm box and checks the two match on the handset (D3). §4.5 mints the username here; it is shown on a dashboard card (R15) and never typed.",
+        body: { token: '<draft>', email: 'asha@example.com', password: '<password>' }
       },
       {
         name: 'Signup — Resume a Stopped Draft',
@@ -988,7 +995,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Get Profile',
         method: 'GET',
         path: 'api/v1/user/profile',
-        description: 'Name, DOB, email, mobile, masked PAN, and a signed profile-image URL. Name/DOB/PAN are one-time onboarding inputs (read-only).'
+        description: 'Same endpoint as Auth & Session > My Profile (see there for the full shape). data = { pan (masked), email, name, mobile, dob, entityType, workspace, profileImage (signed URL), modules, person, company }. Top-level email/mobile/dob are the account\'s (a business: the company contact) and are masked for anyone but the owner. `person` = the signed-in human { name, username, mobile, email, emailVerified, role, isOwner }, unmasked. `company` = null for an individual workspace, else { name, legalName, entityType, panMasked, tenantCode, incorporationDate, ownership: { status: verified|pending|expired, expiresAt: ISO-8601|null } }. Name/DOB/PAN are one-time onboarding inputs (read-only).'
       },
       {
         name: 'Upload Profile Image',
@@ -1804,7 +1811,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Get User Details',
         method: 'GET',
         path: 'api/admin/v1/users/:userId',
-        description: 'Full per-user view: profile, subscription/plan, storage usage (used/available), and recent payments.',
+        description: "Full per-user view: profile, subscription/plan, storage usage (used/available), and recent payments. `identity` says where the account's name, PAN and email came from at sign-up — `nameSource`, `panMasked` + `panSource` (digilocker = their PAN document; pan-kyc = typed, then checked against the PAN records), `emailSource` (digilocker / typed) and `emailVerifiedAt` — read off the workspace owner. The PAN is only ever masked. `null` for an account from before the new sign-up.",
         pathVars: [{ key: 'userId', value: '<userId>' }]
       },
       {
