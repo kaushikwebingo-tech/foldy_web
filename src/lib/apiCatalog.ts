@@ -789,20 +789,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         body: { gstin: GSTIN, formType: 'GSTR-1', period: '042026' }
       },
       {
-        name: 'Notice List (taxpayer session)',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/notices/list',
-        description: 'Notices via the ACTIVE TAXPAYER SESSION (GSTIN in the body) — distinct from the per-profile GET below, which reads a saved profile by id.',
-        body: { gstin: '29ABCDE1234F1Z5', fromDate: '01-04-2024', toDate: '31-03-2025' }
-      },
-      {
-        name: 'Notice Details (taxpayer session)',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/notices/details',
-        description: 'One notice\'s detail via the active taxpayer session.',
-        body: { gstin: '29ABCDE1234F1Z5', refId: '<refId>' }
-      },
-      {
         name: 'Search & Save Taxpayer',
         method: 'POST',
         path: 'api/v1/b2b/gst/profile',
@@ -844,55 +830,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2b/gst/get-finance-status',
         description: 'Whole-year filing status for one GSTIN. returns.monthly now also carries GSTR2A and GSTR2B — auto-drafted ITC statements, so they use status Available|NotAvailable (never Filed/Due/Overdue) and have no dueDate. 2A exists from the start of the period; 2B appears once GSTN generates it on the 14th of the following month. They are EXCLUDED from summary.totalFiled/Overdue/Due and counted separately as summary.totalStatementsAvailable. gstr narrows BOTH the rows and the counts to a single form (GSTR1|GSTR1A|GSTR3B|GSTR9|GSTR9C|GSTR2A|GSTR2B, dash- and case-insensitive); leave it empty for the whole year. Anything else is a 400 rather than an empty schedule.',
         body: { gstin: GSTIN, financial_year: 'FY 2024-25', gstr: '' }
-      },
-      {
-        name: 'Taxpayer — Generate OTP',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/otp',
-        description: 'type is required (GSTR1|GSTR3B|GSTR9|GSTR9C|GSTR1A); title is optional.',
-        body: { username: '<gst-portal-username>', gstin: GSTIN, type: 'GSTR1', title: 'Q1 filing' }
-      },
-      {
-        name: 'Taxpayer — Verify OTP',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/otp/verify',
-        body: { username: '<gst-portal-username>', gstin: GSTIN, otp: '123456' }
-      },
-      {
-        name: 'Taxpayer — Refresh Session',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/session/refresh',
-        body: { taxpayer_token: '<taxpayer_token>' }
-      },
-      {
-        name: 'GSTR-1 Summary',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/gstr1/summary',
-        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, year: '2024', month: '04', summary_type: 'long' }
-      },
-      {
-        name: 'GSTR-1 B2B Invoices',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/gstr1/b2b',
-        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, year: '2024', month: '04' }
-      },
-      {
-        name: 'Return Summary (by type)',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/summary/:type',
-        description: 'type path var = gstr1|gstr1a|gstr3b|gstr9|gstr9c. ret_period is MMYYYY (year/month optional).',
-        pathVars: [{ key: 'type', value: 'gstr1' }],
-        body: { taxpayer_token: '<taxpayer_token>', gstin: GSTIN, ret_period: '042024' }
-      },
-      {
-        name: 'Annual Sales Summary',
-        method: 'GET',
-        path: 'api/v1/b2b/gst/sales-summary',
-        query: [
-          { key: 'gstin', value: GSTIN },
-          { key: 'fy', value: '2024-25' },
-          { key: 'taxpayer_token', value: '<taxpayer_token>' }
-        ]
       },
       {
         name: 'Mark Return as Filed',
