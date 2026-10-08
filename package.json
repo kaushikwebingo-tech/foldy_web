@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "route-diff": "node scripts/route-diff.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

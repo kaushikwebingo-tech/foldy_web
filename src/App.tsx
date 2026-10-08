@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import DashboardPage     from '@/pages/DashboardPage';
 import LoginPage         from '@/pages/LoginPage';
 import OnboardingPage    from '@/pages/OnboardingPage';
+import IdentityPage      from '@/pages/IdentityPage';
 import ProfilePage       from '@/pages/ProfilePage';
 import GstProfilePage    from '@/pages/GstProfilePage';
 import TdsPage           from '@/pages/TdsPage';
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/"               element={<DashboardPage />} />
           <Route path="/login"          element={<LoginPage />} />
           <Route path="/onboarding"     element={<OnboardingPage />} />
+          <Route path="/identity"       element={<IdentityPage />} />
           <Route path="/profile"        element={<ProfilePage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
           <Route path="/tds"            element={<TdsPage />} />
