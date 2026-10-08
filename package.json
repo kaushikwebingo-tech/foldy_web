@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "dev:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./deploy.ps1",
     "lint": "eslint .",
     "route-diff": "node scripts/route-diff.mjs",
     "preview": "vite preview"
