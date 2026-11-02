@@ -1,9 +1,10 @@
-import type { ApiSection } from './postman';
+import type { ApiSection } from './postmanCore';
+import { completeAdminCatalog, patchAdminEndpoint } from './adminApiCatalog';
 
 /*
  * Declarative endpoint catalog used to generate Postman collections.
- * Keep paths in sync with the backend routes. Bearer auth + {{baseUrl}} are
- * applied at the collection level by the generator.
+ * The master generator verifies paths against mounted server routes, adds
+ * {{baseUrl}}, and assigns public/app/admin authentication per request.
  */
 
 const GSTIN = '29ABCDE1234F1Z5';
@@ -959,7 +960,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   support: {
     key: 'support',
     name: 'Support & Account',
-    description: 'Contact Support (raise + list own requests), Feature Requests ("Suggest Feature"), and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. For the user calls set {{token}} to a user JWT; for the admin calls set {{token}} to an admin JWT.',
+    description: 'Contact Support (raise + list own requests), Feature Requests ("Suggest Feature"), and Delete Account — common to both B2B and B2C (auth only). Plus the admin triage endpoints. User requests use {{token}}; admin requests use the separate {{adminToken}}.',
     endpoints: [
       {
         name: 'Raise Support Request',
@@ -1656,7 +1657,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   admin: {
     key: 'admin',
     name: 'Admin Panel',
-    description: 'Admin auth + admin-user management + Super-Admin plan catalog. Uses the /api/admin/v1 prefix; set {{token}} to an ADMIN JWT.',
+    description: 'All mounted administrator APIs. Protected requests use {{adminToken}}, separate from the app {{token}}. Login uses {{adminEmail}} and {{adminPassword}}. Role permissions remain enforced by the server.',
     endpoints: [
       { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
       { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
@@ -1808,8 +1809,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       },
       /*
        * GONE, NOT MISSING — `DELETE /users/:userId/team/invites/:inviteId`.
-       * `adminTeamRoutes` mounts only `GET /:userId/team` and
-       * `DELETE /:userId/team/members/:membershipId`. There is no invitation to
+       * Current team routes include reads, seat overrides and member revocation.
+       * There is no invitation to
        * cancel and no `invited` membership (decision R21).
        */
       {
@@ -2218,6 +2219,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   }
 };
+
+// Apply current admin request examples to every section that exposes admin APIs.
+for (const section of Object.values(API_SECTIONS)) {
+  section.endpoints = section.key === 'admin'
+    ? completeAdminCatalog(section.endpoints)
+    : section.endpoints.map(patchAdminEndpoint);
+}
 
 export function getSection(key: string): ApiSection | undefined {
   return API_SECTIONS[key];

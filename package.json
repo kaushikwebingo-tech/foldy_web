@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "route-diff": "node scripts/route-diff.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postman:generate": "node --import ../server/node_modules/tsx/dist/loader.mjs scripts/genMasterPostman.ts",
+    "postman:check": "node --import ../server/node_modules/tsx/dist/loader.mjs scripts/genMasterPostman.ts --check",
+    "test:postman": "node --import ../server/node_modules/tsx/dist/loader.mjs --test --test-isolation=none tests/*.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
