@@ -150,12 +150,12 @@ const statementsOf = (source) => {
 
 const NON_ROUTER_HEADS = new Set(['req', 'request', 'res', 'response', 'next', 'console', 'process', 'JSON', 'Object', 'axios']);
 
-const collectServer = () => {
+export const collectServer = (serverDir = SERVER_DIR) => {
   const routeFiles = [
-    ...walk(join(SERVER_DIR, 'src', 'routes')),
-    ...walk(join(SERVER_DIR, 'src', 'webhooks')),
+    ...walk(join(serverDir, 'src', 'routes')),
+    ...walk(join(serverDir, 'src', 'webhooks')),
   ];
-  const appFile = join(SERVER_DIR, 'src', 'app.ts');
+  const appFile = join(serverDir, 'src', 'app.ts');
 
   /*
    * One entry per file. Routes are bucketed BY THE ROUTER VARIABLE they were
@@ -572,4 +572,4 @@ const main = () => {
   }
 };
 
-main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
