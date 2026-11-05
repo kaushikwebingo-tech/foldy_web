@@ -81,6 +81,89 @@ test('restricted sign-in results never replace the full session token or the adm
   assert.equal(values.token, undefined); assert.equal(values.challengeToken, 'device-challenge');
 });
 
+/*
+ * Structural conformance to Postman collection format v2.1.
+ *
+ * Hand-rolled on purpose: the project ships no JSON-schema validator and
+ * fetching Postman's schema at test time would make the suite need a network.
+ * This asserts the parts of the format Postman actually refuses to import or
+ * silently drops — a body with a mode but no matching field, an event with no
+ * script, a url with neither raw nor host, an auth block whose credential list
+ * does not match its type.
+ */
+test('the master conforms to the v2.1 collection format it declares', () => {
+  assert.equal(collection.info.schema, 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json');
+  assert.ok(collection.info.name && collection.info._postman_id);
+  assert.ok(Array.isArray(collection.item) && collection.item.length);
+  for (const variable of collection.variable) {
+    assert.equal(typeof variable.key, 'string');
+    assert.ok(variable.key.length, 'a collection variable needs a key');
+    assert.equal(typeof variable.value, 'string');
+  }
+
+  const bodyField: Record<string, string> = {
+    raw: 'raw', formdata: 'formdata', urlencoded: 'urlencoded', file: 'file', graphql: 'graphql',
+  };
+  const checkAuth = (auth: any) => {
+    assert.ok(typeof auth?.type === 'string', 'auth needs a type');
+    if (auth.type === 'noauth') return;
+    assert.ok(Array.isArray(auth[auth.type]), `auth ${auth.type} needs its credential list`);
+    for (const entry of auth[auth.type]) assert.equal(typeof entry.key, 'string');
+  };
+  const checkEvents = (events: any[] = []) => {
+    for (const event of events) {
+      assert.ok(['prerequest', 'test'].includes(event.listen), `bad event listen ${event.listen}`);
+      assert.equal(event.script?.type, 'text/javascript');
+      assert.ok(Array.isArray(event.script.exec) && event.script.exec.length);
+      for (const line of event.script.exec) assert.equal(typeof line, 'string');
+    }
+  };
+
+  checkAuth(collection.auth);
+  checkEvents(collection.event);
+
+  let folders = 0;
+  let leaves = 0;
+  const visit = (items: any[], trail: string) => {
+    for (const item of items) {
+      assert.ok(typeof item.name === 'string' && item.name.length, `unnamed item under ${trail}`);
+      const here = `${trail}/${item.name}`;
+      checkEvents(item.event);
+      if (item.item) {
+        folders += 1;
+        assert.ok(Array.isArray(item.item), `${here} is a folder with no item array`);
+        assert.equal(item.request, undefined, `${here} is both a folder and a request`);
+        visit(item.item, here);
+        continue;
+      }
+      leaves += 1;
+      const request = item.request;
+      assert.ok(request, `${here} is neither a folder nor a request`);
+      assert.ok(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method), `${here} method`);
+      checkAuth(request.auth);
+
+      const url = request.url;
+      assert.ok(typeof url.raw === 'string' && url.raw.length, `${here} url.raw`);
+      assert.ok(Array.isArray(url.host) && Array.isArray(url.path), `${here} url host/path`);
+      for (const segment of url.path) assert.equal(typeof segment, 'string');
+      for (const param of url.query ?? []) assert.equal(typeof param.key, 'string');
+      for (const bound of url.variable ?? []) assert.ok(bound.key && bound.value, `${here} path variable`);
+
+      for (const header of request.header ?? []) {
+        assert.equal(typeof header.key, 'string');
+        assert.equal(typeof header.value, 'string');
+      }
+      if (request.body) {
+        const field = bodyField[request.body.mode];
+        assert.ok(field, `${here} unknown body mode ${request.body.mode}`);
+        assert.notEqual(request.body[field], undefined, `${here} body mode ${request.body.mode} has no ${field}`);
+      }
+    }
+  };
+  visit(collection.item, '');
+  assert.ok(folders > 10 && leaves > 500, `expected a populated tree, got ${folders} folders / ${leaves} requests`);
+});
+
 test('checked-in master stays reproducible from routes and examples', () => {
   assert.equal(readFileSync(outputPath, 'utf8'), JSON.stringify(collection, null, 2) + '\n');
 });

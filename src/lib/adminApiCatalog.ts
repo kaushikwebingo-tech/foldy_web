@@ -92,7 +92,7 @@ const definitions: AdminEndpoint[] = [
   endpoint('Check Identifier', 'GET', 'users/check-identifier/:identifier'),
   endpoint('Update Customer Module Access', 'PATCH', 'users/:userId/modules', { body: { gst: true, roc: true, tds: true, itr: true, investment: true } }),
   endpoint('Get Customer Team', 'GET', 'users/:userId/team'),
-  endpoint('Set Customer Seat Override', 'PATCH', 'users/:userId/team/seats', { body: { seats: 10 }, description: 'seats: positive integer (max1000), -1 unlimited, or null to clear the override.' }),
+  endpoint('Set Customer Seat Override', 'PATCH', 'users/:userId/team/seats', { body: { seats: 10 }, description: 'seats: a positive integer up to 1000, -1 for unlimited, or null to clear the override and fall back to the plan limit. 0 is REFUSED (422) — it used to be accepted and silently mapped to null, restoring the plan default instead of the zero the caller asked for. The response carries the limit that applies now: { memberLimit, seatsUsed, override }. 404 when the account has no subscription to set seats on.' }),
   endpoint('Revoke Customer Team Member', 'DELETE', 'users/:userId/team/members/:membershipId', { body: { reason: 'API test: remove synthetic staff membership.' }, description: 'Cannot revoke the owner. Removes the selected membership and ends its workspace sessions.' }),
   endpoint('Cancel Customer Subscription', 'POST', 'users/:userId/cancel-subscription', { body: { reason: 'API test: customer requested cancellation.' } }),
   endpoint('Assign Customer Custom Plan', 'POST', 'users/:userId/custom-plan', { body: { ...planBody, name: 'API Test Custom Plan {{$timestamp}}' }, capture: { planId: 'data._id' }, statuses: [201] }),
@@ -190,9 +190,38 @@ export function patchAdminEndpoint(ep: PmEndpoint): PmEndpoint {
   return replacement ? { ...ep, ...replacement } : { ...ep, auth: 'admin' } as AdminEndpoint;
 }
 
+/*
+ * Patch a whole section, leaving NAMED VARIANTS of one route alone.
+ *
+ * The override is keyed on method+path, so a route catalogued twice on purpose
+ * — one entry per usage, as broadcast once was for "everyone" and "targeted
+ * audience" — had BOTH entries rewritten into the same generic request, and the
+ * richer example was silently lost from the console and the master collection.
+ * A route with more than one entry now keeps its own examples; it still gets
+ * the admin auth scope stamped on it.
+ */
+export function patchAdminEndpoints(existing: PmEndpoint[]): PmEndpoint[] {
+  const perRoute = new Map<string, number>();
+  for (const ep of existing) {
+    const route = `${ep.method} ${ep.path}`;
+    perRoute.set(route, (perRoute.get(route) ?? 0) + 1);
+  }
+  return existing.map(ep => {
+    if ((perRoute.get(`${ep.method} ${ep.path}`) ?? 0) < 2) return patchAdminEndpoint(ep);
+    return ep.path.startsWith(prefix) ? ({ ...ep, auth: 'admin' } as AdminEndpoint) : ep;
+  });
+}
+
 export function completeAdminCatalog(existing: PmEndpoint[]): PmEndpoint[] {
-  const result = existing.map(patchAdminEndpoint);
+  const result = patchAdminEndpoints(existing);
+  // Tracked as we go: a duplicate inside `definitions` would otherwise be
+  // appended once per occurrence.
   const known = new Set(result.map(ep => `${ep.method} ${ep.path}`));
-  for (const ep of definitions) if (!known.has(`${ep.method} ${ep.path}`)) result.push(ep);
+  for (const ep of definitions) {
+    const route = `${ep.method} ${ep.path}`;
+    if (known.has(route)) continue;
+    known.add(route);
+    result.push(ep);
+  }
   return result;
 }

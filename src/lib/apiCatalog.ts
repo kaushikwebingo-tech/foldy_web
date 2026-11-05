@@ -1,5 +1,5 @@
 import type { ApiSection } from './postmanCore';
-import { completeAdminCatalog, patchAdminEndpoint } from './adminApiCatalog';
+import { completeAdminCatalog, patchAdminEndpoints } from './adminApiCatalog';
 
 /*
  * Declarative endpoint catalog used to generate Postman collections.
@@ -646,7 +646,15 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     endpoints: [
       { name: 'Instafinancials Webhook', method: 'POST', path: 'webhook/instafinancials', description: 'ROC/LLP job callbacks. Verifies X-Webhook-Timestamp + X-Webhook-Signature against the webhook secret.', body: {} },
       { name: 'MoneyOne Webhook', method: 'POST', path: 'webhook/moneyone', description: 'Account-Aggregator consent + FI-data-ready callbacks.', body: {} },
-      { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature. payment.captured, order.paid and subscription.charged resolve the STORED PaymentOrder (or rebuild a legacy one from Razorpay) and call the same apply-once path as verify-payment. 200 for applied / already applied / not applied (flagged for support) / unattributable, 409 while in progress, 503 when the Razorpay lookup is unavailable (retryable). Unsigned deliveries (no RAZORPAY_WEBHOOK_SECRET) apply nothing unless mock mode AND the order id starts with order_mock_.', body: {} }
+      { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature. payment.captured, order.paid and subscription.charged resolve the STORED PaymentOrder (or rebuild a legacy one from Razorpay) and call the same apply-once path as verify-payment. 200 for applied / already applied / not applied (flagged for support) / unattributable, 409 while in progress, 503 when the Razorpay lookup is unavailable (retryable). Unsigned deliveries (no RAZORPAY_WEBHOOK_SECRET) apply nothing unless mock mode AND the order id starts with order_mock_.', body: {} },
+      {
+        name: 'Sandbox DigiLocker Session Webhook',
+        method: 'POST',
+        path: 'webhook/sandbox/digilocker',
+        description: 'Sandbox\'s authoritative session-status callback, and the reason a signup no longer dies when the browser redirect is lost (app killed inside DigiLocker, deep link never delivered, tab closed). Sign the EXACT raw request JSON with the server\'s SANDBOX_WEBHOOK_SECRET — HMAC-SHA256, Base64 — and send it as X-Sandbox-Signature; there is no bearer token on this path. The session id is read from data.id (session_id / sessionId also accepted). Only two statuses are acted on: succeeded -> completed, failed -> failed. Anything else (including created), an unknown session id, and a session already past pending are ACKNOWLEDGED WITH 200 AND IGNORED — expired is never resurrected, because its ten-minute identity window had already closed. So a 200 does not prove a write happened, and a Sandbox retry is harmless. Bad or missing signature = 401; 503 when SANDBOX_WEBHOOK_SECRET is unset. It records the session only: the identity is still read through getAssertedIdentity when the app asks. PREREQUISITE: this URL has to be registered in the Sandbox console before Sandbox will ever call it.',
+        headers: [{ key: 'X-Sandbox-Signature', value: '{{sandboxWebhookSignature}}' }],
+        body: { data: { id: '{{digilockerSessionId}}', status: 'succeeded' } }
+      }
     ]
   },
 
@@ -913,6 +921,20 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/v1/b2b/roc/mca/company/master-data',
         description: 'Company/LLP master data from InstaFinancials by CIN or LLPIN (billable). Pass exactly one of cin | llpin.',
         body: { cin: 'U72900KA2021PTC145000' }
+      },
+      {
+        name: 'Delete One Document',
+        method: 'DELETE',
+        path: 'api/v1/b2b/roc/documents/:id',
+        description: 'Removes ONE stored document row. Metadata only — the PDF itself lives on InstaFinancials and is not ours to delete, so the permanent downloadUrl keeps working. Scoped to the caller\'s tenant, so another account\'s id reads as 404 "Document not found." instead of deleting it, and a malformed id is the same 404 rather than a 500. Returns { jobId } (the job it belonged to, or null). Take id from the My Documents or Search Documents response.',
+        pathVars: [{ key: 'id', value: '<documentId>' }]
+      },
+      {
+        name: 'Erase All My ROC Data',
+        method: 'POST',
+        path: 'api/v1/b2b/roc/revoke',
+        description: 'HARD delete of this account\'s whole ROC footprint: every document row, every job row, the cached company/LLP records, and the cross-cutting module footprint (freshness cache, reminders, the denormalised CIN on FinanceDetails). Returns { documentsDeleted, jobsDeleted, companyRecordsDeleted }. Not metered — erasing your own data is never a paid action. THREE deliberate consequences: (1) the 90-day order cooldown lives ON the job row, so erasing the rows clears it and the account may order again immediately — keeping it would mean keeping a record of the past order, which the hard-delete rule forbids; (2) an in-flight order is abandoned, not blocked, and nothing resurrects it (the InstaFinancials callback matches on orderId, finds no job and is dropped); (3) credits already spent are NOT refunded. Destructive and irreversible — test workspaces only.',
+        body: {}
       }
     ]
   },
@@ -1017,6 +1039,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         method: 'GET',
         path: 'api/admin/v1/feature-requests/available',
         description: 'Admin JWT. Same catalog as the user-facing /available, used to label stored title values in the console.'
+      },
+      {
+        name: 'Admin — Decide Feature Request',
+        method: 'PATCH',
+        path: 'api/admin/v1/feature-requests/:id/status',
+        description: 'Admin JWT. Approve or reject ONE request. Needs featureRequests.update ON TOP of the router-wide featureRequests.read, so a read-only or support admin can see the backlog but cannot decide anything. status must be "approved" or "rejected" — there is no way back to "pending", because re-deciding would email the customer the same outcome twice. Optional note is trimmed, max 1000 chars, and "" / null are accepted as "no note"; any other key is rejected with 400. EMAILS THE CUSTOMER — this is the only way they ever learn the outcome, since the app has no screen showing their own requests. The success message says what actually happened: an account with no email on record answers "the customer was NOT notified" rather than claiming a mail went out. Send on a test account.',
+        pathVars: [{ key: 'id', value: '<featureRequestId>' }],
+        body: { status: 'approved', note: 'Planned for the next release.' }
       },
       {
         name: 'Admin — List Support Queries',
@@ -1624,9 +1654,9 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 
   storage: {
     key: 'storage',
-    name: 'Documents (Storage) \u2014 RETIRED',
+    name: 'Documents (Storage) — RETIRED',
     description:
-      'RETIRED \u2014 use the Vault group above. This API never stored a byte: the server wrote the literal string '
+      'RETIRED — use the Vault group above. This API never stored a byte: the server wrote the literal string '
       + '"Mock content for <name>" to local disk and the app stripped the file bytes before sending. '
       + 'Reads still answer so the shipped v1.0.3+4 build does not crash; POST /upload-file now returns 410 Gone.',
     endpoints: [
@@ -1770,6 +1800,67 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         pathVars: [{ key: 'userId', value: '<userId>' }]
       },
       {
+        name: 'List Incomplete-Signup Leads',
+        method: 'GET',
+        path: 'api/admin/v1/leads',
+        description: 'People who started signing up and stopped. Rides on users.read (a lead IS a customer record, so no new permission string was invented). READ-ONLY with respect to the draft: nothing under /leads ever mutates a PendingSignup. A lead is addressed by its OPAQUE draft id, never by phone number, so no personal data reaches a URL or an access log. Filters are AND-ed. stage and disposition accept ONE value or a REPEATED param (?stage=a&stage=b); a comma-joined string is NOT split and is rejected with 400. Unknown query keys are rejected too. page*limit becomes a Mongo skip, so page is capped at 10000 and limit at 100. createdFrom later than createdTo answers 400 instead of silently returning nothing. Opted-out and expired drafts are hidden unless you ask for them.',
+        query: [
+          { key: 'page', value: '1', description: '1-10000 (default 1)' },
+          { key: 'limit', value: '20', description: '1-100 (default 20)' },
+          { key: 'stage', value: '', description: 'optional, repeatable: mobile_sent | mobile_verified | kind_chosen | pan_verified | identity_verified | details_entered' },
+          { key: 'disposition', value: '', description: 'optional, repeatable: new | attempted | contacted | interested | not_interested | unreachable | converted' },
+          { key: 'query', value: '', description: 'optional free text, max 120 chars (bounded so it cannot become an expensive regex scan)' },
+          { key: 'createdFrom', value: '', description: 'optional ISO date' },
+          { key: 'createdTo', value: '', description: 'optional ISO date, must be on or after createdFrom' },
+          { key: 'assignedTo', value: '', description: 'optional admin id (24-char hex)' },
+          { key: 'includeOptedOut', value: '', description: 'optional true to include people who stopped the nudges (default false)' },
+          { key: 'includeExpired', value: '', description: 'optional true to include drafts past expiresAt (default false)' }
+        ]
+      },
+      {
+        name: 'Lead Funnel Stats',
+        method: 'GET',
+        path: 'api/admin/v1/leads/stats',
+        description: 'Where drafts drop out, counted per signup stage over the same population as the list. Requires users.read. Takes ONLY the four date/inclusion filters — no stage, disposition, query or assignedTo — and rejects any other key with 400. An inverted date range is a 400, not an empty funnel.',
+        query: [
+          { key: 'createdFrom', value: '', description: 'optional ISO date' },
+          { key: 'createdTo', value: '', description: 'optional ISO date, must be on or after createdFrom' },
+          { key: 'includeOptedOut', value: '', description: 'optional true (default false)' },
+          { key: 'includeExpired', value: '', description: 'optional true (default false)' }
+        ]
+      },
+      {
+        name: 'Get Lead Follow-Up',
+        method: 'GET',
+        path: 'api/admin/v1/leads/:id/follow-up',
+        description: 'The CRM side of one lead: disposition, assigned admin (id/name/email), nextFollowUpAt, lastContactedAt, notes and resume-link history. Requires users.read. A lead with no follow-up row yet is NOT a 404 — it reads as the default { disposition: "new", assignedTo: null, ... }, because the row is created lazily on first write. id is the draft id from the list.',
+        pathVars: [{ key: 'id', value: '<leadId>' }]
+      },
+      {
+        name: 'Update Lead Follow-Up',
+        method: 'PATCH',
+        path: 'api/admin/v1/leads/:id/follow-up',
+        description: 'Records an outcome, so it needs users.update, not the users.read the reads use. Send AT LEAST ONE key: an empty body is 400, and an unknown key is rejected rather than ignored. OMITTING a key leaves that field untouched, while an explicit null on assignedTo or nextFollowUpAt is an UNSET — the two are different requests. markContacted:true stamps lastContactedAt now. The acting admin email is taken from the token server-side; you cannot set it. This writes the follow-up row only and still never touches the draft.',
+        pathVars: [{ key: 'id', value: '<leadId>' }],
+        body: { disposition: 'contacted', assignedTo: null, nextFollowUpAt: '2026-11-12T09:30:00.000Z', markContacted: true }
+      },
+      {
+        name: 'Add Lead Note',
+        method: 'POST',
+        path: 'api/admin/v1/leads/:id/notes',
+        description: 'Appends one note to the lead call log. Requires users.update. 201 on success. body is required, trimmed, 1-2000 chars — whitespace alone is 400 — and no other key is accepted. Author email and timestamp come from the admin token, not the request. The list is capped at the newest 200 notes server-side so one lead cannot grow an unbounded document; older notes fall off.',
+        pathVars: [{ key: 'id', value: '<leadId>' }],
+        body: { body: 'Called, asked us to try again after Diwali.' }
+      },
+      {
+        name: 'Send Lead Resume Link',
+        method: 'POST',
+        path: 'api/admin/v1/leads/:id/resume-link',
+        description: 'SENDS A REAL SMS TO A REAL PERSON. Requires users.update; run it only against a test draft. Four refusals come before anything is sent: a number that was never verified (409), a lead that opted out of signup reminders (409), a draft past expiresAt (409, because the link would not work), and a 10-minute per-lead cooldown (429, naming the minutes left). A malformed id is 400 and an unknown one 404. The send count and timestamp are recorded on the follow-up row and the acting admin is stamped from the token.',
+        pathVars: [{ key: 'id', value: '<leadId>' }],
+        body: {}
+      },
+      {
         name: 'Block User',
         method: 'PATCH',
         path: 'api/admin/v1/users/:userId/block',
@@ -1851,7 +1942,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Broadcast to a Targeted Audience',
         method: 'POST',
         path: 'api/admin/v1/notifications/broadcast',
-        description: 'Same endpoint, with audience targeting. Filters combine with AND: planTypes (trial|business|individual|enterprise), joinedDaysAgo (signed up EXACTLY N days ago, 0 = today), expiredOnly (subscription expired), workspace (business|individual). Blocked and deleted accounts are always excluded. Errors 400 if no user matches.',
+        description: 'The same endpoint as Broadcast Notification, with audience targeting — omit "filters" entirely and it reaches everyone instead. Filters combine with AND: planTypes (trial|business|individual|enterprise), joinedDaysAgo (signed up EXACTLY N days ago, 0 = today), expiredOnly (subscription expired), workspace (business|individual). Blocked and deleted accounts are always excluded. Errors 400 if no user matches.',
         body: {
           title: 'Your plan has expired',
           message: 'Renew now to keep access to your documents.',
@@ -2224,7 +2315,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 for (const section of Object.values(API_SECTIONS)) {
   section.endpoints = section.key === 'admin'
     ? completeAdminCatalog(section.endpoints)
-    : section.endpoints.map(patchAdminEndpoint);
+    : patchAdminEndpoints(section.endpoints);
 }
 
 export function getSection(key: string): ApiSection | undefined {

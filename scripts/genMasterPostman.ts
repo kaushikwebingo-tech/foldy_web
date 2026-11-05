@@ -97,6 +97,12 @@ export function createMasterCollection(routes = serverRoutes()) {
   const included = routes.filter(route => !excludedRoute(route));
   for (const route of included) {
     const [method, routePath] = route.split(' ') as [PmEndpoint['method'], string];
+    /*
+     * A route arrives as "METHOD /path". Without the path the next line used to
+     * die on `undefined.replace`, pointing at this file rather than at the mount
+     * that produced it, so say which route is malformed.
+     */
+    if (!routePath) throw new Error(`Malformed route from the mount graph: ${JSON.stringify(route)}`);
     const path = routePath.replace(/^\//, '');
     const candidate = definitions.get(key({ method, path })) ?? definitions.get(key({ method, path: aliasOf(path) }));
     if (!candidate) { missing.push(route); continue; }
