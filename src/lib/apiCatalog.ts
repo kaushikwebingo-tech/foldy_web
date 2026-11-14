@@ -852,20 +852,37 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   roc: {
     key: 'roc',
     name: 'ROC Documents',
-    description: 'Company + LLP MCA documents from InstaFinancials. ONE guarded job drives everything: post an identifier and the server picks the stack (CIN/PAN → InstaDocs, LLPIN → LLPDocs). Delivery is asynchronous and slow (~30 min for LLPDocs, up to ~3 weeks for InstaDocs) and arrives by webhook, so poll GET /job — it reads our DB and costs no vendor call. Guards: one active job per user, and one order per 90 days counted from CREATION. Requires an active B2B plan.',
+    description: 'Company + LLP MCA documents from InstaFinancials. ONE guarded job drives everything: post an identifier and the server picks the stack (CIN/PAN → InstaDocs, LLPIN → LLPDocs). Delivery is asynchronous and slow (~30 min for LLPDocs, up to ~3 weeks for InstaDocs) and arrives by webhook, so poll GET /job — it reads our DB and costs no vendor call. Each request is its own record with its own status (GET /requests). Guards, PER COMPANY (CIN/LLPIN/PAN): one request in progress at a time, and one request per ROLLING 24 hours counted from that company\'s last DELIVERED request. Different companies run side by side. A failed or expired request uses up nothing: its credits are refunded and the company may be requested again at once. Requires an active B2B plan.',
     endpoints: [
       {
         name: 'Order Documents',
         method: 'POST',
         path: 'api/v1/b2b/roc/job',
-        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. `name` is REQUIRED — the company/LLP name as entered by the user, stored on the job and shown on the ROC profile beside the CIN (accepted as `name` or `entityName`). Returns 202 + jobId. Refuses with 409 if a job is already in flight, or 429 while the 90-day cooldown is running.',
+        description: 'The only call that spends money. Send ONE identifier: CIN or PAN (→ InstaDocs) or LLPIN (→ LLPDocs) — the type is detected from its shape. cin/pan/llpin are accepted as aliases for `identifier`. `name` is REQUIRED — the company/LLP name as entered by the user, stored on the job and shown on the ROC profile beside the CIN (accepted as `name` or `entityName`). Returns 202 + jobId. Refuses — and never charges — with 409 ROC_JOB_IN_PROGRESS if a request for this company is still running, 429 ROC_DAILY_LIMIT if this company was delivered in the last 24 hours (data.nextRequestAt says when it opens), 403 when a NEW company would exceed the plan\'s ROC limit (a company whose only requests failed takes no slot), or 502 ROC_ORDER_FAILED when the vendor refuses the order (kept in the history as failed, costs nothing, retry at once).',
         body: { identifier: 'U69202WB2024PTC269500', name: 'ACME Solutions Pvt Ltd' }
       },
       {
         name: 'Job Status',
         method: 'GET',
         path: 'api/v1/b2b/roc/job',
-        description: 'The current job + cooldown for the logged-in user. Reads our DB only (the vendor allows just 4 status pulls per order, which the reconciler cron owns), so this is free to poll. `canOrder` is the single flag the order button needs. Key job state off `status` (queued|processing|ready|failed|expired) — `error` is only ever populated on a terminal status (failed|expired), never for a job still running.'
+        description: 'LEGACY — the NEWEST request only, kept for app builds from before the request history; new clients use GET /requests. Reads our DB only (the vendor allows just 4 status pulls per order, which the reconciler cron owns), so this is free to poll. `cooldown` is always inactive (ROC has no order cooldown any more) and `canOrder` is false only while the newest request runs. Key state off `status` (queued|processing|ready|failed|expired) — `error` is only ever populated on a terminal status (failed|expired).'
+      },
+      {
+        name: 'Request History',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/requests',
+        description: 'Every ROC request this account made, newest first: { requests, total, page, limit, hasMore }. Each request: id, kind, identifierType, identifier, entityName, status (queued|processing|ready|failed|expired), documentCount, requestedAt, completedAt, error (our own words, only on failed|expired), charged (credits were taken — a refused placement never is), creditsRefunded, and company: { inProgress, canRequestAgain, nextRequestAt } — whether THAT company may be requested now and, if not, when. The ROC screen asks for limit=3; "Show more" pages the rest. Reads our DB only — free.',
+        query: [
+          { key: 'page', value: '1', description: 'optional, from 1' },
+          { key: 'limit', value: '20', description: 'optional, 1-50 (default 20)' }
+        ]
+      },
+      {
+        name: 'One Request',
+        method: 'GET',
+        path: 'api/v1/b2b/roc/requests/:id',
+        description: 'One request, in the same shape as a Request History row. Scoped to the caller: another account\'s id, or a malformed one, reads as 404 ROC_JOB_NOT_FOUND. Its documents are My Documents / Search Documents with jobId = this id.',
+        pathVars: [{ key: 'id', value: '<requestId>' }]
       },
       {
         name: 'My Documents',
@@ -934,7 +951,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Erase All My ROC Data',
         method: 'POST',
         path: 'api/v1/b2b/roc/revoke',
-        description: 'HARD delete of this account\'s whole ROC footprint: every document row, every job row, the cached company/LLP records, and the cross-cutting module footprint (freshness cache, reminders, the denormalised CIN on FinanceDetails). Returns { documentsDeleted, jobsDeleted, companyRecordsDeleted }. Not metered — erasing your own data is never a paid action. THREE deliberate consequences: (1) the 90-day order cooldown lives ON the job row, so erasing the rows clears it and the account may order again immediately — keeping it would mean keeping a record of the past order, which the hard-delete rule forbids; (2) an in-flight order is abandoned, not blocked, and nothing resurrects it (the InstaFinancials callback matches on orderId, finds no job and is dropped); (3) credits already spent are NOT refunded. Destructive and irreversible — test workspaces only.',
+        description: 'HARD delete of this account\'s whole ROC footprint: every document row, every job row, the cached company/LLP records, and the cross-cutting module footprint (freshness cache, reminders, the denormalised CIN on FinanceDetails). Returns { documentsDeleted, jobsDeleted, companyRecordsDeleted }. Not metered — erasing your own data is never a paid action. THREE deliberate consequences: (1) each company\'s 24-hour window is read from the job rows, so erasing them clears it and the account may request again immediately — keeping it would mean keeping a record of the past order, which the hard-delete rule forbids; (2) an in-flight order is abandoned, not blocked, and nothing resurrects it (the InstaFinancials callback matches on orderId, finds no job and is dropped); (3) credits already spent are NOT refunded. Destructive and irreversible — test workspaces only.',
         body: {}
       }
     ]
