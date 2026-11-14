@@ -87,7 +87,8 @@ export function workflowSections(): ApiSection[] {
       ep('6. Read credit balance', 'GET', 'user/credits'),
     ] },
     { key: 'flow-admin', name: 'Admin login and find current owner contacts', description: 'Admin credentials are separate from app credentials. Get the legacy userId from user search; do not substitute a Person or Tenant ID. Header and member owner contacts should match after an app profile save (member contacts are masked).', endpoints: [
-      { name: '1. Admin login', method: 'POST', path: 'api/admin/v1/auth/login', auth: 'none', body: { email: '{{adminEmail}}', password: '{{adminPassword}}' }, capture: { adminToken: 'data.token' } },
+      { name: '1. Admin login (password)', method: 'POST', path: 'api/admin/v1/auth/login', auth: 'none', body: { email: '{{adminEmail}}', password: '{{adminPassword}}' }, capture: { adminMfaToken: 'data.mfaToken' } },
+      { name: '1b. Admin login (authenticator code)', method: 'POST', path: 'api/admin/v1/auth/login/mfa', auth: 'none', body: { mfaToken: '{{adminMfaToken}}', code: '{{adminTotpCode}}' }, capture: { adminToken: 'data.token' } },
       { name: '2. Find user by saved contact', method: 'POST', path: 'api/admin/v1/users/search', body: { filters: { query: '{{newEmail}}', deviceTypes: [], workspaces: [], subscriptionStates: [], accountStatuses: [] }, page: 1, limit: 10 }, capture: { userId: 'data.items.0._id' } },
       { name: '3. Read current owner header', method: 'GET', path: 'api/admin/v1/users/:userId' },
       { name: '4. Compare owner member row', method: 'GET', path: 'api/admin/v1/users/:userId/team' },

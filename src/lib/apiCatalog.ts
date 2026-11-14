@@ -646,6 +646,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     endpoints: [
       { name: 'Instafinancials Webhook', method: 'POST', path: 'webhook/instafinancials', description: 'ROC/LLP job callbacks. Verifies X-Webhook-Timestamp + X-Webhook-Signature against the webhook secret.', body: {} },
       { name: 'MoneyOne Webhook', method: 'POST', path: 'webhook/moneyone', description: 'Account-Aggregator consent + FI-data-ready callbacks.', body: {} },
+      { name: 'Apple App Store Server Notification', method: 'POST', path: 'api/v1/payments/apple/notifications', auth: 'none', description: 'Apple calls this (App Store Server Notifications V2). No bearer token: the signedPayload JWS is the authentication, verified against Apple\'s root. For inspection only.', body: { signedPayload: '<App Store signed notification JWS>' } },
       { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature. payment.captured, order.paid and subscription.charged resolve the STORED PaymentOrder (or rebuild a legacy one from Razorpay) and call the same apply-once path as verify-payment. 200 for applied / already applied / not applied (flagged for support) / unattributable, 409 while in progress, 503 when the Razorpay lookup is unavailable (retryable). Unsigned deliveries (no RAZORPAY_WEBHOOK_SECRET) apply nothing unless mock mode AND the order id starts with order_mock_.', body: {} },
       {
         name: 'Sandbox DigiLocker Session Webhook',
@@ -1414,6 +1415,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         }
       },
       {
+        name: 'Verify Apple In-App Purchase',
+        method: 'POST',
+        path: 'api/v1/payments/apple/verify',
+        description: 'iOS rail. Send the StoreKit 2 signed transaction (verificationData) or its transactionId. The JWS chain must anchor in Apple\'s root and carry the App Store OIDs; the plan comes from the product id, never the body. Members need billing.purchase. Sandbox purchases are honoured on production by owner decision (logged at warn).',
+        body: { verificationData: '<StoreKit 2 signed transaction JWS>', productId: 'in.co.foldy.business.monthly', source: 'storekit2' }
+      },
+      {
         name: 'Payment History',
         method: 'GET',
         path: 'api/v1/payments/history',
@@ -1690,7 +1698,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'All mounted administrator APIs. Protected requests use {{adminToken}}, separate from the app {{token}}. Login uses {{adminEmail}} and {{adminPassword}}. Role permissions remain enforced by the server.',
     endpoints: [
       { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
-      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', body: { email: 'admin@foldy.in', password: '<password>' } },
+      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', description: 'Step 1 of 2: returns an mfaToken (and, on first sign-in, the authenticator QR code), never a session token.', body: { email: 'admin@foldy.in', password: '<password>' } },
+      { name: 'Admin Login — Authenticator Code', method: 'POST', path: 'api/admin/v1/auth/login/mfa', description: 'Step 2 of 2: the 6-digit authenticator code opens the session.', body: { mfaToken: '<mfaToken>', code: '123456' } },
       {
         name: 'Admin Forgot Password',
         method: 'POST',

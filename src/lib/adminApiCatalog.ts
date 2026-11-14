@@ -40,7 +40,8 @@ function endpoint(name: string, method: PmEndpoint['method'], path: string, extr
  * Catalog-only compatibility routes remain documented with their real refusal.
  */
 const definitions: AdminEndpoint[] = [
-  endpoint('Admin Login', 'POST', 'auth/login', { auth: 'none', body: { email: '{{adminEmail}}', password: '{{adminPassword}}' }, capture: { adminToken: 'data.token' } }),
+  endpoint('Admin Login', 'POST', 'auth/login', { auth: 'none', body: { email: '{{adminEmail}}', password: '{{adminPassword}}' }, capture: { adminMfaToken: 'data.mfaToken' }, description: 'Step 1 of 2. The right password returns a five-minute mfaToken, never a session: next "mfa" asks for an authenticator code; next "mfa_setup" also returns the QR code (qrCodeDataUrl) and key (secret) to add the account to an authenticator app on first sign-in.' }),
+  endpoint('Admin Login — Authenticator Code', 'POST', 'auth/login/mfa', { auth: 'none', body: { mfaToken: '{{adminMfaToken}}', code: '{{adminTotpCode}}' }, capture: { adminToken: 'data.token' }, description: 'Step 2 of 2. The 6-digit code from the authenticator app opens the session. Each code works once; five wrong codes lock the step for 15 minutes.' }),
   endpoint('Bootstrap First Admin (non-production only)', 'POST', 'auth/register', { auth: 'none', body: { email: '{{adminEmail}}', password: '{{adminPassword}}', fullName: 'API Test Administrator' }, description: 'Only an empty administrator database outside production may bootstrap here. Existing installations return 403; use admin-users to add employees.', statuses: [201, 403] }),
   endpoint('Admin Session', 'GET', 'auth/me'),
   endpoint('Admin Forgot Password', 'POST', 'auth/forgot-password', { auth: 'none', body: { email: '{{adminEmail}}' } }),
@@ -55,7 +56,14 @@ const definitions: AdminEndpoint[] = [
   endpoint('Get Admin Employee', 'GET', 'admin-users/:id'),
   endpoint('Update Admin Employee', 'PATCH', 'admin-users/:id', { body: { fullName: 'Updated API Test Employee' } }),
   endpoint('Change Admin Employee Role', 'PATCH', 'admin-users/:id/role', { body: { roleId: '{{adminRoleId}}' } }),
+  endpoint('Reset Admin Employee Authenticator', 'POST', 'admin-users/:id/mfa/reset', { description: 'System owner only. Removes the employee\'s authenticator app and signs them out everywhere; they set up a new one at their next sign-in. The owner\'s own: npm run admin:reset-mfa -- <email> on the server.', statuses: [200, 403] }),
   endpoint('Deactivate Admin Employee', 'DELETE', 'admin-users/:id'),
+
+  endpoint('Google Play OAuth URL', 'GET', 'app-versioning/google-auth-url', { query: [{ key: 'packageName', value: 'com.foldy.in' }], description: 'Needs appVersions.update. Returns the Google consent URL with a one-time state bound to this admin and package (10 minutes).' }),
+  endpoint('Google Play OAuth code exchange', 'POST', 'app-versioning/google-exchange', { body: { code: '{{googleAuthCode}}', state: '{{googleAuthState}}' }, description: 'Needs appVersions.update. Exchanges the code Google returned for tokens; the state must be the one this admin was issued.' }),
+  endpoint('Save Google Play refresh token', 'POST', 'app-versioning/refresh-token', { body: { refreshToken: '{{googleRefreshToken}}', packageName: 'com.foldy.in' }, description: 'Needs appVersions.update. Keep the token in a private environment, never a shared collection.' }),
+  endpoint('Set app version policy', 'POST', 'app-versioning/manual-update', { body: { platform: 'android', packageName: 'com.foldy.in', latestVersion: '1.0.3', latestVersionCode: 4, minSupportedVersion: '1.0.0', forceUpdate: false, releaseNotes: 'API test release' }, description: 'Needs appVersions.update. Changes what check-update tells installed apps — test metadata only.' }),
+  endpoint('Sync app version from Google Play', 'POST', 'app-versioning/sync', { body: { packageName: 'com.foldy.in' }, description: 'Needs appVersions.update. Reads the live track from Google Play now instead of waiting for the cache.' }),
 
   endpoint('List Admin Roles', 'GET', 'roles'),
   endpoint('Admin Permission Options', 'GET', 'roles/options'),

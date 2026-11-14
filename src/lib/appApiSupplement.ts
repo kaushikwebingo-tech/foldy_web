@@ -183,16 +183,7 @@ for (const prefix of ['api/v1/app-versioning', 'api/v1']) {
     ep('Check app version (query alias)', 'GET', `${prefix}/check-update`, {
       auth: 'none', query: [{ key: 'current_version', value: '{{currentVersion}}' }, { key: 'platform', value: 'android' }, { key: 'package', value: 'com.foldy.in' }],
     }),
-    ep('Google Play OAuth URL', 'GET', `${prefix}/google-auth-url`, { auth: 'none', description: 'Operational OAuth setup endpoint. Use only against your local/staging server and configured Google developer account.' }),
-    ep('Google Play OAuth callback', 'GET', `${prefix}/google-callback`, { auth: 'none', query: [{ key: 'code', value: '{{googleAuthCode}}' }], description: 'Use the real authorization code returned by Google. Do not paste OAuth secrets into a shared collection.' }),
-    ep('Save Google Play refresh token — operational mutation', 'POST', `${prefix}/refresh-token`, {
-      auth: 'none', body: { refreshToken: '{{googleRefreshToken}}', packageName: 'com.foldy.in' },
-      description: 'MANUAL ONLY: mutates Google Play integration credentials. This route currently has no auth middleware in the server route file. Do not bulk-run; use a local/staging server and keep the refresh token in a private Postman environment.',
-    }),
-    ep('Set app version metadata — operational mutation', 'POST', `${prefix}/manual-update`, {
-      auth: 'none', body: { platform: 'android', packageName: 'com.foldy.in', latestVersion: '1.0.3', latestVersionCode: 4, minSupportedVersion: '1.0.0', forceUpdate: false, releaseNotes: 'API test release', cacheTtlMinutes: 60 },
-      description: 'MANUAL ONLY: changes app update policy. This route currently has no auth middleware in the server route file. Do not bulk-run; use only local/staging test metadata.',
-    }),
+    ep('Google Play OAuth callback', 'GET', `${prefix}/google-callback`, { auth: 'none', query: [{ key: 'code', value: '{{googleAuthCode}}' }, { key: 'state', value: '{{googleAuthState}}' }], description: 'Google redirects the browser here after the admin started the flow (admin app-versioning/google-auth-url). The one-time state ties the code to that admin; a missing, reused or foreign state is refused. The Google Play admin operations moved to the admin API (audit CFG-01/PAY-02).' }),
   );
 }
 for (const suffix of ['check-update', 'check-update/:current_version']) {
@@ -327,8 +318,8 @@ const corrections: ApiSection = {
       description: 'Successful empty items[] is valid. Select a returned tdsId and its downloadLink; do not invent IDs or reuse a statement from another account.',
     }),
     ep('Render26AS statement PDF', 'POST', 'api/v1/income-tax/:itType', {
-      pathVars: [{ key: 'itType', value: '26as' }], body: { jsonUrl: '{{statementJsonUrl}}', pan: '{{pan}}', financialYear: '{{financialYear}}' },
-      description: 'The required key is jsonUrl, not downloadLink. Supply the HTTPS downloadLink of your own fetched26AS statement as jsonUrl. The server verifies ownership, renders PDF bytes and meters download credits. For ITR change itType to itr-x and use itrJsonUrl; optional ITR metadata follows its separate validator.',
+      pathVars: [{ key: 'itType', value: '26as' }], body: { jsonUrl: '{{statementJsonUrl}}' },
+      description: 'The required key is jsonUrl, not downloadLink. Supply the HTTPS downloadLink of your own fetched26AS statement as jsonUrl. The server verifies ownership, renders PDF bytes and meters download credits. For ITR change itType to itr-x and use itrJsonUrl. jsonUrl is the only field: every printed value comes from the provider record, and any override (pan, name, income…) is refused with 400 (audit INT-03).',
     }),
     ep('Verify actual checkout payment', 'POST', 'api/v1/payments/verify-payment', {
       body: { razorpay_order_id: '{{razorpayOrderId}}', razorpay_payment_id: '{{razorpayPaymentId}}', razorpay_signature: '{{razorpaySignature}}' },
