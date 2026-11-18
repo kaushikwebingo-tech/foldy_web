@@ -13,7 +13,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   auth: {
     key: 'auth',
     name: 'Auth & Session',
-    description: 'Session helpers: push-token registration and the authenticated user\'s plan/storage status (logout is in the Identity section). Login & registration are PAN-first (see Onboarding). Set {{token}} to a logged-in JWT for the protected calls.',
+    description: 'What is LEFT of the legacy `authRoutes`: forgot-password, the emailed session-logout pair, push-token registration and the authenticated user\'s plan/storage status. Signing in and signing up are NOT here — they are the Identity section (`signupRoutes` + `identityAuthRoutes`); nothing PAN-first survives on this router. Set {{token}} to a logged-in JWT for the protected calls.',
     endpoints: [
       {
         name: 'Forgot Password',
@@ -106,9 +106,11 @@ export const API_SECTIONS: Record<string, ApiSection> = {
    *
    * These routes are LIVE on the server today — `signupRoutes`, `identityAuthRoutes`
    * (plus its `tenantRouter`), `workspaceRoutes` and `metaRoutes`, all mounted in
-   * `routes/app/v1/index.ts` AHEAD of the legacy PAN-first `authRoutes`, which still
-   * answers until §12 retires it. `POST /auth/logout` is the one path declared in
-   * both files, and the new handler shadows the legacy one as a superset.
+   * `routes/app/v1/index.ts` AHEAD of what remains of `authRoutes`. The PAN-first
+   * login and registration are GONE from the server: `authRoutes` now mounts only
+   * forgot-password, the emailed session-logout pair, update-push-token and logout.
+   * `POST /auth/logout` is the one path declared in both files, and the new handler
+   * shadows the legacy one as a superset.
    * GET /v1/workspace/access (§7.12) and GET /v1/meta/permissions (§6.4) are BUILT.
    */
   identity: {
@@ -204,7 +206,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Sign In',
         method: 'POST',
         path: 'api/v1/auth/login',
-        description: '§5.1. A known handset answers with a session; an unknown one, or one unseen for 30 days, answers a ticket and sends a code (§5.2) — a `next`, not an error. `deviceSecret` is a secret the app STORED, never an identifier the handset claims about itself, and it lives in secure storage so a forced sign-out does not make every sign-out look like a new phone.',
+        description: '§5.1. A known handset answers with a session; an unknown one, or one unseen for 30 days, answers a ticket and sends a code (§5.2) — a `next`, not an error. `deviceSecret` is a secret the app STORED, never an identifier the handset claims about itself, and it lives in secure storage so a forced sign-out does not make every sign-out look like a new phone. A staff member signing in with the temporary password from their welcome email gets neither: 200 { next: "set_password", token, person, message } — a set-password-only session that reaches nothing but POST /auth/password/first-set (a workspace switch is 403 AUTH_PASSWORD_CHANGE_REQUIRED until they choose their own).',
         body: { identifier: '9876543210', password: '<password>', deviceSecret: '<stored secret, optional>' }
       },
       {
@@ -318,21 +320,24 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 
   /*
    * Staff on the NEW model — `routes/app/v1/staffRoutes.ts` + `teamRoleRoutes.ts`
-   * mounted at `/team`, and the staff member's own half under `/auth/setup`
-   * (`identityAuthRoutes`). RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5.
+   * mounted at `/team`, and the staff member's own half under
+   * `/auth/password/first-set` (`identityAuthRoutes`). RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5.
    *
    * GONE, NOT MISSING: every invitation / claim / `login/password` /
    * `pendingInvites` row and the `/account/memberships` family (create, my
    * memberships, enter, leave). Decision R21: no invitation exists anywhere, and
-   * R22: a new staff member sets their password through an EMAILED single-use
-   * 72-hour link. The `/account/members` family below is still mounted
+   * R22: a new staff member is emailed their username and a TEMPORARY password
+   * and must replace it at first sign-in. The emailed single-use link, its
+   * `/auth/setup` HTML page and `/auth/setup/complete` are GONE — see
+   * `staffService.createStaff` and `staffSetupService.resendSetupEmail`.
+   * The `/account/members` family below is still mounted
    * (`accountMemberRoutes`) and is kept only as LEGACY.
    */
   account: {
     key: 'account',
     name: 'Team & Access (staff)',
     description:
-      'A company workspace\'s staff on the NEW identity model (RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5). There is NO invitation anywhere (decision R21): the admin CREATES the staff member ACTIVE at once, and the person chooses their own password through an EMAILED single-use 72-hour link (R22) — the admin never sees, sets or resets it. ' +
+      'A company workspace\'s staff on the NEW identity model (RBAC_MASTER_PLAN.md §4.1-§4.4, §6, §7.3, §7.10, §8.5). There is NO invitation anywhere (decision R21): the admin CREATES the staff member ACTIVE at once, and the person is emailed their username and a TEMPORARY password (R22, valid 72 hours, at most 3 sends) which they must replace at first sign-in: POST /auth/login answers next: "set_password" and they choose their own on POST /auth/password/first-set. The admin never sees it and cannot set or reset it. ' +
       'Every /team route needs a NEW-model session ({{token}} from Identity → Sign In: sub + sid + tid + mid); the tenant comes only from that session (§8.7 rule 2). Reads need team.read; every staff write needs team.manage, which the owner holds through the everything-role and an Administrator holds too (L1). ' +
       'Only the OWNER may assign a role carrying team.manage or roles.manage (403 RBAC_OWNER_ONLY); nobody may assign a role granting more than they hold (403 RBAC_PERMISSION_DENIED); a non-owner may not suspend, remove or re-role a colleague holding either (403 RBAC_SENIORITY_DENIED); nobody acts on their own row or the owner\'s (403 RBAC_PERMISSION_DENIED, data.reason self | owner_membership). An individual workspace has no team: 403 TEAM_UNAVAILABLE. ' +
       'FIVE actions need an X-Step-Up header (§8.5, Class B, reusable for 10 minutes): team.staff for suspend, reactivate, remove and setup/resend, team.staff.role for the role change. Mint it with Identity → Step-Up Start then Verify and add the header by hand; without it the answer is 403 AUTH_STEP_UP_REQUIRED { action, class, fresh }. ' +
@@ -367,7 +372,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Add Staff Member',
         method: 'POST',
         path: 'api/v1/team/staff',
-        description: 'team.manage (no X-Step-Up on this route). §4.1\'s one screen with a CLOSED body — unknown keys are 422, so no username, password, pan, status or isOwner can ride along: name 2-80; mobile, Indian only (10 digits starting 6-9, +91 / 0 tolerated); email REQUIRED, ≤ 254 — the set-password link goes there; role, a 24-hex id from List Team Roles (another workspace\'s → 404); title optional, ≤ 60. The member is ACTIVE at once — no invitation, no `invited` status (R21). A person new to Foldy is emailed a single-use set-password link valid 72 hours (R22); one who already has an account is emailed a plain notice. 201 "Staff member added." { membershipId, name, role: { id, name }, status: "active", title?, seats: { used, limit } } — BYTE-IDENTICAL in both branches (§8.2), so the response never answers "is this mobile on Foldy?". Refusals: 409 TEAM_MEMBER_EXISTS { membershipId } (already someone in THIS workspace); 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } or 409 TENANT_PLAN_CHANGE_PENDING, and nothing is written; 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign; 403 TEAM_UNAVAILABLE on an individual workspace; 429 OTP_SEND_LIMIT { retryAfterSeconds } past 10 adds per 15 minutes or 40 per day; 503 when the server cannot build the link.',
+        description: 'team.manage (no X-Step-Up on this route). §4.1\'s one screen with a CLOSED body — unknown keys are 422, so no username, password, pan, status or isOwner can ride along: name 2-80; mobile, Indian only (10 digits starting 6-9, +91 / 0 tolerated); email REQUIRED, ≤ 254 — the username and temporary password go there; role, a 24-hex id from List Team Roles (another workspace\'s → 404); title optional, ≤ 60. The member is ACTIVE at once — no invitation, no `invited` status (R21). A person new to Foldy is emailed their username and a temporary password, valid 72 hours and replaced at first sign-in (R22); one who already has an account keeps their own password and is emailed a plain notice. 201 "Staff member added." { membershipId, name, role: { id, name }, status: "active", title?, seats: { used, limit } } — BYTE-IDENTICAL in both branches (§8.2), so the response never answers "is this mobile on Foldy?". Refusals: 409 TEAM_MEMBER_EXISTS { membershipId } (already someone in THIS workspace); 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } or 409 TENANT_PLAN_CHANGE_PENDING, and nothing is written; 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign; 403 TEAM_UNAVAILABLE on an individual workspace; 429 OTP_SEND_LIMIT { retryAfterSeconds } past 10 adds per 15 minutes or 40 per day; 503 when Foldy has no public address configured (`requireSetupOrigin`).',
         body: { name: 'Asha Nair', mobile: '9876543210', email: 'asha@example.com', role: '<roles[].id from List Team Roles>', title: 'Accounts — GST' }
       },
       // ── §4.4 — the membership actions, X-Step-Up gated ──
@@ -405,23 +410,8 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Resend Set-Password Email',
         method: 'POST',
         path: 'api/v1/team/staff/:id/setup/resend',
-        description: 'team.manage + X-Step-Up team.staff. Takes NO body — the link is system-generated. Only while the row\'s setupPending is true and only for the workspace that CREATED the person (row.can.resendSetup); once they have chosen a password it is theirs: 403 RBAC_NOT_MANAGED_PERSON (they use Forgot password). Re-mints the link and restarts the 72-hour window. 429 OTP_SEND_LIMIT { retryAfterSeconds } within 60 s of the last send or after 3 sends in one window; 422 VALIDATION_FAILED when no email is on file. 200 { membershipId, person: { id, name }, sentTo (masked) | null, expiresAt, sends: { used, limit }, resendIn } — identical whether the email went out or was dropped by the silent recipient cap (§8.2). The link is never in the response.',
+        description: 'team.manage + X-Step-Up team.staff. Takes NO body — the temporary password is system-generated. Only while the row\'s setupPending is true and only for the workspace that CREATED the person (row.can.resendSetup); once they have chosen a password it is theirs: 403 RBAC_NOT_MANAGED_PERSON (they use Forgot password). Mints a FRESH temporary password (replacing the one on file) and restarts the 72-hour window. 429 OTP_SEND_LIMIT { retryAfterSeconds } within 60 s of the last send or after 3 sends in one window; 422 VALIDATION_FAILED when no email is on file. 200 { membershipId, person: { id, name }, sentTo (masked) | null, expiresAt, sends: { used, limit }, resendIn } — identical whether the email went out or was dropped by the silent recipient cap (§8.2). The password is never in the response.',
         pathVars: [{ key: 'id', value: '<membershipId>' }]
-      },
-      // ── §4.2 — the staff member's own half, PUBLIC ──
-      {
-        name: 'Set-Password Page (from the email)',
-        method: 'GET',
-        path: 'api/v1/auth/setup',
-        description: 'PUBLIC — the page the emailed link opens. Server-rendered HTML, NOT JSON and not the ApiResponse envelope (Cache-Control: no-store). t = <membershipId>.<secret> exactly as the link carried it. 200 with the password form while the link is live; 422 with the same "This link is no longer valid" page for every way a link can be wrong (§8.2). The form posts to Complete Setup. Under the identity family\'s per-IP limiter; no {{token}} is needed.',
-        query: [{ key: 't', value: '<membershipId>.<secret from the email>' }]
-      },
-      {
-        name: 'Complete Setup (first password)',
-        method: 'POST',
-        path: 'api/v1/auth/setup/complete',
-        description: 'PUBLIC. Closed body { t, password }. Writes the staff member\'s FIRST password, once. Signup\'s password policy applies (at least 10 characters; one built from their name, mobile or the work email is 422 AUTH_WEAK_PASSWORD). A dead, spent, malformed or unknown link is one 422 AUTH_TICKET_INVALID sentence. The link is burned and the address it reached becomes their verified email when nobody else holds it. MINTS NO SESSION: 200 { next: "done", message } — they then sign in on POST /auth/login like anybody else.',
-        body: { t: '<membershipId>.<secret from the email>', password: '<their new password>' }
       },
       // ── LEGACY — accountMemberRoutes on the legacy JWT (the Activity Log entry below is NOT legacy) ──
       {
@@ -500,62 +490,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         query: [
           { key: 'limit', value: '50', description: '1-100, default 50. Optional (add only with a value — empty is 422): area, actor, operation, from, to, cursor' }
         ]
-      }
-    ]
-  },
-
-  onboarding: {
-    key: 'onboarding',
-    name: 'Onboarding (PAN-first)',
-    description: 'Single entry: POST /onboarding/pan handles both registration and login. New PAN → PAN + name + DOB demographic match (Sandbox) → registrationToken; registration then runs 2 OTP layers — Phone → Email — and create-profile returns a JWT. Existing PAN → SMS OTP to the registered mobile, then pan/verify-otp returns the JWT. All OTPs print to the server console in dev.',
-    endpoints: [
-      {
-        name: 'Check PAN (registered?)',
-        method: 'POST',
-        path: 'api/v1/onboarding/pan/check',
-        description: 'Presence check — is this PAN already registered? Returns { exists, mode } (login | register). No OTP, no side effects.',
-        body: { pan: 'ABCDE1234F' }
-      },
-      {
-        name: 'PAN Entry (Register or Login)',
-        method: 'POST',
-        path: 'api/v1/onboarding/pan',
-        description: 'New PAN → demographic match on PAN + name + dob; on success returns mode:"register" + registrationToken + name. Existing PAN → SMS OTP to the registered mobile, returns mode:"login" + referenceId (name/dob ignored).',
-        body: { pan: 'ABCDE1234F', name: 'John Doe', dob: '01/01/1990' }
-      },
-      {
-        name: 'Verify OTP & Login (existing PAN)',
-        method: 'POST',
-        path: 'api/v1/onboarding/pan/verify-otp',
-        description: 'Login only: verifies the SMS OTP from PAN Entry and returns { mode:"login", token, user } (JWT).',
-        body: { referenceId: '<referenceId>', otp: '123456' }
-      },
-      {
-        name: 'Send OTP — Phone / Email (Layers 1 & 2)',
-        method: 'POST',
-        path: 'api/v1/onboarding/otp/send',
-        description: 'channel = "phone" or "email". Requires the registrationToken from PAN Entry.',
-        body: { registrationToken: '<registrationToken>', channel: 'phone', value: '9876543210' }
-      },
-      {
-        name: 'Verify OTP — Phone / Email (Layers 1 & 2)',
-        method: 'POST',
-        path: 'api/v1/onboarding/otp/verify',
-        body: { registrationToken: '<registrationToken>', channel: 'phone', otp: '123456' }
-      },
-      {
-        name: 'Verify via DigiLocker',
-        method: 'POST',
-        path: 'api/v1/onboarding/digilocker/verify',
-        description: 'Identity check via DigiLocker during onboarding. Rate-limited and pre-JWT.',
-        body: {}
-      },
-      {
-        name: 'Create Profile (auto-login)',
-        method: 'POST',
-        path: 'api/v1/onboarding/create-profile',
-        description: 'Requires Phone + Email verified. Returns { token, user }. name defaults to the identity-matched name.',
-        body: { registrationToken: '<registrationToken>', name: 'John Doe' }
       }
     ]
   },
@@ -968,7 +902,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   profile: {
     key: 'profile',
     name: 'Profile',
-    description: 'View + edit the logged-in user\'s profile. Name/image update immediately; email/phone changes are OTP-verified (request-otp → verify) and apply only when every changed channel is verified. Set {{token}} to a user JWT.',
+    description: 'View + edit the logged-in person\'s profile on the legacy `/user` routes. Name/image update immediately. A SAVED email or mobile does NOT change here: `/user/profile/contact/request-otp` and `/verify` are compatibility stubs that answer a flat 409 { next: \'verify_contact\' } and send no code — the live flow is /auth/contact/request → /verify → /commit in the Identity — Contact, Recovery and Account Lifecycle section, where only the commit writes. Set {{token}} to a user JWT.',
     endpoints: [
       {
         name: 'Get Profile',
@@ -987,20 +921,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Remove Profile Image',
         method: 'DELETE',
         path: 'api/v1/user/profile/image'
-      },
-      {
-        name: 'Request Contact OTP',
-        method: 'POST',
-        path: 'api/v1/user/profile/contact/request-otp',
-        description: 'Send OTP to the new email and/or phone (only the changed field(s)). Leave one out to keep it unchanged.',
-        body: { email: 'new@example.com', phone: '9876543210' }
-      },
-      {
-        name: 'Verify Contact OTP',
-        method: 'POST',
-        path: 'api/v1/user/profile/contact/verify',
-        description: 'Applies the change only when every changed channel is verified; if one is unverified, nothing updates.',
-        body: { emailOtp: '123456', phoneOtp: '123456' }
       }
     ]
   },
@@ -1359,7 +1279,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
   digilocker: {
     key: 'digilocker',
     name: 'DigiLocker',
-    description: 'DigiLocker KYC — verify, start a consent session, fetch documents. Set {{token}}.',
+    description: 'DigiLocker KYC. The session itself runs inside signup (Identity — Signup Screen 4), which is where the live routes are; the only thing mounted here is the public OAuth redirect target. The standalone verify-account / sessions family was retired with the PAN-first onboarding.',
     endpoints: [
       {
         name: 'OAuth Callback',
@@ -1368,36 +1288,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'PUBLIC OAuth redirect target — DigiLocker/Sandbox sends the BROWSER here. Listed for inspection; the app never calls it directly.',
         query: [{ key: 'code', value: '<oauth-code>' }, { key: 'state', value: '<state>' }]
       },
-      {
-        name: 'Verify Account',
-        method: 'POST',
-        path: 'api/v1/digilocker/verify-account',
-        body: { aadhaar_number: '123456789012', mobile: '9876543210' }
-      },
-      {
-        name: 'Initiate Session',
-        method: 'POST',
-        path: 'api/v1/digilocker/sessions/init',
-        body: { doc_types: ['aadhaar', 'pan'], redirect_url: 'http://localhost:3000/digilocker', flow: 'signin' }
-      },
-      {
-        name: 'Session Status',
-        method: 'GET',
-        path: 'api/v1/digilocker/sessions/:session_id/status',
-        pathVars: [{ key: 'session_id', value: '<session_id>' }]
-      },
-      {
-        name: 'User Profile',
-        method: 'GET',
-        path: 'api/v1/digilocker/sessions/:session_id/profile',
-        pathVars: [{ key: 'session_id', value: '<session_id>' }]
-      },
-      {
-        name: 'Fetch Document',
-        method: 'GET',
-        path: 'api/v1/digilocker/sessions/:session_id/documents/:doc_type',
-        pathVars: [{ key: 'session_id', value: '<session_id>' }, { key: 'doc_type', value: 'aadhaar' }]
-      }
     ]
   },
 

@@ -4,7 +4,7 @@ import { Field, SelectField } from '@/components/Field';
 import PageHeader from '@/components/PageHeader';
 import { accountApi } from '@/api/accountApi';
 import { client } from '@/api/client';
-import { getApiOrigin, getToken } from '@/lib/utils';
+import { getToken } from '@/lib/utils';
 import { Users } from 'lucide-react';
 
 /*
@@ -13,9 +13,11 @@ import { Users } from 'lucide-react';
  * identityAuthRoutes}.ts, mounted at /api/v1/{team,workspace,meta,auth}.
  *
  * NO INVITATION EXISTS ANYWHERE (decision R21): the admin creates the staff member
- * ACTIVE at once, and the person sets their own password through an EMAILED
- * single-use 72-hour link (R22). There is no claim, no temporary password and no
- * `invited` status, so this page has no card for any of them.
+ * ACTIVE at once, and a person new to Foldy is emailed their username and a
+ * TEMPORARY password (R22, 72 hours, at most 3 sends) which they must replace at
+ * their first sign-in — `/auth/login` answers `next: 'set_password'` and they
+ * choose their own on `/auth/password/first-set`. There is no claim, no emailed
+ * link and no `invited` status, so this page has no card for any of them.
  *
  * FIVE ACTIONS ARE STEP-UP GATED (§8.5, Class B): `team.staff` for suspend,
  * reactivate, remove and setup/resend, `team.staff.role` for the role change. The
@@ -98,9 +100,9 @@ export default function TeamPage() {
   const [suspendReason, setSuspendReason] = useState('');
   const [ackShrink, setAckShrink] = useState(false);
 
-  // §4.2 — the staff member's own half (public)
-  const [setupT, setSetupT] = useState('');
+  // §4.2 — the staff member's own half (their set-password-only session)
   const [setupPassword, setSetupPassword] = useState('');
+  const [noticeVersion, setNoticeVersion] = useState('');
 
   // Activity log
   const [area, setArea] = useState('');
@@ -136,15 +138,11 @@ export default function TeamPage() {
     if (!held?.token) return 'none held — the server will answer 403 AUTH_STEP_UP_REQUIRED';
     return held.expiresAt ? `held, expires ${held.expiresAt}` : 'held (pasted)';
   };
-  const setupPageUrl = setupT.trim()
-    ? `${getApiOrigin()}/api/v1/auth/setup?t=${encodeURIComponent(setupT.trim())}`
-    : '';
-
   return (
     <div className="max-w-3xl">
       <PageHeader
         title="Team & Access"
-        subtitle="Staff on the new identity model (§4.1-§4.4): the admin creates a member ACTIVE at once and the person sets their password from an emailed 72-hour link — there is no invitation anywhere (R21, R22). Five actions need an X-Step-Up token (§8.5)."
+        subtitle="Staff on the new identity model (§4.1-§4.4): the admin creates a member ACTIVE at once and the person replaces an emailed temporary password at their first sign-in — there is no invitation anywhere (R21, R22). Five actions need an X-Step-Up token (§8.5)."
         icon={<Users size={18} />}
         badge="Auth Required"
         postmanSection="account"
@@ -257,7 +255,7 @@ export default function TeamPage() {
           title="Add Staff Member"
           method="POST"
           endpoint="/api/v1/team/staff"
-          description="team.manage. CLOSED body — unknown keys are 422. Email is REQUIRED: the single-use 72-hour set-password link goes there (R22). The member is active at once. 201 { membershipId, name, role, status: 'active', title?, seats } — byte-identical whether the mobile was already on Foldy or not (§8.2). 409 TEAM_MEMBER_EXISTS, 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } (nothing written), 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign."
+          description="team.manage. CLOSED body — unknown keys are 422. Email is REQUIRED: the username and, for a person new to Foldy, a temporary password go there (R22, 72 hours); one who already has an account keeps their own password and is emailed a plain notice. The member is active at once. 201 { membershipId, name, role, status: 'active', title?, seats } — byte-identical whether the mobile was already on Foldy or not (§8.2). 409 TEAM_MEMBER_EXISTS, 409 TENANT_SEAT_UNAVAILABLE { limit, used, needed } (nothing written), 403 RBAC_OWNER_ONLY / RBAC_PERMISSION_DENIED for a role you may not assign."
           buttonLabel="Add"
           onSubmit={() =>
             client.post('/team/staff', {
@@ -408,10 +406,10 @@ export default function TeamPage() {
         />
 
         <ApiCard
-          title="Resend Set-Password Email"
+          title="Resend Temporary Password"
           method="POST"
           endpoint="/api/v1/team/staff/:id/setup/resend"
-          description={`X-Step-Up team.staff (${heldFor('team.staff')}). No body. Only while setupPending and only for the workspace that created the person (row.can.resendSetup) — otherwise 403 RBAC_NOT_MANAGED_PERSON. 429 OTP_SEND_LIMIT within 60 s or after 3 sends in one 72-hour window. Answers { sentTo (masked), expiresAt, sends { used, limit }, resendIn } and never the link.`}
+          description={`X-Step-Up team.staff (${heldFor('team.staff')}). No body. Mints a FRESH temporary password (replacing the one on file) and restarts the 72-hour window. Only while setupPending and only for the workspace that created the person (row.can.resendSetup) — otherwise 403 RBAC_NOT_MANAGED_PERSON. 422 when there is no email address on file. 429 OTP_SEND_LIMIT within 60 s or after 3 sends in one 72-hour window. Answers { sentTo (masked), expiresAt, sends { used, limit }, resendIn } and never the password.`}
           buttonLabel="Resend"
           onSubmit={() =>
             client.post(`/team/staff/${need(staffId, 'Membership ID')}/setup/resend`, undefined, {
@@ -421,28 +419,23 @@ export default function TeamPage() {
         />
 
         {/* ---------- The staff member's own half ---------- */}
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Staff member · the emailed link (public)</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 pt-4">Staff member · their first sign-in</p>
 
         <ApiCard
-          title="Complete Setup (first password)"
+          title="Set First Password"
           method="POST"
-          endpoint="/api/v1/auth/setup/complete"
-          description="PUBLIC. What the page GET /api/v1/auth/setup?t= (server-rendered HTML, not JSON) posts. t = <membershipId>.<secret> as the link carried it. Password policy is signup's (≥ 10 characters; 422 AUTH_WEAK_PASSWORD). Any bad link is one 422 AUTH_TICKET_INVALID. Mints NO session: 200 { next: 'done', message }, then they sign in on /auth/login."
+          endpoint="/api/v1/auth/password/first-set"
+          description="The staff member's own half. There is no emailed link: they sign in on POST /auth/login with the username and TEMPORARY password from their welcome email, that answers 200 { next: 'set_password', token, person, message }, and THAT token (stored by the Sign In card on /identity) is the only session this route accepts — a normal app token is 403. Password policy is signup's (≥ 10 characters, and not close to their name, mobile or email; 422 AUTH_WEAK_PASSWORD), and reusing the temporary one is refused. A person who is not awaiting one is a flat 422 AUTH_TICKET_INVALID. Mints NO session and ends every existing one: 200 { message }, then they sign in again with their own password."
           buttonLabel="Set Password"
-          onSubmit={() => client.post('/auth/setup/complete', { t: setupT.trim(), password: setupPassword })}
+          onSubmit={() =>
+            client.post('/auth/password/first-set', {
+              newPassword: setupPassword,
+              ...(noticeVersion.trim() ? { noticeVersion: noticeVersion.trim() } : {}),
+            })
+          }
         >
-          <Field label="t (from the emailed link)" value={setupT} onChange={setSetupT} placeholder="<membershipId>.<secret>" fullWidth />
           <Field label="New password" value={setupPassword} onChange={setSetupPassword} placeholder="at least 10 characters" type="password" />
-          {setupPageUrl ? (
-            <a
-              href={setupPageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="self-end text-xs font-semibold text-[#1A73E8] hover:underline"
-            >
-              Open the set-password page ↗
-            </a>
-          ) : null}
+          <Field label="noticeVersion (optional)" value={noticeVersion} onChange={setNoticeVersion} placeholder="blank → the server's current notice" />
         </ApiCard>
 
         <ApiCard

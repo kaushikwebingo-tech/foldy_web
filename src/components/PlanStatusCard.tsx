@@ -71,13 +71,13 @@ export default function PlanStatusCard() {
         </div>
         <div className="flex-1">
           <p className="text-sm font-semibold text-slate-600">No active session</p>
-          <p className="text-xs text-slate-400">Log in to see your plan status and time remaining.</p>
+          <p className="text-xs text-slate-400">Sign in on Identity to see your plan status and time remaining.</p>
         </div>
         <button
-          onClick={() => navigate('/login')}
+          onClick={() => navigate('/identity')}
           className="text-xs font-semibold text-[#1A73E8] hover:underline whitespace-nowrap"
         >
-          Login →
+          Identity →
         </button>
       </div>
     );

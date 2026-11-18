@@ -1,21 +1,20 @@
 import { getToken } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import {
-  LogIn, User, Building2,
+  KeyRound, LogIn, Building2,
   Receipt, FolderOpen, CreditCard,
-  HardDrive, ShieldCheck, ArrowRight,
+  ShieldCheck, ArrowRight,
 } from 'lucide-react';
 import PlanStatusCard from '@/components/PlanStatusCard';
 
-const ALL_MODULES = [
-  { label: 'Login / OTP',     path: '/login',          icon: <LogIn size={20} />,       desc: 'Phone OTP auth + trial status',          badge: 'Public', authHide: true  },
-  { label: 'Onboarding',      path: '/onboarding',     icon: <User size={20} />,        desc: 'PAN · Aadhaar · GSTIN · Bank KYC',        badge: 'Public', authHide: true  },
-  { label: 'GST',             path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'Profiles · authorise · summaries · filing status', badge: 'B2B', authHide: false },
-  { label: 'TDS',             path: '/tds',            icon: <Receipt size={20} />,     desc: 'TRACES Form 16 / 16A jobs',               badge: 'B2B',    authHide: false },
-  { label: 'Storage',         path: '/storage',        icon: <FolderOpen size={20} />,  desc: 'Document vault · folders · files',        badge: 'Auth',   authHide: false },
-  { label: 'Payments',        path: '/payments',       icon: <CreditCard size={20} />,  desc: 'Razorpay order creation & verification',  badge: 'Auth',   authHide: false },
-  { label: 'DigiLocker',      path: '/digilocker',     icon: <HardDrive size={20} />,   desc: 'Government document fetch via UIDAI',     badge: 'Public', authHide: false },
-  { label: 'Admin Panel',     path: '/admin',          icon: <ShieldCheck size={20} />, desc: 'Approve / reject · user management',      badge: 'Admin',  authHide: false },
+const MODULES = [
+  { label: 'Identity',        path: '/identity',       icon: <KeyRound size={20} />,    desc: 'Signup · sign-in · workspaces · email gate', badge: 'Public' },
+  { label: 'Session & Plan',  path: '/login',          icon: <LogIn size={20} />,       desc: 'Plan status · profile · sessions · sign out', badge: 'Auth' },
+  { label: 'GST',             path: '/gst-profile',    icon: <Building2 size={20} />,   desc: 'Profiles · authorise · summaries · filing status', badge: 'B2B' },
+  { label: 'TDS',             path: '/tds',            icon: <Receipt size={20} />,     desc: 'TRACES Form 16 / 16A jobs',               badge: 'B2B' },
+  { label: 'Storage',         path: '/storage',        icon: <FolderOpen size={20} />,  desc: 'Document vault · folders · files',        badge: 'Auth' },
+  { label: 'Payments',        path: '/payments',       icon: <CreditCard size={20} />,  desc: 'Razorpay order creation & verification',  badge: 'Auth' },
+  { label: 'Admin Panel',     path: '/admin',          icon: <ShieldCheck size={20} />, desc: 'Approve / reject · user management',      badge: 'Admin' },
 ];
 
 const BADGE_STYLES: Record<string, string> = {
@@ -28,7 +27,6 @@ const BADGE_STYLES: Record<string, string> = {
 export default function DashboardPage() {
   const navigate  = useNavigate();
   const hasToken  = !!getToken();
-  const MODULES   = ALL_MODULES.filter(m => !(hasToken && m.authHide));
 
   return (
     <div>
@@ -41,7 +39,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold mb-2">Foldy API Test Console</h1>
         <p className="text-sm text-slate-300 max-w-xl">
           Test every backend API endpoint from this interface. All responses are shown inline.
-          Start by logging in via OTP to get your JWT, then explore the B2B and storage modules.
+          Start on Identity — sign up, or sign in with one box and a password — then explore the B2B and storage modules.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {hasToken ? (
@@ -52,11 +50,11 @@ export default function DashboardPage() {
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded-full px-3 py-1">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />
-              Not logged in — go to Login to get a token
+              No session — sign in on Identity to get a token
             </span>
           )}
           <span className="inline-flex items-center gap-1.5 text-xs bg-white/10 text-slate-300 border border-white/10 rounded-full px-3 py-1">
-            {ALL_MODULES.length} modules · {Object.keys(MODULES).length} API groups
+            {MODULES.length} modules
           </span>
         </div>
       </div>

@@ -94,6 +94,14 @@ export function createMasterCollection(routes = serverRoutes()) {
   for (const ep of CORE_ENDPOINTS) definitions.set(key(ep), { ep, section: 'Identity — Signup, Sign-in and Security' });
   const groups = new Map<string, PmEndpoint[]>();
   const missing: string[] = [];
+  /*
+   * Both directions, or the catalog rots. Server route with no entry was always
+   * caught; an ENTRY WITH NO ROUTE never was — it is silently dropped from the
+   * collection — so a whole retired family (the PAN-first onboarding, the
+   * standalone DigiLocker sessions, the /auth/setup page) sat here for months
+   * describing a server that had moved on.
+   */
+  const consumed = new Set<string>();
   const included = routes.filter(route => !excludedRoute(route));
   for (const route of included) {
     const [method, routePath] = route.split(' ') as [PmEndpoint['method'], string];
@@ -104,8 +112,10 @@ export function createMasterCollection(routes = serverRoutes()) {
      */
     if (!routePath) throw new Error(`Malformed route from the mount graph: ${JSON.stringify(route)}`);
     const path = routePath.replace(/^\//, '');
-    const candidate = definitions.get(key({ method, path })) ?? definitions.get(key({ method, path: aliasOf(path) }));
+    const matched = [key({ method, path }), key({ method, path: aliasOf(path) })].find(k => definitions.has(k));
+    const candidate = matched ? definitions.get(matched) : undefined;
     if (!candidate) { missing.push(route); continue; }
+    consumed.add(matched!);
     const actualParams = [...path.matchAll(/:([\w]+)/g)].map(m => m[1]!);
     const originalParams = [...candidate.ep.path.matchAll(/:([\w]+)/g)].map(m => m[1]!);
     const next = prepare({ ...candidate.ep, method, path, pathVars: actualParams.map((name, i) => {
@@ -117,6 +127,10 @@ export function createMasterCollection(routes = serverRoutes()) {
     groups.get(section)!.push(next);
   }
   if (missing.length) throw new Error(`Missing request examples for ${missing.length} mounted routes:\n${missing.join('\n')}`);
+  const orphans = [...definitions].filter(([k]) => !consumed.has(k)).map(([k, v]) => `${k}   [${v.section}]`);
+  if (orphans.length) throw new Error(
+    `${orphans.length} catalog entr${orphans.length === 1 ? 'y describes' : 'ies describe'} a route the server does not mount. ` +
+    `Delete the entry, or fix its path to the route that replaced it:\n${orphans.join('\n')}`);
   const workflow = workflowSections();
   const allEndpoints = [...[...groups.values()].flat(), ...workflow.flatMap(section => section.endpoints)];
   const variableKeys = new Set(Object.keys(defaults));

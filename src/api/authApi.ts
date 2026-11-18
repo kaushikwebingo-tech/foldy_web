@@ -1,42 +1,17 @@
 import { client } from './client';
 
 /*
- * Onboarding (PAN-first) + session helpers.
- * Single entry: panEntry → server returns mode "register" or "login".
- *   - New PAN (+ name + DOB) → demographic match → registrationToken.
- *   - Existing PAN → SMS OTP to the registered mobile (login).
- * Registration then runs 2 OTP layers: Phone → Email → create-profile.
+ * Session, profile and plan helpers for the signed-in person.
+ *
+ * Signup and sign-in are NOT here: the PAN-first onboarding this file used to
+ * drive (/onboarding/pan, its two OTP layers and create-profile) was retired
+ * with the server routes, and the live flow lives in identityApi.ts
+ * (/signup/* and /auth/login).
  */
 export const authApi = {
-  // Presence check — is this PAN already registered? (no OTP). Returns { exists, mode }.
-  checkPan:        (pan: string) =>
-    client.post('/onboarding/pan/check', { pan }),
-
   // App-side forgot password (distinct from the admin one).
   forgotPassword:  (email: string) =>
     client.post('/auth/forgot-password', { email }),
-
-  panEntry:        (pan: string, name?: string, dob?: string, workspace: 'business' | 'individual' = 'business') =>
-    client.post('/onboarding/pan', { workspace, pan, ...(name ? { name } : {}), ...(dob ? { dob } : {}) }),
-
-  // Existing-PAN login — verify the SMS OTP. Returns { mode:'login', token, user }.
-  verifyPanOtp:    (referenceId: string, otp: string) =>
-    client.post('/onboarding/pan/verify-otp', { referenceId, otp }),
-
-  // Layers 1 & 2 — phone / email OTP (registration).
-  sendOtp:         (registrationToken: string, channel: 'phone' | 'email', value: string) =>
-    client.post('/onboarding/otp/send', { registrationToken, channel, value }),
-
-  verifyOtp:       (registrationToken: string, channel: 'phone' | 'email', otp: string) =>
-    client.post('/onboarding/otp/verify', { registrationToken, channel, otp }),
-
-  // Finish registration → JWT (auto-login).
-  createProfile:   (registrationToken: string, name?: string) =>
-    client.post('/onboarding/create-profile', { registrationToken, ...(name ? { name } : {}) }),
-
-  // Identity check via DigiLocker during onboarding (rate-limited, pre-JWT).
-  verifyDigilocker: (payload: Record<string, unknown>) =>
-    client.post('/onboarding/digilocker/verify', payload),
 
   // Profile section for the logged-in user (PAN masked).
   getProfile:      () =>

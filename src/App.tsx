@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import DashboardPage     from '@/pages/DashboardPage';
 import LoginPage         from '@/pages/LoginPage';
-import OnboardingPage    from '@/pages/OnboardingPage';
 import IdentityPage      from '@/pages/IdentityPage';
 import ProfilePage       from '@/pages/ProfilePage';
 import GstProfilePage    from '@/pages/GstProfilePage';
@@ -14,7 +13,6 @@ import SupportPage       from '@/pages/SupportPage';
 import StoragePage       from '@/pages/StoragePage';
 import ManualUploadsPage from '@/pages/ManualUploadsPage';
 import PaymentsPage      from '@/pages/PaymentsPage';
-import DigilockerPage    from '@/pages/DigilockerPage';
 import AdminPage         from '@/pages/AdminPage';
 import LoadTestPage      from '@/pages/LoadTestPage';
 import ReportsPage       from '@/pages/ReportsPage';
@@ -28,7 +26,6 @@ export default function App() {
         <Routes>
           <Route path="/"               element={<DashboardPage />} />
           <Route path="/login"          element={<LoginPage />} />
-          <Route path="/onboarding"     element={<OnboardingPage />} />
           <Route path="/identity"       element={<IdentityPage />} />
           <Route path="/profile"        element={<ProfilePage />} />
           <Route path="/gst-profile"    element={<GstProfilePage />} />
@@ -40,7 +37,6 @@ export default function App() {
           <Route path="/storage"        element={<StoragePage />} />
           <Route path="/manual-uploads" element={<ManualUploadsPage />} />
           <Route path="/payments"       element={<PaymentsPage />} />
-          <Route path="/digilocker"     element={<DigilockerPage />} />
           <Route path="/admin"          element={<AdminPage />} />
           <Route path="/reports"        element={<ReportsPage />} />
           <Route path="/calendar"       element={<CalendarPage />} />

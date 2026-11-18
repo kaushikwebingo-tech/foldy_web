@@ -5,14 +5,17 @@
  * WHY THIS IS A SCRIPT AND NOT A MEMO. Two things in this repo must track the
  * server and both drift silently: `src/api/*.ts` (the axios clients the console
  * drives) and `src/lib/apiCatalog.ts` (the declarative catalog that GENERATES THE
- * POSTMAN COLLECTION). Nothing enforces either. The server is being rebuilt right
- * now, so the answer changes daily and a hand-written list is stale on arrival.
+ * POSTMAN COLLECTION). A hand-written list of what matches is stale on arrival.
  *
- * RUN IT, DO NOT ACT ON IT BLINDLY — the plan (§11.4) says the console diff runs
- * AFTER the server routes settle, and the server has not settled. While that is
- * true, bucket A is the only actionable one and even then a missing server route
- * may simply be a route that has not been rebuilt yet. NEVER delete a console
- * entry on the strength of a half-built server.
+ * WHAT IS ENFORCED, AND WHAT IS NOT. The identity rebuild has landed, so the plan's
+ * §11.4 condition is met and the buckets below are actionable. `postman:generate`
+ * now fails BOTH ways — a mounted route with no catalog entry, and a catalog entry
+ * naming a route the server does not mount — so A and D cannot rot unnoticed in the
+ * catalog. This script is still the only thing watching the axios CLIENTS, which the
+ * generator never reads: buckets A and C are about `src/api/*.ts` and `src/pages`.
+ * Read a bucket-B route before covering it (a webhook or a public callback belongs
+ * where it is) and read a bucket-A path before deleting its caller — a route that
+ * moved wants repointing, not removal.
  *
  * Usage (no dependencies, Node 18+):
  *   node scripts/route-diff.mjs                    # buckets A and C (the actionable ones)
@@ -407,6 +410,19 @@ const collectCatalog = () => {
   if (!existsSync(file)) return [];
   const source = stripComments(read(file));
   const out = [];
+
+  /*
+   * GOTCHA 7: the catalog is TWO files. appApiSupplement.ts carries the app-only
+   * entries through a helper, `ep('name', 'METHOD', 'path', { … })`, so the brace
+   * walker below never saw them and bucket C reported four documented membership
+   * routes as undocumented. Read that file on its own terms.
+   */
+  const supplement = join(CONSOLE_DIR, 'src', 'lib', 'appApiSupplement.ts');
+  if (existsSync(supplement)) {
+    for (const m of stripComments(read(supplement)).matchAll(/\bep\(\s*'[^']*'\s*,\s*'([A-Za-z]+)'\s*,\s*'([^']+)'/g)) {
+      if (METHODS.includes(m[1].toLowerCase())) out.push({ method: m[1].toUpperCase(), path: normalizePath(m[2]) });
+    }
+  }
 
   /*
    * GOTCHA 6, and it made bucket D almost worthless. An entry is an object literal

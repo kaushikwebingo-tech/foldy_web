@@ -3,14 +3,12 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   LogIn,
-  User,
   Building2,
   Receipt,
   FileText,
   Gauge,
   BarChart3,
   CalendarDays,
-  HardDrive,
   CreditCard,
   FolderOpen,
   ShieldCheck,
@@ -31,12 +29,11 @@ import { authApi } from "@/api/authApi";
 /* ── nav definition ──────────────────────────────────────────────── */
 const AUTH_NAV = [
   /*
-   * Two doors, deliberately both shown. `/identity` drives the NEW model (a password
-   * and one box, RBAC_MASTER_PLAN.md §5.1) and `/login` the legacy PAN-first one; the
-   * server mounts both and §12 retires the second. Neither is hidden while that is
-   * true, because a console that quietly picks one is how you stop noticing that the
-   * other still answers. `/identity` is not guest-only: its switcher, email gate and
-   * tenant-PAN cards need a live session.
+   * ONE door. `/identity` drives signing up and signing in (a password and one box,
+   * RBAC_MASTER_PLAN.md §5.1); the PAN-first login it used to sit beside is gone from
+   * the server, so `/login` is now only what a LIVE session can do — plan status,
+   * profile, the session list and signing out. Neither is guest-only: every card on
+   * both pages needs a session except signup's public half.
    */
   {
     label: "Identity (new)",
@@ -44,10 +41,9 @@ const AUTH_NAV = [
     icon: <KeyRound size={16} />,
   },
   {
-    label: "Login / OTP (legacy PAN)",
+    label: "Session & Plan",
     path: "/login",
     icon: <LogIn size={16} />,
-    guestOnly: true,
   },
 ];
 
@@ -55,11 +51,6 @@ const GROUPS = [
   {
     group: "Profile Area",
     items: [
-      {
-        label: "Onboarding",
-        path: "/onboarding",
-        icon: <User size={16} />,
-      },
       {
         label: "Profile",
         path: "/profile",
@@ -129,11 +120,6 @@ const GROUPS = [
     group: "Finance",
     items: [
       { label: "Payments", path: "/payments", icon: <CreditCard size={16} /> },
-      {
-        label: "DigiLocker",
-        path: "/digilocker",
-        icon: <HardDrive size={16} />,
-      },
     ],
   },
   {

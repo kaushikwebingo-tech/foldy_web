@@ -7,8 +7,10 @@ import { client } from './client';
  *
  * THESE ROUTES EXIST ON THE SERVER TODAY: `routes/app/v1/signupRoutes.ts` and
  * `routes/app/v1/identityAuthRoutes.ts` (plus its `tenantRouter`), both mounted in
- * `routes/app/v1/index.ts` AHEAD of the legacy `authRoutes`. The two paths run side
- * by side until the PAN-first one is retired, and nothing is declared in both.
+ * `routes/app/v1/index.ts` AHEAD of what is left of `authRoutes`. There is no second
+ * path any more: the PAN-first signup and login are gone from the server, and nothing
+ * is declared in both files except `POST /auth/logout`, where the new handler
+ * shadows the legacy one as a superset.
  *
  * WHAT IS NOT HERE. §6.4's served permission catalog (`GET /v1/meta/permissions`),
  * §7.12's access envelope (`GET /v1/workspace/access`) and §8.5's step-up

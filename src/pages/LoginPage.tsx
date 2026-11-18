@@ -1,97 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ApiCard from "@/components/ApiCard";
-import { Field, SelectField } from "@/components/Field";
+import { Field } from "@/components/Field";
 import PageHeader from "@/components/PageHeader";
 import { authApi } from "@/api/authApi";
-import { getToken, setToken, removeToken } from "@/lib/utils";
-import { LogIn, CheckCircle2, LogOut, LayoutDashboard } from "lucide-react";
+import { getToken, removeToken } from "@/lib/utils";
+import { LogIn, CheckCircle2, LogOut, LayoutDashboard, KeyRound } from "lucide-react";
 
-/* ─── PAN login cards (shared) ─────────────────────────────────────── */
-function PanLoginCards() {
-  const [pan, setPan] = useState("");
-  const [referenceId, setReferenceId] = useState("");
-  const [otp, setOtp] = useState("");
+/* ─── Session, plan and profile of the signed-in person ───────────── */
+function SessionCards() {
   const [sid, setSid] = useState("");
-  const [workspace, setWorkspace] = useState<"business" | "individual">(
-    "business",
-  );
 
   return (
     <div className="space-y-4">
-      <div className="mb-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-        Login is PAN-first: enter your PAN to receive an OTP on your registered
-        mobile, then verify it. New PAN? Use the <strong>Onboarding</strong>{" "}
-        page to register. OTPs print to the server console.
-      </div>
-
       <ApiCard
         step={1}
-        title="PAN Entry"
-        method="POST"
-        endpoint="/api/v1/onboarding/pan"
-        description="Existing PAN → SMS OTP to the registered mobile (login). New PAN → use the Onboarding page (needs Name + DOB). Copy referenceId into step 2."
-        onSubmit={async () => {
-          const { data } = await authApi.panEntry(pan, "", "", workspace);
-          // Destructuring `data?.data` throws the moment the envelope is anything
-          // but the happy one — which is exactly what a half-rebuilt server returns.
-          // Read the field, do not unwrap the shape.
-          const referenceId = data?.data?.referenceId;
-          if (referenceId) setReferenceId(referenceId);
-          return data;
-        }}
-      >
-        <Field
-          label="PAN"
-          value={pan}
-          onChange={setPan}
-          placeholder="ABCDE1234F"
-          fullWidth
-        />
-        <SelectField
-          label="Workspace (register + login-as)"
-          value={workspace}
-          onChange={(v) => setWorkspace(v as "business" | "individual")}
-          options={[
-            { label: "Business", value: "business" },
-            { label: "Individual", value: "individual" },
-          ]}
-        />
-      </ApiCard>
-
-      <ApiCard
-        step={2}
-        title="Verify OTP & Login"
-        method="POST"
-        endpoint="/api/v1/onboarding/pan/verify-otp"
-        description="On an existing PAN this returns a JWT and logs you in automatically."
-        onSubmit={async () => {
-          const res = await authApi.verifyPanOtp(referenceId, otp);
-          const data = res.data?.data;
-          if (data?.mode === "login" && data?.token) {
-            setToken(data.token);
-            window.location.reload();
-          }
-          return res;
-        }}
-      >
-        <Field
-          label="referenceId"
-          value={referenceId}
-          onChange={setReferenceId}
-          placeholder="From PAN entry response"
-          fullWidth
-        />
-        <Field
-          label="OTP"
-          value={otp}
-          onChange={setOtp}
-          placeholder="6-digit OTP (server console)"
-        />
-      </ApiCard>
-
-      <ApiCard
-        step={3}
         title="Get Trial / Plan Status"
         method="GET"
         endpoint="/api/v1/user/plan-status"
@@ -100,7 +23,7 @@ function PanLoginCards() {
       />
 
       <ApiCard
-        step={4}
+        step={2}
         title="Get My Profile"
         method="GET"
         endpoint="/api/v1/user/profile"
@@ -109,7 +32,7 @@ function PanLoginCards() {
       />
 
       <ApiCard
-        step={5}
+        step={3}
         title="Active Sessions"
         method="GET"
         endpoint="/api/v1/user/sessions"
@@ -118,7 +41,7 @@ function PanLoginCards() {
       />
 
       <ApiCard
-        step={6}
+        step={4}
         title="End One Session"
         method="DELETE"
         endpoint="/api/v1/user/sessions/:sid"
@@ -136,13 +59,33 @@ function PanLoginCards() {
       </ApiCard>
 
       <ApiCard
-        step={7}
+        step={5}
         title="Log Out Other Devices"
         method="POST"
         endpoint="/api/v1/user/sessions/logout-others"
         description="No body. Scope is fixed server-side to you: an owner signs out their own other devices (never a director's); a director signs out their other sessions on this company only."
         onSubmit={() => authApi.logoutOtherSessions()}
       />
+    </div>
+  );
+}
+
+/* Sign-in itself is the Identity page: /signup/* and /auth/login. */
+function SignInElsewhere() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="mb-1 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+      Signing in happens on the <strong>Identity</strong> page — mobile signup,
+      DigiLocker, and <code>POST /auth/login</code> with a username or mobile and
+      a password. The cards below need a token, so sign in there first.
+      <button
+        onClick={() => navigate("/identity")}
+        className="mt-3 flex items-center gap-2 px-3 py-2 bg-[#1A73E8] hover:bg-[#1558C0] text-white text-xs font-semibold rounded-lg transition-colors"
+      >
+        <KeyRound size={14} />
+        Go to Identity
+      </button>
     </div>
   );
 }
@@ -166,11 +109,11 @@ function AlreadyLoggedIn() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Auth — PAN Login"
-        subtitle="Manage your session."
+        title="Session & Plan"
+        subtitle="Manage this browser's session."
         icon={<LogIn size={18} />}
-        badge="Public"
-        postmanSection="onboarding"
+        badge="Token"
+        postmanSection="identity"
       />
 
       <div className="bg-green-50 border border-green-200 rounded-2xl p-6 mb-6">
@@ -215,7 +158,7 @@ function AlreadyLoggedIn() {
         </div>
       </div>
 
-      <PanLoginCards />
+      <SessionCards />
     </div>
   );
 }
@@ -228,13 +171,16 @@ export default function LoginPage() {
   return (
     <div className="max-w-3xl">
       <PageHeader
-        title="Auth — PAN Login"
-        subtitle="PAN-first login. The JWT is auto-saved to localStorage on a successful OTP verify."
+        title="Session & Plan"
+        subtitle="Session, plan and profile of the signed-in person. Sign in on the Identity page."
         icon={<LogIn size={18} />}
-        badge="Public"
-        postmanSection="onboarding"
+        badge="Token"
+        postmanSection="identity"
       />
-      <PanLoginCards />
+      <SignInElsewhere />
+      <div className="mt-4">
+        <SessionCards />
+      </div>
     </div>
   );
 }

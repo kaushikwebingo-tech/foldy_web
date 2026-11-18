@@ -11,8 +11,8 @@ import { KeyRound } from 'lucide-react';
  * §5.4 (the switcher), §5.7 (the email gate) and §3.1's PAN on a live session.
  *
  * WHY THIS PAGE EXISTS. The server has landed `signupRoutes` and
- * `identityAuthRoutes`, both mounted ahead of the legacy PAN-first `authRoutes`, and
- * the Flutter app has been built against them — but nothing could drive them by hand.
+ * `identityAuthRoutes`, both mounted ahead of what is left of `authRoutes`, and the
+ * Flutter app has been built against them — but nothing could drive them by hand.
  * Eleven signup routes, nine sign-in/gate routes and `POST /tenant/pan` were reachable
  * and undriveable, which is the worst state for an endpoint to be in during a rebuild.
  *
@@ -22,9 +22,10 @@ import { KeyRound } from 'lucide-react';
  * draft token and the session token are lifted out of a reply only when they are
  * actually there.
  *
- * The old PAN-first login still lives on the Login page. Both are correct today; §12
- * retires the PAN one, and until then the console shows which is which rather than
- * quietly preferring one.
+ * THIS IS THE ONLY SIGN-IN. The PAN-first login is gone from the server and from
+ * this console: `authRoutes` keeps nothing but forgot-password, the emailed
+ * session-logout pair, update-push-token and logout, and the Session & Plan page
+ * drives only what a session already holds.
  */
 
 const KINDS = [
@@ -79,7 +80,7 @@ export default function IdentityPage() {
     <div className="max-w-3xl">
       <PageHeader
         title="Identity — Signup & Sign-in (new model)"
-        subtitle="§3 signup, §5.1 one box + a password, §5.2 the new-device code, §5.4 the workspace switcher, §5.7 the email gate. Mounted ahead of the legacy PAN-first login, which still works on the Login page."
+        subtitle="§3 signup, §5.1 one box + a password, §5.2 the new-device code, §5.4 the workspace switcher, §5.7 the email gate. The only sign-in there is — the PAN-first one is gone from the server."
         icon={<KeyRound size={18} />}
         badge="Public + Session"
         postmanSection="identity"
