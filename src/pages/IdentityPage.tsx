@@ -269,14 +269,14 @@ export default function IdentityPage() {
             const res = await identityApi.login(identifier.trim(), loginPassword, deviceSecret.trim() || undefined);
             const t = pick(res, 'token');
             if (t) setToken(t);
-            const tk = pick(res, 'ticket', 'challengeId');
+            const tk = pick(res, 'challengeToken');
             if (tk) setTicket(tk);
             return res;
           }}
         >
           <Field label="Mobile, email or username" value={identifier} onChange={setIdentifier} placeholder="9876543210 / you@example.com / asha-nair-4821" />
           <Field label="Password" value={loginPassword} onChange={setLoginPassword} placeholder="••••••••" type="password" />
-          <Field label="Device secret (optional)" value={deviceSecret} onChange={setDeviceSecret} placeholder="the stored secret, never a claimed device id" fullWidth />
+          <Field label="Device trust (optional)" value={deviceSecret} onChange={setDeviceSecret} placeholder="the stored secret, never a claimed device id" fullWidth />
         </ApiCard>
 
         <ApiCard
@@ -284,7 +284,7 @@ export default function IdentityPage() {
           title="New device — the code"
           method="POST"
           endpoint="/api/v1/auth/login/device"
-          description="§5.2. 'Remember this device for 30 days' is the tick box behind `remember`; the secret is STORED by the app and sent on the next login, never an identifier the handset claims about itself."
+          description="§5.2. 'Remember this device for 30 days' is the tick box behind `rememberDevice`; the secret is STORED by the app and sent on the next login, never an identifier the handset claims about itself."
           buttonLabel="Verify Device"
           onSubmit={async () => {
             const res = await identityApi.loginVerifyDevice(ticket.trim(), deviceCode.trim(), remember === 'yes');
@@ -293,7 +293,7 @@ export default function IdentityPage() {
             return res;
           }}
         >
-          <Field label="Ticket" value={ticket} onChange={setTicket} placeholder="auto-filled from sign-in" />
+          <Field label="Challenge token" value={ticket} onChange={setTicket} placeholder="auto-filled from sign-in" />
           <Field label="Code" value={deviceCode} onChange={setDeviceCode} placeholder="6 digits" />
           <SelectField label="Remember this device" value={remember} onChange={setRemember} options={REMEMBER} fullWidth />
         </ApiCard>

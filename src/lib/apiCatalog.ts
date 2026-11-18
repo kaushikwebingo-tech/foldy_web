@@ -204,21 +204,21 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Sign In',
         method: 'POST',
         path: 'api/v1/auth/login',
-        description: '§5.1. A known handset answers with a session; an unknown one, or one unseen for 30 days, answers a ticket and sends a code (§5.2) — a `next`, not an error. `deviceSecret` is a secret the app STORED, never an identifier the handset claims about itself, and it lives in secure storage so a forced sign-out does not make every sign-out look like a new phone. A staff member signing in with the temporary password from their welcome email gets neither: 200 { next: "set_password", token, person, message } — a set-password-only session that reaches nothing but POST /auth/password/first-set (a workspace switch is 403 AUTH_PASSWORD_CHANGE_REQUIRED until they choose their own).',
-        body: { identifier: '9876543210', password: '<password>', deviceSecret: '<stored secret, optional>' }
+        description: '§5.1. A known handset answers with a session; an unknown one, or one unseen for 30 days, answers a ticket and sends a code (§5.2) — a `next`, not an error. `deviceTrust` is a secret the app STORED, never an identifier the handset claims about itself, and it lives in secure storage so a forced sign-out does not make every sign-out look like a new phone. A staff member signing in with the temporary password from their welcome email gets neither: 200 { next: "set_password", token, person, message } — a set-password-only session that reaches nothing but POST /auth/password/first-set (a workspace switch is 403 AUTH_PASSWORD_CHANGE_REQUIRED until they choose their own).',
+        body: { loginId: '9876543210', password: '<password>', deviceTrust: '<stored secret, optional>' }
       },
       {
         name: 'Sign In — New Device Code',
         method: 'POST',
         path: 'api/v1/auth/login/device',
-        description: '§5.2. `remember` is the "Remember this device for 30 days" tick box.',
-        body: { ticket: '<from sign-in>', code: '123456', remember: true }
+        description: '§5.2. `rememberDevice` is the "Remember this device for 30 days" tick box.',
+        body: { challengeToken: '<from sign-in>', code: '123456', rememberDevice: true }
       },
       {
         name: 'Sign In — Resend Device Code',
         method: 'POST',
         path: 'api/v1/auth/login/device/resend',
-        body: { ticket: '<from sign-in>' }
+        body: { challengeToken: '<from sign-in>' }
       },
       // ── §5.4 the switcher, session ──
       {

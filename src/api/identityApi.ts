@@ -119,20 +119,20 @@ export const identityApi = {
   // never hints whether an identifier exists.
   // A known handset answers with a session; an unknown one (or one unseen for 30
   // days) answers `next` and sends a code — §5.2, not an error.
-  login: (identifier: string, password: string, deviceSecret?: string) =>
+  login: (identifier: string, password: string, deviceTrust?: string) =>
     client.post('/auth/login', {
-      identifier,
+      loginId: identifier,
       password,
-      ...(deviceSecret ? { deviceSecret } : {}),
+      ...(deviceTrust ? { deviceTrust } : {}),
     }),
 
-  // §5.2's code, plus "Remember this device for 30 days". The device secret is a
+  // §5.2's code, plus "Remember this device for 30 days". `deviceTrust` is a
   // stored secret the app sends, NEVER an identifier a handset claims about itself.
-  loginVerifyDevice: (ticket: string, code: string, remember = true) =>
-    client.post('/auth/login/device', { ticket, code, remember }),
+  loginVerifyDevice: (challengeToken: string, code: string, rememberDevice = true) =>
+    client.post('/auth/login/device', { challengeToken, code, rememberDevice }),
 
-  loginResendDevice: (ticket: string) =>
-    client.post('/auth/login/device/resend', { ticket }),
+  loginResendDevice: (challengeToken: string) =>
+    client.post('/auth/login/device/resend', { challengeToken }),
 
   /* ── §5.4 — one person, several workspaces (session) ─────────────────── */
 
