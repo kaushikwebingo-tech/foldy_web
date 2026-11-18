@@ -1723,8 +1723,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'All mounted administrator APIs. Protected requests use {{adminToken}}, separate from the app {{token}}. Login uses {{adminEmail}} and {{adminPassword}}. Role permissions remain enforced by the server.',
     endpoints: [
       { name: 'Admin Register', method: 'POST', path: 'api/admin/v1/auth/register', body: { email: 'admin@foldy.in', password: '<password>', fullName: 'Admin User' } },
-      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', description: 'Step 1 of 2: returns an mfaToken (and, on first sign-in, the authenticator QR code), never a session token.', body: { email: 'admin@foldy.in', password: '<password>' } },
-      { name: 'Admin Login — Authenticator Code', method: 'POST', path: 'api/admin/v1/auth/login/mfa', description: 'Step 2 of 2: the 6-digit authenticator code opens the session.', body: { mfaToken: '<mfaToken>', code: '123456' } },
+      { name: 'Admin Login', method: 'POST', path: 'api/admin/v1/auth/login', description: 'Step 1: returns an mfaToken, never a session token. On first sign-in it also emails a 6-digit set-up code; the QR code comes only after that code is proved.', body: { email: 'admin@foldy.in', password: '<password>' } },
+      { name: 'Admin Login — Set-up Email Code', method: 'POST', path: 'api/admin/v1/auth/login/mfa/setup', description: 'First sign-in only: proves the emailed 6-digit code and returns the authenticator QR code.', body: { mfaToken: '<mfaToken>', emailOtp: '123456' } },
+      { name: 'Admin Login — Resend Set-up Code', method: 'POST', path: 'api/admin/v1/auth/login/mfa/setup/resend', description: 'First sign-in only: emails a new set-up code and returns a new mfaToken.', body: { mfaToken: '<mfaToken>' } },
+      { name: 'Admin Login — Authenticator Code', method: 'POST', path: 'api/admin/v1/auth/login/mfa', description: 'Last step: the 6-digit authenticator code opens the session.', body: { mfaToken: '<mfaToken>', code: '123456' } },
       {
         name: 'Admin Forgot Password',
         method: 'POST',

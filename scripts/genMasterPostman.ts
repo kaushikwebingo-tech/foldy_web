@@ -23,7 +23,7 @@ export function serverRoutes(): string[] {
 
 const defaults: Record<string, string> = {
   baseUrl: 'http://localhost:5000', token: '', adminToken: '', signupToken: '', restoreToken: '', setPasswordToken: '',
-  loginId: '', password: '', adminEmail: '', adminPassword: '', adminMfaToken: '', adminTotpCode: '', mobile: '', email: '', newEmail: '', newMobile: '',
+  loginId: '', password: '', adminEmail: '', adminPassword: '', adminMfaToken: '', adminSetupOtp: '', adminTotpCode: '', mobile: '', email: '', newEmail: '', newMobile: '',
   otp: '123456', providerOtp: '', stepUpAction: 'auth.email.change', deviceTrust: '', loginNext: '',
   deviceId: 'foldy-postman-test-device', deviceName: 'Postman API testing', devicePlatform: 'android', appVersion: '1.0.0',
   featureId: '1', page: '1', limit: '20', financialYear: '2025-26', assessmentYear: '2026-27', fy: '2025-26',

@@ -19,7 +19,7 @@ for (const file of [
 }
 
 const schemasByRoute: Record<string, string> = {
- 'POST auth/login':'loginSchema','POST auth/register':'registerSchema','POST auth/forgot-password':'forgotPasswordSchema','POST auth/verify-email-otp':'verifyEmailOtpSchema','POST auth/update-password':'updatePasswordSchema','POST auth/change-password':'changePasswordSchema',
+ 'POST auth/login':'loginSchema','POST auth/login/mfa/setup':'mfaSetupEmailSchema','POST auth/login/mfa/setup/resend':'mfaSetupResendSchema','POST auth/login/mfa':'mfaVerifySchema','POST auth/register':'registerSchema','POST auth/forgot-password':'forgotPasswordSchema','POST auth/verify-email-otp':'verifyEmailOtpSchema','POST auth/update-password':'updatePasswordSchema','POST auth/change-password':'changePasswordSchema',
  'POST admin-users':'createAdminSchema','PATCH admin-users/:id':'updateAdminSchema','PATCH admin-users/:id/role':'changeAdminRoleSchema',
  'POST plans':'createPlanSchema','PUT plans/:id':'updatePlanSchema','PATCH plans/:id/status':'planStatusSchema',
  'POST storage-addons':'createStorageAddonSchema','PUT storage-addons/:id':'updateStorageAddonSchema','PATCH storage-addons/:id/status':'storageAddonStatusSchema',
@@ -55,6 +55,9 @@ const variables: Record<string, string> = {
   adminEmployeeEmail: 'employee-api-test@example.com',
   adminEmployeePassword: 'ApiTestEmployeePassword123!',
   adminEmployeePhone: '9876501234',
+  adminMfaToken: 'synthetic.mfa.ticket',
+  adminSetupOtp: '123456',
+  adminTotpCode: '123456',
   adminRoleId: '111111111111111111111111',
   adminUserId: '222222222222222222222222',
   calendarDate: '2026-11-02',
