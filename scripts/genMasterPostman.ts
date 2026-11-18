@@ -87,10 +87,40 @@ function aliasOf(path: string) {
   return path;
 }
 
+/*
+ * Sections that are MEANT to describe a route another section already does.
+ * Everything here is keyed METHOD+path, so the last entry loaded wins; these
+ * sections exist to be that winner (stale catalog examples corrected against
+ * the current validators, and the generated AA template/mount matrix). Any
+ * OTHER pair of sections describing one route is the bug the guard below
+ * catches: one copy becomes invisible, free to rot and contradict the winner
+ * with nothing to notice. CORE_ENDPOINTS, applied after all of them, overrides
+ * by the same intent for the guided workflows.
+ */
+const overrideSections = new Set(['request-quality-corrections', 'aa-template-supplement', 'uploads-exports-supplement']);
+
 export function createMasterCollection(routes = serverRoutes()) {
   const sections = [...Object.values(API_SECTIONS), ...APP_API_SUPPLEMENT];
-  const definitions = new Map<string, { ep: PmEndpoint; section: string }>();
-  for (const section of sections) for (const ep of section.endpoints) definitions.set(key(ep), { ep, section: section.name });
+  const definitions = new Map<string, { ep: PmEndpoint; section: string; sectionKey?: string }>();
+  const collisions: string[] = [];
+  for (const section of sections) for (const ep of section.endpoints) {
+    const previous = definitions.get(key(ep));
+    /*
+     * Twice in ONE section is a NAMED VARIANT of one route (purchase a plan vs
+     * top up credits; broadcast to everyone vs to an audience) and is kept on
+     * purpose — the per-section download shows both. Two entries of the same
+     * name are not a variant, they are a copy. Compare section KEYS: two
+     * sections can share a display name (two were both "Manual Uploads").
+     */
+    if (previous && !overrideSections.has(section.key) &&
+        (previous.sectionKey !== section.key || previous.ep.name === ep.name)) {
+      collisions.push(`${key(ep)}   [${previous.section}] ${JSON.stringify(previous.ep.name)} vs [${section.name}] ${JSON.stringify(ep.name)}`);
+    }
+    definitions.set(key(ep), { ep, section: section.name, sectionKey: section.key });
+  }
+  if (collisions.length) throw new Error(
+    `${collisions.length} route${collisions.length === 1 ? ' is' : 's are'} catalogued twice. ` +
+    `Only the last entry survives, so keep ONE — merge the better text into the section a tester looks in first and delete the other:\n${collisions.join('\n')}`);
   for (const ep of CORE_ENDPOINTS) definitions.set(key(ep), { ep, section: 'Identity — Signup, Sign-in and Security' });
   const groups = new Map<string, PmEndpoint[]>();
   const missing: string[] = [];

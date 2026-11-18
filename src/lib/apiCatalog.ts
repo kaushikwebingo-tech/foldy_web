@@ -1,5 +1,5 @@
 import type { ApiSection } from './postmanCore';
-import { completeAdminCatalog, patchAdminEndpoints } from './adminApiCatalog';
+import { completeAdminCatalog, patchAdminEndpoints, routeShape } from './adminApiCatalog';
 
 /*
  * Declarative endpoint catalog used to generate Postman collections.
@@ -46,12 +46,10 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       },
       // `POST /auth/logout` lives in the Identity section: the new PUBLIC,
       // always-200 handler now answers that path for both token kinds.
-      {
-        name: 'My Profile',
-        method: 'GET',
-        path: 'api/v1/user/profile',
-        description: 'Profile section for the logged-in user. data = { pan, email, name, mobile, dob, entityType, workspace, profileImage, modules, person, company }. The top-level fields are the ACCOUNT (for a business: the company, so `name` is the company name and email/mobile/dob are its registered contact and incorporation date); PAN is masked for everybody. Anyone who is not the owner gets email, mobile and dob MASKED too, e.g. "a••••••@ashatraders.in", "••••••3210", "••/••/••••": a legacy DELEGATED token, and a person token (sub/mid) whose membership is not the owner (fails closed when the person or membership cannot be read). `person` = the human signed in, their OWN contact unmasked: { name, username, mobile, email, emailVerified, role (role name, e.g. "Administrator"), isOwner } (legacy token: read from the users row, username/role null). `company` = null for an individual workspace, else { name (display name, else legal name), legalName, entityType, panMasked, tenantCode, incorporationDate, ownership: { status: "verified"|"pending"|"expired", expiresAt: ISO-8601 or null (null once verified) } }. The app greets `person.name`.'
-      },
+      // `GET /user/profile` is catalogued ONCE, in the Profile section that owns
+      // the rest of those routes. Two sections describing one route silently
+      // collapse to whichever loads last, and the copy that was here had already
+      // rotted into a shorter restatement of the one that won.
       {
         name: 'Active Sessions',
         method: 'GET',
@@ -494,6 +492,12 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
+  /*
+   * ONE section per route family. Every route below was ALSO catalogued by a
+   * second, condensed `manualUploads` section at the end of this file, and
+   * since that one loaded later it was its one-line descriptions that reached
+   * the master collection while these were dropped unseen.
+   */
   'manual-uploads': {
     key: 'manual-uploads',
     name: 'Manual Uploads',
@@ -587,7 +591,13 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     description: 'Endpoints PROVIDERS call, mounted at /webhook (outside the /api tree). Each verifies a signature header rather than a JWT, so these are for inspection/replay — not something the app ever calls.',
     endpoints: [
       { name: 'Instafinancials Webhook', method: 'POST', path: 'webhook/instafinancials', description: 'ROC/LLP job callbacks. Verifies X-Webhook-Timestamp + X-Webhook-Signature against the webhook secret.', body: {} },
-      { name: 'MoneyOne Webhook', method: 'POST', path: 'webhook/moneyone', description: 'Account-Aggregator consent + FI-data-ready callbacks.', body: {} },
+      {
+        name: 'MoneyOne Webhook',
+        method: 'POST',
+        path: 'webhook/moneyone',
+        description: 'Account-Aggregator consent + FI-data-ready callbacks. Provider-called (NOT under /api, NOT auth). OneMoney POSTs consent lifecycle events here — signature-verified via X-Webhook-Signature/X-Webhook-Timestamp against MONEYONE_WEBHOOK_SECRET, idempotent on transaction_id. Events: ANALYTICS_CALLBACK, NUDGES_CALLBACK, CONSENT_REVOKED_CALLBACK. Documented for reference; the console base URL targets /api so it can\'t drive this.',
+        body: { event: 'CONSENT_REVOKED_CALLBACK', transaction_id: '<txn>', timestamp: 1719400000, data: { consentId: '<consentId>' } }
+      },
       { name: 'Apple App Store Server Notification', method: 'POST', path: 'api/v1/payments/apple/notifications', auth: 'none', description: 'Apple calls this (App Store Server Notifications V2). No bearer token: the signedPayload JWS is the authentication, verified against Apple\'s root. For inspection only.', body: { signedPayload: '<App Store signed notification JWS>' } },
       { name: 'Razorpay Webhook', method: 'POST', path: 'webhook/razorpay', description: 'Payment lifecycle events. Verifies x-razorpay-signature. payment.captured, order.paid and subscription.charged resolve the STORED PaymentOrder (or rebuild a legacy one from Razorpay) and call the same apply-once path as verify-payment. 200 for applied / already applied / not applied (flagged for support) / unattributable, 409 while in progress, 503 when the Razorpay lookup is unavailable (retryable). Unsigned deliveries (no RAZORPAY_WEBHOOK_SECRET) apply nothing unless mock mode AND the order id starts with order_mock_.', body: {} },
       {
@@ -737,7 +747,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Mark Return as Filed',
         method: 'POST',
         path: 'api/v1/b2b/gst/mark-as-filed',
-        description: 'Records a return as filed so the reminder cron stops nudging for it. All three fields required; period is MMYYYY.',
+        description: 'Records a return as filed so the reminder cron stops nudging for it. All three fields required; period is MMYYYY, MM-YYYY, YYYY-YY or YYYY — anything else is 400 VALIDATION_FAILED.',
         body: { gstin: GSTIN, formType: 'GSTR-1', period: '042026' }
       },
       {
@@ -783,12 +793,9 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         description: 'Whole-year filing status for one GSTIN. returns.monthly now also carries GSTR2A and GSTR2B — auto-drafted ITC statements, so they use status Available|NotAvailable (never Filed/Due/Overdue) and have no dueDate. 2A exists from the start of the period; 2B appears once GSTN generates it on the 14th of the following month. They are EXCLUDED from summary.totalFiled/Overdue/Due and counted separately as summary.totalStatementsAvailable. gstr narrows BOTH the rows and the counts to a single form (GSTR1|GSTR1A|GSTR3B|GSTR9|GSTR9C|GSTR2A|GSTR2B, dash- and case-insensitive); leave it empty for the whole year. Anything else is a 400 rather than an empty schedule.',
         body: { gstin: GSTIN, financial_year: 'FY 2024-25', gstr: '' }
       },
-      {
-        name: 'Mark Return as Filed',
-        method: 'POST',
-        path: 'api/v1/b2b/gst/mark-as-filed',
-        body: { gstin: GSTIN, formType: 'GSTR-1', period: '04-2024' }
-      }
+      // `POST /b2b/gst/mark-as-filed` is catalogued once, above: this was a
+      // second entry of the SAME name with no description, and being last it
+      // was the copy that reached the master collection.
     ]
   },
   roc: {
@@ -908,7 +915,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Get Profile',
         method: 'GET',
         path: 'api/v1/user/profile',
-        description: 'Same endpoint as Auth & Session > My Profile (see there for the full shape). data = { pan (masked), email, name, mobile, dob, entityType, workspace, profileImage (signed URL), modules, person, company }. Top-level email/mobile/dob are the account\'s (a business: the company contact) and are masked for anyone but the owner. `person` = the signed-in human { name, username, mobile, email, emailVerified, role, isOwner }, unmasked. `company` = null for an individual workspace, else { name, legalName, entityType, panMasked, tenantCode, incorporationDate, ownership: { status: verified|pending|expired, expiresAt: ISO-8601|null } }. Name/DOB/PAN are one-time onboarding inputs (read-only).'
+        description: 'Profile screen for the logged-in user. data = { pan, email, name, mobile, dob, entityType, workspace, profileImage, modules, person, company }. The top-level fields are the ACCOUNT (for a business: the company, so `name` is the company name and email/mobile/dob are its registered contact and incorporation date); PAN is masked for everybody. Anyone who is not the owner gets email, mobile and dob MASKED too, e.g. "a••••••@ashatraders.in", "••••••3210", "••/••/••••": a legacy DELEGATED token, and a person token (sub/mid) whose membership is not the owner (fails closed when the person or membership cannot be read). `person` = the human signed in, their OWN contact unmasked: { name, username, mobile, email, emailVerified, role (role name, e.g. "Administrator"), isOwner } (legacy token: read from the users row, username/role null). `company` = null for an individual workspace, else { name (display name, else legal name), legalName, entityType, panMasked, tenantCode, incorporationDate, ownership: { status: "verified"|"pending"|"expired", expiresAt: ISO-8601 or null (null once verified) } }. The app greets `person.name`. profileImage is a signed URL; name, DOB and PAN are one-time onboarding inputs (read-only).'
       },
       {
         name: 'Upload Profile Image',
@@ -2086,22 +2093,11 @@ export const API_SECTIONS: Record<string, ApiSection> = {
           'Forces a full re-ingest of the latest consent\'s data (getallfidata → normalize → upsert). Body { consentId? } optional. Returns the ingest summary { accounts, transactions, errors }.',
         body: { consentId: '' }
       },
-      {
-        name: 'Consent Callback (PUBLIC — server-to-server)',
-        method: 'GET',
-        path: 'api/v1/investment/callback',
-        description:
-          'PUBLIC — no auth. OneMoney redirects the user\'s browser here with ?token=<random>. The server verifies the real status against OneMoney (never trusts the URL), updates the consent, and 302-redirects to the app deep link (foldy://moneyone/callback?status=…). Not called by clients directly — documented for completeness.',
-        query: [{ key: 'token', value: '', description: 'the token from Create Consent' }]
-      },
-      {
-        name: 'Webhook (PROVIDER → server, not /api)',
-        method: 'POST',
-        path: 'webhook/moneyone',
-        description:
-          'Provider-called (NOT under /api, NOT auth). OneMoney POSTs consent lifecycle events here — signature-verified via X-Webhook-Signature/X-Webhook-Timestamp against MONEYONE_WEBHOOK_SECRET, idempotent on transaction_id. Events: ANALYTICS_CALLBACK, NUDGES_CALLBACK, CONSENT_REVOKED_CALLBACK. Documented for reference; the console base URL targets /api so it can\'t drive this.',
-        body: { event: 'CONSENT_REVOKED_CALLBACK', transaction_id: '<txn>', timestamp: 1719400000, data: { consentId: '<consentId>' } }
-      },
+      // `GET /api/v1/investment/callback` is catalogued in the Investment
+      // section: one callback serves BOTH mounts, and a second entry here
+      // would just be the copy the generator throws away.
+      // `POST /webhook/moneyone` is catalogued with the other provider
+      // callbacks, in Webhooks (Provider → Server) — one entry per route.
       {
         name: 'Resolve Consent',
         method: 'GET',
@@ -2147,7 +2143,15 @@ export const API_SECTIONS: Record<string, ApiSection> = {
       { name: 'Cash Flow', method: 'GET', path: 'api/v1/investment/cash-flow', description: 'Inflow / outflow over recent months.', query: [{ key: 'months', value: '6' }] },
       { name: 'Consent Health', method: 'GET', path: 'api/v1/investment/consents', description: 'Per-template AA consent status + expiry, for the "reconnect" prompts.' },
       { name: 'SIP Tracker', method: 'GET', path: 'api/v1/investment/sip', description: 'Detected recurring SIP contributions from the stored MF transactions.' },
-      { name: 'AA Consent Callback (PUBLIC)', method: 'GET', path: 'api/v1/investment/callback', description: 'PUBLIC, no JWT — OneMoney redirects the user\'s browser here after they approve/decline. Authenticates on an unguessable token, finalises the consent, then deep-links back into the app (foldy://). Moved here from the old /b2c/moneyone/callback.', query: [{ key: 'token', value: '<callback-token>' }] }
+      // Shared by both AA mounts: a consent created under the /api/v1/moneyone
+      // routes comes back through this one callback, so it is catalogued only here.
+      {
+        name: 'AA Consent Callback (PUBLIC)',
+        method: 'GET',
+        path: 'api/v1/investment/callback',
+        description: 'PUBLIC, no JWT — OneMoney redirects the user\'s browser here after they approve/decline. Authenticates on an unguessable token, verifies the real status against OneMoney (never trusts the URL), finalises the consent, then 302-redirects to the app deep link (foldy://moneyone/callback?status=…). Not called by clients directly — documented for completeness. Moved here from the old /b2c/moneyone/callback.',
+        query: [{ key: 'token', value: '<callback-token>', description: 'the token from Create Consent' }]
+      }
     ]
   },
 
@@ -2207,22 +2211,6 @@ export const API_SECTIONS: Record<string, ApiSection> = {
     ]
   },
 
-  manualUploads: {
-    key: 'manualUploads',
-    name: 'Manual Uploads',
-    description: 'User-uploaded compliance docs (PTAX, trade license, PF/ESI, property papers) by category. Set {{token}}.',
-    endpoints: [
-      { name: 'Categories', method: 'GET', path: 'api/v1/manual-uploads/categories' },
-      { name: 'List Items', method: 'GET', path: 'api/v1/manual-uploads/:category/items', pathVars: [{ key: 'category', value: 'ptax' }] },
-      { name: 'Upload Item', method: 'POST', path: 'api/v1/manual-uploads/:category/upload', description: 'multipart, field "file".', pathVars: [{ key: 'category', value: 'ptax' }] },
-      { name: 'Download Item', method: 'GET', path: 'api/v1/manual-uploads/items/:id/download', pathVars: [{ key: 'id', value: '<itemId>' }] },
-      { name: 'Move Item to Trash', method: 'DELETE', path: 'api/v1/manual-uploads/items/:id', description: 'Soft delete (was a hard delete). { id, holdUntil (null for an owner, now + 7d for a delegated session), purgeAt }.', pathVars: [{ key: 'id', value: '<itemId>' }] },
-      { name: 'List Trash', method: 'GET', path: 'api/v1/manual-uploads/trash', description: 'Max 200, newest deletion first; items carry trashedByName, trashedByOwner, holdUntil.' },
-      { name: 'Restore Item', method: 'POST', path: 'api/v1/manual-uploads/items/:id/restore', description: 'vault.delete. Two 409s without an errorCode (period clash / purge race).', pathVars: [{ key: 'id', value: '<itemId>' }] },
-      { name: 'Empty Trash', method: 'DELETE', path: 'api/v1/manual-uploads/trash', description: 'Owner session only; held items skipped. { deleted, remaining, held, heldUntil }.' }
-    ]
-  },
-
   notifications: {
     key: 'notifications',
     name: 'Notifications',
@@ -2238,9 +2226,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
 };
 
 // Apply current admin request examples to every section that exposes admin APIs.
+// The admin section is the CATCH-ALL, so it is filled only with what no other
+// section documents: a route catalogued twice loses one copy silently.
+const documentedElsewhere = new Set(
+  Object.values(API_SECTIONS).filter(section => section.key !== 'admin')
+    .flatMap(section => section.endpoints.map(routeShape)));
 for (const section of Object.values(API_SECTIONS)) {
   section.endpoints = section.key === 'admin'
-    ? completeAdminCatalog(section.endpoints)
+    ? completeAdminCatalog(section.endpoints, documentedElsewhere)
     : patchAdminEndpoints(section.endpoints);
 }
 

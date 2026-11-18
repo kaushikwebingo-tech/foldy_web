@@ -200,6 +200,16 @@ publicEndpoints.push(ep('Sandbox TDS provider webhook', 'POST', 'webhook/sandbox
   description: 'Provider callback, not a bearer-auth client API. Sign the exact request JSON with server SANDBOX_WEBHOOK_SECRET using HMAC-SHA256, Base64 output. Use a disposable TDS job; event may update its state. A fake signature is expected to fail401.',
 }));
 
+/*
+ * DELIBERATE OVERRIDE of the catalog's Investment section, like `corrections`
+ * below: the 4 templates x 2 mounts matrix is generated here so no combination
+ * can be forgotten, and that necessarily re-describes the banking routes the
+ * catalog writes out by hand. These entries win (supplements load last), which
+ * is what adds the consent/linkRef captures and path variables that make the
+ * flow chainable in Postman. The cost is that the catalog's longer banking
+ * prose is the copy the generator drops; move prose here, not back there.
+ * genMasterPostman's duplicate guard admits this section by key.
+ */
 const aa: ApiSection = {
   key: 'aa-template-supplement', name: 'Account Aggregator — All Templates and Mounts',
   description: 'Shared handlers are mounted for banking, equity, mutual funds/SIP and insurance at both /moneyone and /investment. /investment requires a business workspace. Create consent, approve at the provider, resolve it, sync, then read accounts and transactions. Provider consent cannot be simulated by a successful HTTP status alone.',

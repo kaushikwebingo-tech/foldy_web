@@ -222,14 +222,33 @@ export function patchAdminEndpoints(existing: PmEndpoint[]): PmEndpoint[] {
   });
 }
 
-export function completeAdminCatalog(existing: PmEndpoint[]): PmEndpoint[] {
+/**
+ * One route, one shape: copies of a route spell their parameters differently
+ * (`:id` here, `:ticketId` there), and two entries for one route are one too
+ * many however it is spelled.
+ */
+export const routeShape = (ep: Pick<PmEndpoint, 'method' | 'path'>) =>
+  `${ep.method} ${ep.path.replace(/:[A-Za-z]\w*/g, '*')}`;
+
+/**
+ * Fill the admin section with every curated admin example, EXCEPT the routes a
+ * dedicated section already documents (`documentedElsewhere`).
+ *
+ * The support and feature-request families are catalogued in Support & Account,
+ * where each entry carries its own explanation; they live in `definitions` too
+ * so `patchAdminEndpoint` can keep those entries' requests current. Appending
+ * them here as well gave every one of those routes a second entry — and since
+ * this section loads later, the master collection shipped THESE bare copies and
+ * dropped the explained ones (see the duplicate guard in genMasterPostman).
+ */
+export function completeAdminCatalog(existing: PmEndpoint[], documentedElsewhere = new Set<string>()): PmEndpoint[] {
   const result = patchAdminEndpoints(existing);
   // Tracked as we go: a duplicate inside `definitions` would otherwise be
   // appended once per occurrence.
-  const known = new Set(result.map(ep => `${ep.method} ${ep.path}`));
+  const known = new Set(result.map(routeShape));
   for (const ep of definitions) {
-    const route = `${ep.method} ${ep.path}`;
-    if (known.has(route)) continue;
+    const route = routeShape(ep);
+    if (known.has(route) || documentedElsewhere.has(route)) continue;
     known.add(route);
     result.push(ep);
   }
