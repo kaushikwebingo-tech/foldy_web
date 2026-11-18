@@ -26,8 +26,16 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Log Out Session By Token',
         method: 'GET',
         path: 'api/v1/auth/session/logout',
-        description: 'PUBLIC, tokenised "log me out" link emailed on a new-device sign-in. Takes NO JWT — it authenticates on the unguessable token in the query string.',
+        description: 'PUBLIC, tokenised "log me out" link emailed on a new-device sign-in. Takes NO JWT — it authenticates on the unguessable token in the query string. Opening the link only shows a confirm page; nothing is signed out until that page is submitted (the POST below), so a mail scanner that follows links cannot end a session.',
         query: [{ key: 'token', value: '<emailed-token>' }]
+      },
+      {
+        name: 'Log Out Session By Token — Confirm',
+        method: 'POST',
+        path: 'api/v1/auth/session/logout',
+        auth: 'none',
+        description: 'The confirm page from the emailed link posts here (as a form; JSON is accepted too). Signs that one device out and answers with a result page. 400 with a "Link expired" page for a missing, expired or forged token.',
+        body: { token: '<emailed-token>' }
       },
       {
         name: 'Update Push Token',

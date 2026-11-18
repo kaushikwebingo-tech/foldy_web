@@ -112,7 +112,10 @@ const workspace: ApiSection = {
     }),
     ep('Staff decline proposed contact', 'POST', 'api/v1/team/contact-change/decline', { body: {} }),
     ep('Stop contact change from secure link', 'GET', 'api/v1/team/contact-change/stop', {
-      auth: 'none', query: [{ key: 't', value: '{{contactStopToken}}' }], description: 'Use the unguessable stop token from the security email/SMS. This cancels a pending recovery; do not use an app JWT as the link token.',
+      auth: 'none', query: [{ key: 't', value: '{{contactStopToken}}' }], description: 'Use the unguessable stop token from the security email/SMS. Opening the link only shows a confirm page; the change is stopped when that page is submitted (the POST below). Do not use an app JWT as the link token.',
+    }),
+    ep('Stop contact change from secure link — confirm', 'POST', 'api/v1/team/contact-change/stop', {
+      auth: 'none', body: { t: '{{contactStopToken}}' }, description: 'The confirm page from the security link posts here. Cancels the pending recovery and tells the workspace owner. A form post gets a result page back; a JSON body gets JSON.',
     }),
     ep('Legacy linked memberships', 'GET', 'api/v1/account/memberships', { description: 'Compatibility route. Modern clients should normally use GET /auth/workspaces.' }),
     ep('Legacy add account member', 'POST', 'api/v1/account/memberships', {
