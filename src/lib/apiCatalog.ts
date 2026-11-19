@@ -41,7 +41,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Update Push Token',
         method: 'POST',
         path: 'api/v1/auth/update-push-token',
-        description: 'Registers the device push token. Requires auth. device_type = android|ios|web. Needs the X-Device-Id header: the server upserts a device row { user: <token id>, deviceId } with actor = the person. On a DELEGATED token the legacy User.notificationToken mirror is not written (a director\'s handset never replaces the owner\'s); company pushes reach it only while the membership is active. Validation errors are 400 VALIDATION_FAILED.',
+        description: 'Registers the device push token. Requires auth. device_type = android|ios|web. Needs the X-Device-Id header: the server upserts a device row { user: <token id>, deviceId } with actor = the person. On a DELEGATED token the legacy User.notificationToken mirror is not written (a director\'s handset never replaces the owner\'s); company pushes reach it only while the membership is active. A push token belongs to ONE signed-in login at a time (decision 2026-11-19): registering it takes it off every other login\'s rows, so only the account open on a phone gets its push; rows on the caller\'s own X-Device-Id (its other workspaces) keep it, and an old build that sends one id for every account keeps today\'s delivery. Validation errors are 400 VALIDATION_FAILED.',
         body: { notification_token: '<fcm-or-onesignal-token>', device_type: 'android' }
       },
       // `POST /auth/logout` lives in the Identity section: the new PUBLIC,
@@ -304,14 +304,21 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Logout',
         method: 'POST',
         path: 'api/v1/auth/logout',
-        description: 'PUBLIC by design and ALWAYS 200 — even with a dead, missing or unverifiable token (§8.6 rule 8: a 401 or a 422 on logout makes clients loop). The handler reads the bearer itself and does nothing at all when it will not verify. Ends THIS session only — a new-model sub+sid token or a legacy id+sid token — and deletes this device\'s push token; { forgetDevice: true } also revokes the device trust (anything else means no). 200 { forgotDevice }. It shadows the legacy POST /auth/logout as a superset.',
+        description: 'PUBLIC by design and ALWAYS 200 — even with a dead, missing or unverifiable token (§8.6 rule 8: a 401 or a 422 on logout makes clients loop). The handler reads the bearer itself and does nothing at all when it will not verify. Ends the WHOLE LOGIN on this phone (decision 2026-11-19): every workspace session of the person on the device the session was opened on — read from the session row, never the X-Device-Id header — and clears that device\'s push token from those workspaces; a legacy id+sid token ends its one session. A token whose session has already ended is only revoked. { forgetDevice: true } also revokes the device trust (anything else means no). 200 { forgotDevice, sessionsEnded }. It shadows the legacy POST /auth/logout as a superset.',
         body: { forgetDevice: false }
       },
       {
         name: 'Logout Everywhere',
         method: 'POST',
         path: 'api/v1/auth/logout-all',
-        description: 'ANY_MEMBER and NO step-up (§8.6 rule 9 — demanding a code to lock down a possibly-compromised account is backwards). Ends every session this person has; device trust is left alone. 200 { sessionsEnded, devicesForgotten: 0, message }.'
+        description: 'ANY_MEMBER and NO step-up (§8.6 rule 9 — demanding a code to lock down a possibly-compromised account is backwards). Ends every session this person has and clears their push token from every device; device trust is left alone. 200 { sessionsEnded, devicesForgotten: 0, message }.'
+      },
+      {
+        name: 'Renew Device Id',
+        method: 'POST',
+        path: 'api/v1/auth/devices/renew',
+        description: 'ANY_MEMBER, per-IP limited with the identity routes. Gives this login its OWN device id on this phone (decision 2026-11-19: the server must not be able to tell which accounts share a phone, and an app that sent one X-Device-Id for every account renews each account\'s id once). Send it with the OLD id in X-Device-Id. Moves every session of the person on the device this session was opened on — both halves — and its device row (trust, name) to the new id, and deletes its push rows on the old id; the open account registers its push again afterwards. trust is the "remember this device" secret the phone kept: it is checked against THIS login\'s row only and never stored. deviceId is 16-120 printable characters, no spaces (422 VALIDATION_FAILED otherwise). 200 { moved, trusted }; repeating the same renewal answers { moved: 0 }. 409 CONFLICT when another session of this login already uses that id; 401 for a session that has ended.',
+        body: { deviceId: '<32-hex-chars-minted-on-the-phone>', trust: '<deviceTrust-secret-or-omit>' }
       }
     ]
   },
