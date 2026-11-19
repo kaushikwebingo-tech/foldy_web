@@ -64,13 +64,17 @@ const identity: ApiSection = {
     ep('Security cooldown state', 'GET', 'api/v1/auth/security/cooldown', {
       description: 'Reads the caller’s cooldown state after security-sensitive changes.',
     }),
-    ep('Restore a closed account', 'POST', 'api/v1/auth/account/restore', {
-      auth: 'restore', body: {},
-      description: 'Requires the restore-only scoped token returned at sign-in during the recovery window. Restores account access; inspect the returned session state.',
+    ep('Ask support to restore a deleted account', 'POST', 'api/v1/auth/account/restore-request', {
+      auth: 'restore', body: { note: 'I deleted it by mistake.' },
+      description: 'Needs the restore-only token a deleted account gets at sign-in (password + device code) within its 60 days. Files ONE support request (category account_restore) and never restores anything: only Foldy support restores, from the admin panel. Repeats answer alreadyRequested:true.',
     }),
-    ep('Close account', 'POST', 'api/v1/auth/account/close', {
+    ep('Ask support to restore (route used by older app builds)', 'POST', 'api/v1/auth/account/restore', {
+      auth: 'restore', body: {},
+      description: 'Same as /auth/account/restore-request. It no longer restores the account by itself.',
+    }),
+    ep('Delete account', 'POST', 'api/v1/auth/account/close', {
       ...stepUp('account.close'), body: {},
-      description: 'Closes the signed-in account. Run deliberately with disposable test data after a fresh account.close step-up; changes account access and starts its retention lifecycle.',
+      description: 'Deletes the LOGIN and every workspace it owns: plans cancelled now, owner signed out, staff of those workspaces paused (refused with access-ended), seats in other workspaces ended. Everything is erased after 60 days; only Foldy support can restore before then. Answer carries purgeAt, workspacesClosed and appStoreSubscription (true: tell the person to cancel in iOS Settings). Disposable test data only.',
     }),
   ],
 };
@@ -273,9 +277,9 @@ const corrections: ApiSection = {
       body: { emailOtp: '{{otp}}' }, statuses: [409],
       description: 'Compatibility refusal: the controller always returns409 without applying a contact change. Modern profile changes use /auth/contact/commit.',
     }),
-    ep('Delete legacy account with explicit confirmation', 'DELETE', 'api/v1/user/account', {
-      body: { confirmation: 'delete my account' },
-      description: 'Destructive legacy account deletion. Requires this exact confirmation phrase; use only a disposable test account. Modern identity account lifecycle is /auth/account/close with a fresh step-up.',
+    ep('Delete account (app route, typed confirmation)', 'DELETE', 'api/v1/user/account', {
+      ...stepUp('account.close'), body: { confirmation: 'delete my account' },
+      description: 'The same deletion as /auth/account/close: needs a fresh account.close step-up AND this exact phrase. Owner only. Use only a disposable test account.',
     }),
     ep('Create vault test folder', 'POST', 'api/v1/vault/folders', {
       body: { name: 'API Test Documents', parentId: null }, capture: { folderId: 'data.id' }, statuses: [201],

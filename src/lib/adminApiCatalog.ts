@@ -97,6 +97,7 @@ const definitions: AdminEndpoint[] = [
   endpoint('Force Verify Owner Email', 'POST', 'users/:userId/force-verify-email', { body: { expectedEmail: '{{email}}', reason: 'API test: email evidence reviewed.' }, description: 'expectedEmail must be the exact current owner email shown in Get Customer Details; a stale email returns 409.' }),
   endpoint('Block Customer', 'PATCH', 'users/:userId/block', { body: { reason: 'API test: temporary account block.' } }),
   endpoint('Unblock Customer', 'PATCH', 'users/:userId/unblock', { body: { reason: 'API test completed.' } }),
+  endpoint('Restore Deleted Customer', 'POST', 'users/:userId/restore', { body: { reason: 'API test: customer asked support to restore it.' }, description: 'Within the 60 days after deletion only: restores the login, its workspaces and their staff; the plan stays cancelled. 409 when not deleted, 410 when past its window. Get Customer Details shows deletion.canRestore.' }),
   endpoint('Reset Customer Attempts', 'POST', 'users/:userId/unlock', { body: { reason: 'API test: reset verification attempts.' } }),
   endpoint('Unlock Identifier', 'POST', 'users/unlock-identifier', { body: { identifier: '{{identifier}}', reason: 'API test: reviewed identifier lock.' } }),
   endpoint('Check Identifier', 'GET', 'users/check-identifier/:identifier'),

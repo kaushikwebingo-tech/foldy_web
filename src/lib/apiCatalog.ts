@@ -969,7 +969,7 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         name: 'Delete My Account',
         method: 'DELETE',
         path: 'api/v1/user/account',
-        description: 'Soft-deletes the account: revokes sessions, cancels subscription, frees phone/email/PAN for re-registration. Retains the record.'
+        description: 'Deletes the login and every workspace it owns (needs an account.close step-up and the typed phrase): plans cancelled now, everything erased after 60 days, which frees the mobile and PAN. Only Foldy support can restore it before then. Foldy invoices and payment records are kept.'
       },
       {
         name: 'Feature Request Options',
@@ -1814,6 +1814,14 @@ export const API_SECTIONS: Record<string, ApiSection> = {
         path: 'api/admin/v1/users/:userId/unblock',
         pathVars: [{ key: 'userId', value: '<userId>' }],
         body: { reason: 'Resolved' }
+      },
+      {
+        name: 'Restore Deleted Account',
+        method: 'POST',
+        path: 'api/admin/v1/users/:userId/restore',
+        description: 'Lifts the deletion block within the 60 days (the customer asks support first). Restores the login, every workspace it owned and their staff; the plan stays cancelled. 409 when not deleted, 410 when past its window. Needs users.block. Audit-logged.',
+        pathVars: [{ key: 'userId', value: '<userId>' }],
+        body: { reason: 'Customer asked support to restore it' }
       },
       {
         name: 'Update User Module Access',

@@ -40,7 +40,7 @@ export function authFor(ep: PmEndpoint): NonNullable<PmEndpoint['auth']> {
   if (/^\/api\/admin\/v1\//.test(p)) {
     return /\/auth\/(?:login|register|forgot-password|verify-email-otp|update-password)$/.test(p) ? 'none' : 'admin';
   }
-  if (p === '/api/v1/auth/account/restore') return 'restore';
+  if (p === '/api/v1/auth/account/restore' || p === '/api/v1/auth/account/restore-request') return 'restore';
   if (p === '/api/v1/auth/password/first-set') return 'password-setup';
   if (p === '/' || p === '/health' || /^\/(?:webhook|preview|landing-page)(?:\/|$)/.test(p) ||
       /^\/api\/landing\/v1(?:\/|$)/.test(p) || /^\/api\/v1\/signup(?:\/|$)/.test(p) ||
